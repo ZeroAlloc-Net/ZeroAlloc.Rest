@@ -121,8 +121,8 @@ Add these lines inside the existing `<ItemGroup>` (after the existing entries, b
     <!-- Analyzers -->
     <PackageVersion Include="Meziantou.Analyzer" Version="2.0.182" />
     <PackageVersion Include="Roslynator.Analyzers" Version="4.12.10" />
-    <PackageVersion Include="ErrorProne.NET.CoreAnalyzers" Version="0.6.2" />
-    <PackageVersion Include="ErrorProne.NET.Structs" Version="0.6.2" />
+    <PackageVersion Include="ErrorProne.NET.CoreAnalyzers" Version="0.1.2" />
+    <PackageVersion Include="ErrorProne.NET.Structs" Version="0.1.2" />
 ```
 
 **Step 2: Verify build passes again**
