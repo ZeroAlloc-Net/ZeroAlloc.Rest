@@ -162,4 +162,26 @@ public class RestClientBenchmarks
 
     [Benchmark]
     public Task Refit_Delete() => _refit.DeleteUserAsync(1);
+
+    // ── Result<T, HttpError> (typed error return, success path) ──────────────
+
+    [Benchmark]
+    public async Task<bool> RawHttpClient_Result()
+    {
+        using var response = await _rawHttp.GetAsync("/users/1/result").ConfigureAwait(false);
+        if (response.IsSuccessStatusCode)
+        {
+            var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
+            var dto = await JsonSerializer.DeserializeAsync<UserDto>(stream, s_jsonOptions).ConfigureAwait(false);
+            return dto != null;
+        }
+        return false;
+    }
+
+    [Benchmark]
+    public async Task<bool> ZeroAlloc_Result()
+    {
+        var result = await _zeroAlloc.GetUserResultAsync(1).ConfigureAwait(false);
+        return result.IsSuccess;
+    }
 }
