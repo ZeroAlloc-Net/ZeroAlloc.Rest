@@ -10,12 +10,7 @@ internal static class ClientEmitter
     internal static void Emit(SourceProductionContext ctx, ClientModel model)
     {
         // Collect unique method-level serializer types (ordered, deduped)
-        var overrideSerializers = new List<string>();
-        foreach (var m in model.Methods)
-        {
-            if (m.SerializerTypeName != null && !overrideSerializers.Contains(m.SerializerTypeName))
-                overrideSerializers.Add(m.SerializerTypeName);
-        }
+        var overrideSerializers = model.GetOverrideSerializerTypes();
 
         // Build a collision-free FQN → field name map
         var serializerFieldMap = new Dictionary<string, string>();
@@ -230,6 +225,7 @@ internal static class ClientEmitter
         var simpleName = fullTypeName.Contains('.')
             ? fullTypeName.Substring(fullTypeName.LastIndexOf('.') + 1)
             : fullTypeName;
+        if (simpleName.Length == 0) simpleName = "Serializer"; // defensive fallback
         var candidate = "_" + char.ToLower(simpleName[0]) + simpleName.Substring(1);
         if (!existingFieldNames.Contains(candidate)) return candidate;
         // Collision — append index

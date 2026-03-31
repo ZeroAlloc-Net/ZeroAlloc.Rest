@@ -53,22 +53,23 @@ public class RestClientBenchmarks
     private HttpClient _rawHttp = null!;
     private HttpClient _zeroAllocHttpClient = null!;
     private HttpClient _refitHttpClient = null!;
+    private InMemoryHandler _handler = null!;
 
     [GlobalSetup]
     public void Setup()
     {
-        var handler = new InMemoryHandler(s_testUser);
+        _handler = new InMemoryHandler(s_testUser);
 
         // ZeroAlloc.Rest: instantiate the source-generated client directly
-        _zeroAllocHttpClient = new HttpClient(handler) { BaseAddress = s_baseUri };
+        _zeroAllocHttpClient = new HttpClient(_handler) { BaseAddress = s_baseUri };
         _zeroAlloc = new ZeroAllocUserApiClient(_zeroAllocHttpClient, new SystemTextJsonSerializer());
 
         // Refit: reflection-based client
-        _refitHttpClient = new HttpClient(handler) { BaseAddress = s_baseUri };
+        _refitHttpClient = new HttpClient(_handler) { BaseAddress = s_baseUri };
         _refit = RestService.For<IRefitUserApi>(_refitHttpClient);
 
         // Raw HttpClient: manual JSON deserialization (true baseline)
-        _rawHttp = new HttpClient(handler) { BaseAddress = s_baseUri };
+        _rawHttp = new HttpClient(_handler) { BaseAddress = s_baseUri };
     }
 
     [GlobalCleanup]
@@ -77,6 +78,7 @@ public class RestClientBenchmarks
         _rawHttp.Dispose();
         _zeroAllocHttpClient.Dispose();
         _refitHttpClient.Dispose();
+        _handler.Dispose();
     }
 
     // ── GET benchmarks ────────────────────────────────────────────────────────

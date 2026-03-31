@@ -180,4 +180,13 @@ public class OpenApiInterfaceGeneratorTests
         var result = OpenApiInterfaceGenerator.Generate(yaml, "MyApp", "IMyApi");
         Assert.Contains("GetAllUsersAsync", result);
     }
+
+    [Fact]
+    public void Generate_WithInvalidSpec_ThrowsInvalidOperationException()
+    {
+        // An empty string produces a null document or parse errors in OpenApiStringReader
+        var invalid = "";
+        Assert.Throws<InvalidOperationException>(() =>
+            OpenApiInterfaceGenerator.Generate(invalid, "MyApp", "IMyApi"));
+    }
 }
