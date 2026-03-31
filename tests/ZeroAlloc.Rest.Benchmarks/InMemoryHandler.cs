@@ -11,16 +11,18 @@ namespace ZeroAlloc.Rest.Benchmarks;
 internal sealed class InMemoryHandler : HttpMessageHandler
 {
     private readonly byte[] _responseBody;
+    private readonly HttpStatusCode _statusCode;
 
-    public InMemoryHandler(object responseObject)
+    public InMemoryHandler(object responseObject, HttpStatusCode statusCode = HttpStatusCode.OK)
     {
         _responseBody = JsonSerializer.SerializeToUtf8Bytes(responseObject);
+        _statusCode = statusCode;
     }
 
     protected override Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request, CancellationToken cancellationToken)
     {
-        var response = new HttpResponseMessage(HttpStatusCode.OK)
+        var response = new HttpResponseMessage(_statusCode)
         {
             Content = new ByteArrayContent(_responseBody)
         };

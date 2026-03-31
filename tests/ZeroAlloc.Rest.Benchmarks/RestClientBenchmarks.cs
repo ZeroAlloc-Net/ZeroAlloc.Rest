@@ -1,7 +1,9 @@
 using BenchmarkDotNet.Attributes;
 using Refit;
 using System.Text.Json;
+using ZeroAlloc.Rest;
 using ZeroAlloc.Rest.SystemTextJson;
+using ZeroAlloc.Results;
 
 namespace ZeroAlloc.Rest.Benchmarks;
 
@@ -24,6 +26,15 @@ public interface IZeroAllocUserApi
 
     [ZeroAlloc.Rest.Attributes.Post("/users")]
     Task<UserDto> CreateUserAsync([ZeroAlloc.Rest.Attributes.Body] UserDto body, CancellationToken ct = default);
+
+    [ZeroAlloc.Rest.Attributes.Get("/users/{id}")]
+    Task<UserDto> GetUserWithTagAsync(int id, [ZeroAlloc.Rest.Attributes.Query] string? tag = null, CancellationToken ct = default);
+
+    [ZeroAlloc.Rest.Attributes.Delete("/users/{id}")]
+    Task DeleteUserAsync(int id, CancellationToken ct = default);
+
+    [ZeroAlloc.Rest.Attributes.Get("/users/{id}/result")]
+    Task<Result<UserDto, HttpError>> GetUserResultAsync(int id, CancellationToken ct = default);
 }
 
 // ── Refit interface — reflection-based client ─────────────────────────────────
@@ -35,6 +46,12 @@ public interface IRefitUserApi
 
     [Refit.Post("/users")]
     Task<UserDto> CreateUserAsync([Refit.Body] UserDto body);
+
+    [Refit.Get("/users/{id}")]
+    Task<UserDto> GetUserWithTagAsync(int id, string? tag = null);
+
+    [Refit.Delete("/users/{id}")]
+    Task DeleteUserAsync(int id);
 }
 
 // ── Benchmarks ────────────────────────────────────────────────────────────────
@@ -81,7 +98,7 @@ public class RestClientBenchmarks
         _handler.Dispose();
     }
 
-    // ── GET benchmarks ────────────────────────────────────────────────────────
+    // ── GET ───────────────────────────────────────────────────────────────────
 
     [Benchmark(Baseline = true)]
     public async Task<UserDto?> RawHttpClient_Get()
@@ -98,7 +115,7 @@ public class RestClientBenchmarks
     [Benchmark]
     public Task<UserDto> Refit_Get() => _refit.GetUserAsync(1);
 
-    // ── POST benchmarks ───────────────────────────────────────────────────────
+    // ── POST ──────────────────────────────────────────────────────────────────
 
     [Benchmark]
     public async Task<UserDto?> RawHttpClient_Post()
@@ -116,4 +133,33 @@ public class RestClientBenchmarks
 
     [Benchmark]
     public Task<UserDto> Refit_Post() => _refit.CreateUserAsync(s_testUser);
+
+    // ── GET with query param (tests URL builder) ──────────────────────────────
+
+    [Benchmark]
+    public async Task<UserDto?> RawHttpClient_QueryParam()
+    {
+        var url = $"/users/1?tag={Uri.EscapeDataString("vip")}";
+        using var response = await _rawHttp.GetAsync(url).ConfigureAwait(false);
+        var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
+        return await JsonSerializer.DeserializeAsync<UserDto>(stream, s_jsonOptions)
+            .ConfigureAwait(false);
+    }
+
+    [Benchmark]
+    public Task<UserDto> ZeroAlloc_QueryParam() => _zeroAlloc.GetUserWithTagAsync(1, "vip");
+
+    [Benchmark]
+    public Task<UserDto> Refit_QueryParam() => _refit.GetUserWithTagAsync(1, "vip");
+
+    // ── DELETE (void return) ──────────────────────────────────────────────────
+
+    [Benchmark]
+    public Task RawHttpClient_Delete() => _rawHttp.DeleteAsync("/users/1");
+
+    [Benchmark]
+    public Task ZeroAlloc_Delete() => _zeroAlloc.DeleteUserAsync(1);
+
+    [Benchmark]
+    public Task Refit_Delete() => _refit.DeleteUserAsync(1);
 }
