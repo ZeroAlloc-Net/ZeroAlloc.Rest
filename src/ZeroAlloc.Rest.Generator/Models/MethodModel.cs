@@ -8,7 +8,7 @@ internal record MethodModel(
     string Route,
     string ReturnTypeName,
     string? InnerTypeName,
-    bool ReturnsApiResponse,
+    bool ReturnsResult,
     bool ReturnsVoid,
     IReadOnlyList<ParameterModel> Parameters,
     string? SerializerTypeName);
