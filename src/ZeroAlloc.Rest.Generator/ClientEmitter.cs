@@ -181,7 +181,7 @@ internal static class ClientEmitter
         {
             sb.AppendLine("        response.EnsureSuccessStatusCode();");
         }
-        else if (method.ReturnsApiResponse)
+        else if (method.ReturnsResult)
         {
             sb.AppendLine($"        var responseStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);");
             sb.AppendLine($"        var content = await {serializerExpr}.DeserializeAsync<{method.InnerTypeName}>(responseStream, {ctArg}).ConfigureAwait(false);");

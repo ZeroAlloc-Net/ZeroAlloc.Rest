@@ -16,7 +16,7 @@ internal static class ModelExtractor
     private const string QueryAttr  = "ZeroAlloc.Rest.Attributes.QueryAttribute";
     private const string HeaderAttr = "ZeroAlloc.Rest.Attributes.HeaderAttribute";
     private const string SerializerAttr = "ZeroAlloc.Rest.Attributes.SerializerAttribute";
-    private const string ApiResponseOpenType = "ZeroAlloc.Rest.ApiResponse<T>";
+    private const string ResultOpenType = "ZeroAlloc.Results.Result<T, E>";
 
     internal static ClientModel? Extract(
         GeneratorAttributeSyntaxContext ctx,
@@ -71,7 +71,7 @@ internal static class ModelExtractor
         if (returnType is null) return null;
 
         bool returnsVoid = false;
-        bool returnsApiResponse = false;
+        bool returnsResult = false;
         string? innerTypeName = null;
         string returnTypeName = returnType.ToDisplayString();
 
@@ -79,8 +79,8 @@ internal static class ModelExtractor
         {
             var inner = returnType.TypeArguments[0] as INamedTypeSymbol;
             innerTypeName = inner?.ToDisplayString();
-            returnsApiResponse = inner?.OriginalDefinition.ToDisplayString() == ApiResponseOpenType;
-            if (returnsApiResponse && inner?.TypeArguments.Length == 1)
+            returnsResult = inner?.OriginalDefinition.ToDisplayString() == ResultOpenType;
+            if (returnsResult && inner?.TypeArguments.Length >= 1)
                 innerTypeName = inner.TypeArguments[0].ToDisplayString();
         }
         else
@@ -93,7 +93,7 @@ internal static class ModelExtractor
 
         return new MethodModel(
             method.Name, httpMethod, route, returnTypeName,
-            innerTypeName, returnsApiResponse, returnsVoid,
+            innerTypeName, returnsResult, returnsVoid,
             parameters, methodSerializer);
     }
 
