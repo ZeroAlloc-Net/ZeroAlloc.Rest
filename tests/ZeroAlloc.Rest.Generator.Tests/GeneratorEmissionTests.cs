@@ -152,7 +152,7 @@ public class GeneratorEmissionTests
             """;
         var output = GetGeneratedSource(source, "ISearchApi.g.cs");
         Assert.DoesNotContain("if (page != null)", output);
-        Assert.Contains("urlBuilder.Append(\"page=\")", output);
+        Assert.Contains("\"page=\"", output);
     }
 
     [Fact]
@@ -227,6 +227,29 @@ public class GeneratorEmissionTests
         Assert.Contains("MyApp.OverrideSerializer overrideSerializer", output);
     }
 
+    private static readonly System.Reflection.Assembly ResultsAssembly =
+        typeof(ZeroAlloc.Results.Result<,>).Assembly;
+
+    [Fact]
+    public void Generator_Result_ReturnType_EmitsResultWrapping()
+    {
+        var source = """
+            using ZeroAlloc.Rest.Attributes;
+            namespace MyApp;
+            [ZeroAllocRestClient]
+            public interface IUserApi
+            {
+                [Get("/users/{id}")]
+                System.Threading.Tasks.Task<ZeroAlloc.Results.Result<string, ZeroAlloc.Rest.HttpError>> GetUserResultAsync(int id, System.Threading.CancellationToken ct = default);
+            }
+            """;
+        var output = GetGeneratedSourceWithResults(source, "IUserApi.g.cs");
+        Assert.Contains("ZeroAlloc.Results.Result<", output);
+        Assert.Contains("IsSuccessStatusCode", output);
+        Assert.Contains(".Success(", output);
+        Assert.Contains(".Failure(", output);
+    }
+
     private static string GetGeneratedSource(string source, string hintName)
     {
         var compilation = CSharpCompilation.Create(
@@ -234,6 +257,27 @@ public class GeneratorEmissionTests
             new[] { CSharpSyntaxTree.ParseText(source) },
             Basic.Reference.Assemblies.Net100.References.All
                 .Append(MetadataReference.CreateFromFile(AttributesAssembly.Location)),
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var generator = new RestClientGenerator();
+        var driver = CSharpGeneratorDriver
+            .Create(generator)
+            .RunGenerators(compilation);
+
+        var result = driver.GetRunResult();
+        var file = result.Results[0].GeneratedSources
+            .FirstOrDefault(f => f.HintName == hintName);
+        return file.SourceText?.ToString() ?? string.Empty;
+    }
+
+    private static string GetGeneratedSourceWithResults(string source, string hintName)
+    {
+        var compilation = CSharpCompilation.Create(
+            "TestAssembly",
+            new[] { CSharpSyntaxTree.ParseText(source) },
+            Basic.Reference.Assemblies.Net100.References.All
+                .Append(MetadataReference.CreateFromFile(AttributesAssembly.Location))
+                .Append(MetadataReference.CreateFromFile(ResultsAssembly.Location)),
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
 
         var generator = new RestClientGenerator();

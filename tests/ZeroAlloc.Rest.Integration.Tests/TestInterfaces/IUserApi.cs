@@ -1,4 +1,5 @@
 using ZeroAlloc.Rest.Attributes;
+using ZeroAlloc.Results;
 
 namespace ZeroAlloc.Rest.Integration.Tests.TestInterfaces;
 
@@ -10,6 +11,9 @@ public interface IUserApi
 {
     [Get("/users/{id}")]
     Task<UserDto> GetUserAsync(int id, CancellationToken ct = default);
+
+    [Get("/users/{id}/result")]
+    Task<Result<UserDto, ZeroAlloc.Rest.HttpError>> GetUserResultAsync(int id, CancellationToken ct = default);
 
     [Post("/users")]
     Task<UserDto> CreateUserAsync([Body] CreateUserRequest body, CancellationToken ct = default);
