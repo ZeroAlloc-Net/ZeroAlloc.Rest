@@ -1,0 +1,16 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:base"],
+  "packageRules": [
+    {
+      "description": "ZeroAlloc packages are managed by release-please, not Renovate",
+      "matchPackagePrefixes": ["ZeroAlloc."],
+      "enabled": false
+    },
+    {
+      "description": "Auto-merge safe patch updates",
+      "matchUpdateTypes": ["patch"],
+      "automerge": true
+    }
+  ]
+}

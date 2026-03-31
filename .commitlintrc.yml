@@ -1,0 +1,13 @@
+extends:
+  - '@commitlint/config-conventional'
+rules:
+  scope-enum:
+    - 2
+    - always
+    - - core
+      - generator
+      - tools
+      - benchmarks
+      - sample
+      - ci
+      - deps
