@@ -61,7 +61,7 @@ public class GeneratorEmissionTests
             }
             """;
         var output = GetGeneratedSource(source, "IOrderApi.g.cs");
-        Assert.Contains("GetAsync", output);
+        Assert.Contains("SendAsync", output);
         Assert.Contains("/orders/", output);
     }
 
@@ -172,6 +172,24 @@ public class GeneratorEmissionTests
             """;
         var output = GetGeneratedSource(source, "ISearchApi.g.cs");
         Assert.Contains("if (page != null)", output);
+    }
+
+    [Fact]
+    public void GeneratedMethod_SetsAcceptHeader()
+    {
+        var source = """
+            using ZeroAlloc.Rest.Attributes;
+            namespace MyApp;
+            [ZeroAllocRestClient]
+            public interface IUserApi
+            {
+                [Get("/users")]
+                System.Threading.Tasks.Task<string> ListAsync(System.Threading.CancellationToken ct = default);
+            }
+            """;
+        var output = GetGeneratedSource(source, "IUserApi.g.cs");
+        Assert.Contains("request.Headers.Accept.Add", output);
+        Assert.Contains("_serializer.ContentType", output);
     }
 
     private static string GetGeneratedSource(string source, string hintName)

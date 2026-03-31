@@ -56,26 +56,14 @@ internal static class ClientEmitter
         var bodyParam = FirstOrDefault(method.Parameters, ParameterKind.Body);
         var headerParams = FilterParameters(method.Parameters, ParameterKind.Header);
 
-        // For GET with no custom headers/body, use the dedicated HttpClient.GetAsync shortcut.
-        // For all other methods (POST/PUT/PATCH/DELETE or GET with headers), use SendAsync.
-        var useGetAsync = method.HttpMethod == "GET" && headerParams.Count == 0 && bodyParam == null;
-
         sb.AppendLine("    [System.Diagnostics.CodeAnalysis.RequiresDynamicCode(\"Serialization of arbitrary types may require dynamic code.\")]");
         sb.AppendLine("    [System.Diagnostics.CodeAnalysis.RequiresUnreferencedCode(\"Serialization of arbitrary types may require unreferenced code.\")]");
         sb.AppendLine($"    public async {method.ReturnTypeName} {method.Name}({BuildParamList(method.Parameters)})");
         sb.AppendLine("    {");
 
         EmitUrlBuilding(sb, method.Route, pathParams, queryParams);
-
-        if (useGetAsync)
-        {
-            EmitGetAsyncAndResponse(sb, method, ctArg);
-        }
-        else
-        {
-            EmitRequestCreation(sb, method, headerParams, bodyParam, ctArg);
-            EmitSendAndResponse(sb, method, ctArg);
-        }
+        EmitRequestCreation(sb, method, headerParams, bodyParam, ctArg);
+        EmitSendAndResponse(sb, method, ctArg);
 
         sb.AppendLine("    }");
         sb.AppendLine();
@@ -120,6 +108,7 @@ internal static class ClientEmitter
         sb.AppendLine($"        using var request = new System.Net.Http.HttpRequestMessage(");
         sb.AppendLine($"            System.Net.Http.HttpMethod.{Capitalize(method.HttpMethod)},");
         sb.AppendLine($"            url);");
+        sb.AppendLine("        request.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue(_serializer.ContentType));");
 
         foreach (var h in headerParams)
             sb.AppendLine($"        request.Headers.TryAddWithoutValidation(\"{h.HeaderName}\", {h.Name}?.ToString());");
@@ -145,12 +134,6 @@ internal static class ClientEmitter
     private static void EmitSendAndResponse(StringBuilder sb, MethodModel method, string ctArg)
     {
         sb.AppendLine($"        using var response = await _httpClient.SendAsync(request, {ctArg}).ConfigureAwait(false);");
-        EmitResponseHandling(sb, method, ctArg);
-    }
-
-    private static void EmitGetAsyncAndResponse(StringBuilder sb, MethodModel method, string ctArg)
-    {
-        sb.AppendLine($"        using var response = await _httpClient.GetAsync(url, {ctArg}).ConfigureAwait(false);");
         EmitResponseHandling(sb, method, ctArg);
     }
 
