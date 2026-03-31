@@ -16,6 +16,7 @@ internal static class ModelExtractor
     private const string QueryAttr  = "ZeroAlloc.Rest.Attributes.QueryAttribute";
     private const string HeaderAttr = "ZeroAlloc.Rest.Attributes.HeaderAttribute";
     private const string SerializerAttr = "ZeroAlloc.Rest.Attributes.SerializerAttribute";
+    private const string ApiResponseOpenType = "ZeroAlloc.Rest.ApiResponse<T>";
 
     internal static ClientModel? Extract(
         GeneratorAttributeSyntaxContext ctx,
@@ -45,7 +46,7 @@ internal static class ModelExtractor
             if (methodModel is not null) methods.Add(methodModel);
         }
 
-        return new ClientModel(ns, interfaceName, className, methods, clientSerializer);
+        return new ClientModel(ns, interfaceName, className, methods.AsReadOnly(), clientSerializer);
     }
 
     private static MethodModel? ExtractMethod(IMethodSymbol method)
@@ -57,11 +58,11 @@ internal static class ModelExtractor
         {
             var attrClass = attr.AttributeClass?.ToDisplayString();
             if (attrClass is null) continue;
-            if (attrClass == GetAttr)    { httpMethod = "GET";    route = (string?)attr.ConstructorArguments[0].Value; break; }
-            if (attrClass == PostAttr)   { httpMethod = "POST";   route = (string?)attr.ConstructorArguments[0].Value; break; }
-            if (attrClass == PutAttr)    { httpMethod = "PUT";    route = (string?)attr.ConstructorArguments[0].Value; break; }
-            if (attrClass == PatchAttr)  { httpMethod = "PATCH";  route = (string?)attr.ConstructorArguments[0].Value; break; }
-            if (attrClass == DeleteAttr) { httpMethod = "DELETE"; route = (string?)attr.ConstructorArguments[0].Value; break; }
+            if (attrClass == GetAttr    && attr.ConstructorArguments.Length > 0) { httpMethod = "GET";    route = (string?)attr.ConstructorArguments[0].Value; break; }
+            if (attrClass == PostAttr   && attr.ConstructorArguments.Length > 0) { httpMethod = "POST";   route = (string?)attr.ConstructorArguments[0].Value; break; }
+            if (attrClass == PutAttr    && attr.ConstructorArguments.Length > 0) { httpMethod = "PUT";    route = (string?)attr.ConstructorArguments[0].Value; break; }
+            if (attrClass == PatchAttr  && attr.ConstructorArguments.Length > 0) { httpMethod = "PATCH";  route = (string?)attr.ConstructorArguments[0].Value; break; }
+            if (attrClass == DeleteAttr && attr.ConstructorArguments.Length > 0) { httpMethod = "DELETE"; route = (string?)attr.ConstructorArguments[0].Value; break; }
         }
 
         if (httpMethod is null || route is null) return null;
@@ -78,8 +79,7 @@ internal static class ModelExtractor
         {
             var inner = returnType.TypeArguments[0] as INamedTypeSymbol;
             innerTypeName = inner?.ToDisplayString();
-            returnsApiResponse = inner?.OriginalDefinition.ToDisplayString()
-                .StartsWith("ZeroAlloc.Rest.ApiResponse") == true;
+            returnsApiResponse = inner?.OriginalDefinition.ToDisplayString() == ApiResponseOpenType;
             if (returnsApiResponse && inner?.TypeArguments.Length == 1)
                 innerTypeName = inner.TypeArguments[0].ToDisplayString();
         }
@@ -97,7 +97,7 @@ internal static class ModelExtractor
             parameters, methodSerializer);
     }
 
-    private static List<ParameterModel> ExtractParameters(IMethodSymbol method)
+    private static IReadOnlyList<ParameterModel> ExtractParameters(IMethodSymbol method)
     {
         var result = new List<ParameterModel>();
         foreach (var param in method.Parameters)
@@ -149,7 +149,7 @@ internal static class ModelExtractor
 
             result.Add(new ParameterModel(param.Name, typeName, kind, headerName, queryName ?? param.Name));
         }
-        return result;
+        return result.AsReadOnly();
     }
 
     private static string? GetSerializerType(ISymbol symbol)
