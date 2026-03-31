@@ -15,6 +15,7 @@ public sealed class UserApiTests : IDisposable
 
     private readonly WireMockServer _server;
     private readonly IUserApi _client;
+    private readonly ServiceProvider _provider;
 
     public UserApiTests()
     {
@@ -28,8 +29,8 @@ public sealed class UserApiTests : IDisposable
             options.UseSerializer<SystemTextJsonSerializer>();
         });
 
-        var provider = services.BuildServiceProvider();
-        _client = provider.GetRequiredService<IUserApi>();
+        _provider = services.BuildServiceProvider();
+        _client = _provider.GetRequiredService<IUserApi>();
     }
 
     [Fact]
@@ -83,5 +84,9 @@ public sealed class UserApiTests : IDisposable
         await _client.DeleteUserAsync(5); // Should not throw
     }
 
-    public void Dispose() => _server.Dispose();
+    public void Dispose()
+    {
+        _provider.Dispose();
+        _server.Dispose();
+    }
 }
