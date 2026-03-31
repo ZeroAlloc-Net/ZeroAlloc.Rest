@@ -7,5 +7,7 @@
     <ProjectReference Include="../../src/ZeroAlloc.Rest.SystemTextJson/ZeroAlloc.Rest.SystemTextJson.csproj" />
     <ProjectReference Include="../../src/ZeroAlloc.Rest.MessagePack/ZeroAlloc.Rest.MessagePack.csproj" />
     <PackageReference Include="MessagePack" />
+    <ProjectReference Include="../../src/ZeroAlloc.Rest.MemoryPack/ZeroAlloc.Rest.MemoryPack.csproj" />
+    <PackageReference Include="MemoryPack" />
   </ItemGroup>
 </Project>
