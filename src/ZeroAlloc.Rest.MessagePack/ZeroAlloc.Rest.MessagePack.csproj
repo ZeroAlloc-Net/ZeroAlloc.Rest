@@ -5,6 +5,6 @@
   <ItemGroup>
     <ProjectReference Include="../ZeroAlloc.Rest/ZeroAlloc.Rest.csproj" />
     <PackageReference Include="MessagePack" />
-    <PackageReference Include="MessagePack.SourceGenerator" />
+    <!-- MessagePack 3.x includes the source generator built-in; no separate MessagePack.SourceGenerator needed -->
   </ItemGroup>
 </Project>

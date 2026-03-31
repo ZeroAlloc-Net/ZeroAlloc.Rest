@@ -8,7 +8,7 @@
     <PackageVersion Include="Microsoft.CodeAnalysis.Analyzers" Version="3.11.0" />
     <!-- Serializers -->
     <PackageVersion Include="MessagePack" Version="3.1.4" />
-    <PackageVersion Include="MessagePack.SourceGenerator" Version="2.6.100-alpha" />
+    <!-- MessagePack 3.x bundles the source generator; no separate MessagePack.SourceGenerator package exists for 3.x -->
     <PackageVersion Include="MemoryPack" Version="1.21.4" />
     <!-- OpenAPI -->
     <PackageVersion Include="Microsoft.OpenApi.Readers" Version="1.6.28" />
@@ -21,7 +21,7 @@
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.SourceGenerators.Testing.XUnit" Version="1.1.2" />
     <PackageVersion Include="WireMock.Net" Version="2.2.0" />
     <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.0" />
-    <PackageVersion Include="Basic.Reference.Assemblies.Net80" Version="1.8.0" />
+    <PackageVersion Include="Basic.Reference.Assemblies.Net100" Version="1.8.4" />
     <PackageVersion Include="Microsoft.Build.Framework" Version="17.13.9" />
     <PackageVersion Include="Microsoft.Build.Utilities.Core" Version="17.13.9" />
   </ItemGroup>
