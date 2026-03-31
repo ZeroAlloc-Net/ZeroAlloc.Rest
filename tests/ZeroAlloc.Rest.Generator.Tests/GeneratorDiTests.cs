@@ -89,6 +89,42 @@ public class GeneratorDiTests
         Assert.Contains(output, f => f.HintName == "IOrderApi.DI.g.cs");
     }
 
+    [Fact]
+    public void MethodLevelSerializer_RegistersOverrideTypeInDI()
+    {
+        var source = """
+            using System.IO;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using ZeroAlloc.Rest;
+            using ZeroAlloc.Rest.Attributes;
+            namespace MyApp;
+            public class OverrideSerializer : IRestSerializer
+            {
+                public string ContentType => "application/octet-stream";
+                [System.Diagnostics.CodeAnalysis.RequiresDynamicCode("")]
+                [System.Diagnostics.CodeAnalysis.RequiresUnreferencedCode("")]
+                public ValueTask<T?> DeserializeAsync<T>(Stream stream, CancellationToken ct = default)
+                    => ValueTask.FromResult<T?>(default);
+                [System.Diagnostics.CodeAnalysis.RequiresDynamicCode("")]
+                [System.Diagnostics.CodeAnalysis.RequiresUnreferencedCode("")]
+                public ValueTask SerializeAsync<T>(Stream stream, T value, CancellationToken ct = default)
+                    => ValueTask.CompletedTask;
+            }
+            [ZeroAllocRestClient]
+            public interface IUploadApi
+            {
+                [Post("/upload")]
+                [Serializer(typeof(OverrideSerializer))]
+                Task UploadAsync([Body] string data, CancellationToken ct = default);
+            }
+            """;
+        var output = RunAndGetSources(source);
+        var diFile = output.Single(f => f.HintName == "IUploadApi.DI.g.cs");
+        var content = diFile.SourceText.ToString();
+        Assert.Contains("TryAddSingleton<MyApp.OverrideSerializer>", content);
+    }
+
     private static ImmutableArray<GeneratedSourceResult> RunAndGetSources(string source)
     {
         var compilation = CSharpCompilation.Create(

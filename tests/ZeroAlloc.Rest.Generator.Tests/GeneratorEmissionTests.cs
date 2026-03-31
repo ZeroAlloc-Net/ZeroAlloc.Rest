@@ -192,6 +192,41 @@ public class GeneratorEmissionTests
         Assert.Contains("_serializer.ContentType", output);
     }
 
+    [Fact]
+    public void MethodLevelSerializer_UsesOverrideSerializerField()
+    {
+        var source = """
+            using System.IO;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using ZeroAlloc.Rest;
+            using ZeroAlloc.Rest.Attributes;
+            namespace MyApp;
+            public class OverrideSerializer : IRestSerializer
+            {
+                public string ContentType => "application/octet-stream";
+                [System.Diagnostics.CodeAnalysis.RequiresDynamicCode("")]
+                [System.Diagnostics.CodeAnalysis.RequiresUnreferencedCode("")]
+                public ValueTask<T?> DeserializeAsync<T>(Stream stream, CancellationToken ct = default)
+                    => ValueTask.FromResult<T?>(default);
+                [System.Diagnostics.CodeAnalysis.RequiresDynamicCode("")]
+                [System.Diagnostics.CodeAnalysis.RequiresUnreferencedCode("")]
+                public ValueTask SerializeAsync<T>(Stream stream, T value, CancellationToken ct = default)
+                    => ValueTask.CompletedTask;
+            }
+            [ZeroAllocRestClient]
+            public interface IUploadApi
+            {
+                [Post("/upload")]
+                [Serializer(typeof(OverrideSerializer))]
+                Task UploadAsync([Body] string data, CancellationToken ct = default);
+            }
+            """;
+        var output = GetGeneratedSource(source, "IUploadApi.g.cs");
+        Assert.Contains("_overrideSerializer", output);
+        Assert.Contains("MyApp.OverrideSerializer overrideSerializer", output);
+    }
+
     private static string GetGeneratedSource(string source, string hintName)
     {
         var compilation = CSharpCompilation.Create(
