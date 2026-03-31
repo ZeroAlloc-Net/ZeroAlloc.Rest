@@ -20,6 +20,9 @@ public sealed class RestClientGenerator : IIncrementalGenerator
             .Select(static (m, _) => m!);
 
         context.RegisterSourceOutput(clientModels, static (ctx, model) =>
-            ClientEmitter.Emit(ctx, model));
+        {
+            ClientEmitter.Emit(ctx, model);
+            DiEmitter.Emit(ctx, model);
+        });
     }
 }
