@@ -135,6 +135,45 @@ public class GeneratorEmissionTests
         Assert.Contains("ConfigureAwait(false)", output);
     }
 
+    [Fact]
+    public void QueryParam_NonNullableValueType_NoNullGuard()
+    {
+        var source = """
+            using ZeroAlloc.Rest.Attributes;
+            namespace MyApp;
+            [ZeroAllocRestClient]
+            public interface ISearchApi
+            {
+                [Get("/items")]
+                System.Threading.Tasks.Task<string> SearchAsync(
+                    [Query] int page,
+                    System.Threading.CancellationToken ct = default);
+            }
+            """;
+        var output = GetGeneratedSource(source, "ISearchApi.g.cs");
+        Assert.DoesNotContain("if (page != null)", output);
+        Assert.Contains("urlBuilder.Append(\"page=\")", output);
+    }
+
+    [Fact]
+    public void QueryParam_NullableValueType_HasNullGuard()
+    {
+        var source = """
+            using ZeroAlloc.Rest.Attributes;
+            namespace MyApp;
+            [ZeroAllocRestClient]
+            public interface ISearchApi
+            {
+                [Get("/items")]
+                System.Threading.Tasks.Task<string> SearchAsync(
+                    [Query] int? page,
+                    System.Threading.CancellationToken ct = default);
+            }
+            """;
+        var output = GetGeneratedSource(source, "ISearchApi.g.cs");
+        Assert.Contains("if (page != null)", output);
+    }
+
     private static string GetGeneratedSource(string source, string hintName)
     {
         var compilation = CSharpCompilation.Create(

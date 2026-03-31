@@ -104,7 +104,10 @@ internal static class ClientEmitter
             sb.AppendLine($"        var urlBase = $\"{routeExpr}\";");
             sb.AppendLine("        var urlBuilder = new System.Text.StringBuilder(urlBase).Append('?');");
             foreach (var q in queryParams)
-                sb.AppendLine($"        if ({q.Name} != null) urlBuilder.Append(\"{q.QueryName}=\").Append(Uri.EscapeDataString({q.Name}.ToString())).Append('&');");
+                if (q.IsNullable)
+                    sb.AppendLine($"        if ({q.Name} != null) urlBuilder.Append(\"{q.QueryName}=\").Append(Uri.EscapeDataString({q.Name}!.ToString()!)).Append('&');");
+                else
+                    sb.AppendLine($"        urlBuilder.Append(\"{q.QueryName}=\").Append(Uri.EscapeDataString({q.Name}.ToString())).Append('&');");
             sb.AppendLine("        var lastChar = urlBuilder[urlBuilder.Length - 1];");
             sb.AppendLine("        if (lastChar == '&' || lastChar == '?') urlBuilder.Length--;");
             sb.AppendLine("        var url = urlBuilder.ToString();");

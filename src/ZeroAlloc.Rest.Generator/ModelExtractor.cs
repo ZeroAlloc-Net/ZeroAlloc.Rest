@@ -147,7 +147,11 @@ internal static class ModelExtractor
                 }
             }
 
-            result.Add(new ParameterModel(param.Name, typeName, kind, headerName, queryName ?? param.Name));
+            // Non-nullable value types (int, bool, Guid…) can never be null at runtime.
+            // Nullable value types (int?) have OriginalDefinition == System.Nullable<T>.
+            bool isNullable = !param.Type.IsValueType
+                || param.Type.OriginalDefinition.SpecialType == Microsoft.CodeAnalysis.SpecialType.System_Nullable_T;
+            result.Add(new ParameterModel(param.Name, typeName, kind, headerName, queryName ?? param.Name, isNullable));
         }
         return result.AsReadOnly();
     }

@@ -7,4 +7,5 @@ internal record ParameterModel(
     string TypeName,
     ParameterKind Kind,
     string? HeaderName = null,
-    string? QueryName = null);
+    string? QueryName = null,
+    bool IsNullable = true);
