@@ -95,4 +95,89 @@ public class OpenApiInterfaceGeneratorTests
             File.Delete(file);
         }
     }
+
+    [Fact]
+    public void Generate_WithObjectResponseRef_MapsTypeName()
+    {
+        var yaml = """
+            openapi: 3.0.0
+            info:
+              title: Test
+              version: "1"
+            paths:
+              /users/{id}:
+                get:
+                  operationId: getUser
+                  parameters:
+                    - in: path
+                      name: id
+                      required: true
+                      schema:
+                        type: integer
+                  responses:
+                    '200':
+                      description: OK
+                      content:
+                        application/json:
+                          schema:
+                            $ref: '#/components/schemas/UserDto'
+            components:
+              schemas:
+                UserDto:
+                  type: object
+            """;
+        var result = OpenApiInterfaceGenerator.Generate(yaml, "MyApp", "IMyApi");
+        Assert.Contains("Task<UserDto>", result);
+        Assert.DoesNotContain("Task<object>", result);
+    }
+
+    [Fact]
+    public void Generate_WithArrayResponse_MapsListType()
+    {
+        var yaml = """
+            openapi: 3.0.0
+            info:
+              title: Test
+              version: "1"
+            paths:
+              /users:
+                get:
+                  operationId: listUsers
+                  responses:
+                    '200':
+                      description: OK
+                      content:
+                        application/json:
+                          schema:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/UserDto'
+            components:
+              schemas:
+                UserDto:
+                  type: object
+            """;
+        var result = OpenApiInterfaceGenerator.Generate(yaml, "MyApp", "IMyApi");
+        Assert.Contains("Task<List<UserDto>>", result);
+    }
+
+    [Fact]
+    public void Generate_WithSnakeCaseOperationId_ProducesPascalCaseMethodName()
+    {
+        var yaml = """
+            openapi: 3.0.0
+            info:
+              title: Test
+              version: "1"
+            paths:
+              /users:
+                get:
+                  operationId: get_all_users
+                  responses:
+                    '200':
+                      description: ok
+            """;
+        var result = OpenApiInterfaceGenerator.Generate(yaml, "MyApp", "IMyApi");
+        Assert.Contains("GetAllUsersAsync", result);
+    }
 }
