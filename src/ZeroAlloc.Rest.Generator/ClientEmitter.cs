@@ -107,7 +107,7 @@ internal static class ClientEmitter
                 if (q.IsNullable)
                     sb.AppendLine($"        if ({q.Name} != null) urlBuilder.Append(\"{q.QueryName}=\").Append(Uri.EscapeDataString({q.Name}!.ToString()!)).Append('&');");
                 else
-                    sb.AppendLine($"        urlBuilder.Append(\"{q.QueryName}=\").Append(Uri.EscapeDataString({q.Name}.ToString())).Append('&');");
+                    sb.AppendLine($"        urlBuilder.Append(\"{q.QueryName}=\").Append(Uri.EscapeDataString({q.Name}.ToString()!)).Append('&');");
             sb.AppendLine("        var lastChar = urlBuilder[urlBuilder.Length - 1];");
             sb.AppendLine("        if (lastChar == '&' || lastChar == '?') urlBuilder.Length--;");
             sb.AppendLine("        var url = urlBuilder.ToString();");
