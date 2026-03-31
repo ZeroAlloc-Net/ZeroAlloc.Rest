@@ -1,0 +1,13 @@
+<Project>
+  <UsingTask TaskName="ZeroAlloc.Rest.Tools.MSBuild.GenerateRestClientTask"
+             AssemblyFile="$(MSBuildThisFileDirectory)../ZeroAlloc.Rest.Tools.dll" />
+
+  <Target Name="GenerateZeroAllocRestClients" BeforeTargets="BeforeBuild">
+    <GenerateRestClientTask
+        Condition="'%(ZeroAllocApiSpec.Identity)' != ''"
+        Spec="%(ZeroAllocApiSpec.Identity)"
+        Namespace="%(ZeroAllocApiSpec.Namespace)"
+        Output="%(ZeroAllocApiSpec.Output)"
+        InterfaceName="%(ZeroAllocApiSpec.InterfaceName)" />
+  </Target>
+</Project>
