@@ -60,6 +60,8 @@ internal static class ClientEmitter
         // For all other methods (POST/PUT/PATCH/DELETE or GET with headers), use SendAsync.
         var useGetAsync = method.HttpMethod == "GET" && headerParams.Count == 0 && bodyParam == null;
 
+        sb.AppendLine("    [System.Diagnostics.CodeAnalysis.RequiresDynamicCode(\"Serialization of arbitrary types may require dynamic code.\")]");
+        sb.AppendLine("    [System.Diagnostics.CodeAnalysis.RequiresUnreferencedCode(\"Serialization of arbitrary types may require unreferenced code.\")]");
         sb.AppendLine($"    public async {method.ReturnTypeName} {method.Name}({BuildParamList(method.Parameters)})");
         sb.AppendLine("    {");
 
@@ -102,8 +104,8 @@ internal static class ClientEmitter
             sb.AppendLine($"        var urlBase = $\"{routeExpr}\";");
             sb.AppendLine("        var urlBuilder = new System.Text.StringBuilder(urlBase).Append('?');");
             foreach (var q in queryParams)
-                sb.AppendLine($"        urlBuilder.Append(\"{q.QueryName}=\").Append(Uri.EscapeDataString({q.Name}?.ToString() ?? string.Empty)).Append('&');");
-            sb.AppendLine("        if (urlBuilder.Length > 0 && urlBuilder[urlBuilder.Length - 1] == '&') urlBuilder.Length--;");
+                sb.AppendLine($"        if ({q.Name} != null) urlBuilder.Append(\"{q.QueryName}=\").Append(Uri.EscapeDataString({q.Name}.ToString())).Append('&');");
+            sb.AppendLine("        if (urlBuilder[urlBuilder.Length - 1] == '&') urlBuilder.Length--;");
             sb.AppendLine("        var url = urlBuilder.ToString();");
         }
     }
@@ -121,7 +123,15 @@ internal static class ClientEmitter
         if (bodyParam != null)
         {
             sb.AppendLine("        var bodyStream = new System.IO.MemoryStream();");
-            sb.AppendLine($"        await _serializer.SerializeAsync(bodyStream, {bodyParam.Name}, {ctArg}).ConfigureAwait(false);");
+            sb.AppendLine("        try");
+            sb.AppendLine("        {");
+            sb.AppendLine($"            await _serializer.SerializeAsync(bodyStream, {bodyParam.Name}, {ctArg}).ConfigureAwait(false);");
+            sb.AppendLine("        }");
+            sb.AppendLine("        catch");
+            sb.AppendLine("        {");
+            sb.AppendLine("            bodyStream.Dispose();");
+            sb.AppendLine("            throw;");
+            sb.AppendLine("        }");
             sb.AppendLine("        bodyStream.Position = 0;");
             sb.AppendLine("        request.Content = new System.Net.Http.StreamContent(bodyStream);");
             sb.AppendLine("        request.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(_serializer.ContentType);");
@@ -131,32 +141,17 @@ internal static class ClientEmitter
     private static void EmitSendAndResponse(StringBuilder sb, MethodModel method, string ctArg)
     {
         sb.AppendLine($"        using var response = await _httpClient.SendAsync(request, {ctArg}).ConfigureAwait(false);");
-
-        if (method.ReturnsVoid)
-        {
-            sb.AppendLine("        response.EnsureSuccessStatusCode();");
-        }
-        else if (method.ReturnsApiResponse)
-        {
-            sb.AppendLine($"        var responseStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);");
-            sb.AppendLine($"        var content = await _serializer.DeserializeAsync<{method.InnerTypeName}>(responseStream, {ctArg}).ConfigureAwait(false);");
-            sb.AppendLine("        var headers = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IReadOnlyList<string>>();");
-            sb.AppendLine("        foreach (var header in response.Headers)");
-            sb.AppendLine("            headers[header.Key] = new System.Collections.Generic.List<string>(header.Value).AsReadOnly();");
-            sb.AppendLine($"        return new ZeroAlloc.Rest.ApiResponse<{method.InnerTypeName}>(content, response.StatusCode, headers);");
-        }
-        else
-        {
-            sb.AppendLine("        response.EnsureSuccessStatusCode();");
-            sb.AppendLine($"        var responseStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);");
-            sb.AppendLine($"        return (await _serializer.DeserializeAsync<{method.InnerTypeName}>(responseStream, {ctArg}).ConfigureAwait(false))!;");
-        }
+        EmitResponseHandling(sb, method, ctArg);
     }
 
     private static void EmitGetAsyncAndResponse(StringBuilder sb, MethodModel method, string ctArg)
     {
         sb.AppendLine($"        using var response = await _httpClient.GetAsync(url, {ctArg}).ConfigureAwait(false);");
+        EmitResponseHandling(sb, method, ctArg);
+    }
 
+    private static void EmitResponseHandling(StringBuilder sb, MethodModel method, string ctArg)
+    {
         if (method.ReturnsVoid)
         {
             sb.AppendLine("        response.EnsureSuccessStatusCode();");
