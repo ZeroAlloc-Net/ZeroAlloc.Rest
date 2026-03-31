@@ -13,6 +13,7 @@ internal static class DiEmitter
         sb.AppendLine("#nullable enable");
         sb.AppendLine();
         sb.AppendLine("using Microsoft.Extensions.DependencyInjection;");
+        sb.AppendLine("using Microsoft.Extensions.DependencyInjection.Extensions;");
         sb.AppendLine("using ZeroAlloc.Rest;");
         sb.AppendLine();
 
@@ -24,16 +25,15 @@ internal static class DiEmitter
 
         sb.AppendLine("public static partial class GeneratedRestClientExtensions");
         sb.AppendLine("{");
-        sb.AppendLine($"    public static Microsoft.Extensions.DependencyInjection.IHttpClientBuilder Add{model.InterfaceName}(");
-        sb.AppendLine($"        this Microsoft.Extensions.DependencyInjection.IServiceCollection services,");
-        sb.AppendLine($"        System.Action<ZeroAlloc.Rest.ZeroAllocClientOptions>? configure = null)");
+        sb.AppendLine($"    public static IHttpClientBuilder Add{model.InterfaceName}(");
+        sb.AppendLine($"        this IServiceCollection services,");
+        sb.AppendLine($"        System.Action<ZeroAllocClientOptions>? configure = null)");
         sb.AppendLine("    {");
-        sb.AppendLine("        var options = new ZeroAlloc.Rest.ZeroAllocClientOptions();");
+        sb.AppendLine("        var options = new ZeroAllocClientOptions();");
         sb.AppendLine("        configure?.Invoke(options);");
         sb.AppendLine("        if (options.SerializerType is not null)");
-        sb.AppendLine("            services.AddSingleton(typeof(ZeroAlloc.Rest.IRestSerializer), options.SerializerType);");
-        sb.AppendLine($"        services.AddTransient<{model.InterfaceName}, {model.ClassName}>();");
-        sb.AppendLine($"        return services.AddHttpClient<{model.ClassName}>(client =>");
+        sb.AppendLine("            services.TryAddSingleton(typeof(IRestSerializer), options.SerializerType);");
+        sb.AppendLine($"        return services.AddHttpClient<{model.InterfaceName}, {model.ClassName}>(client =>");
         sb.AppendLine("        {");
         sb.AppendLine("            if (options.BaseAddress is not null)");
         sb.AppendLine("                client.BaseAddress = options.BaseAddress;");

@@ -65,7 +65,8 @@ public class GeneratorDiTests
         var output = RunAndGetSources(source);
         var diFile = output.Single(f => f.HintName == "IUserApi.DI.g.cs");
         var content = diFile.SourceText.ToString();
-        Assert.Contains("AddHttpClient", content);
+        Assert.Contains("AddHttpClient<", content);
+        Assert.Contains("IUserApi", content);
         Assert.Contains("UserApiClient", content);
     }
 
