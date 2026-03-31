@@ -13,14 +13,30 @@ public sealed class GenerateRestClientTask : Task
 
     public override bool Execute()
     {
+        if (string.IsNullOrWhiteSpace(Namespace))
+        {
+            Log.LogError("ZeroAlloc.Rest: Namespace is required and cannot be empty.");
+            return false;
+        }
+        if (string.IsNullOrWhiteSpace(Output))
+        {
+            Log.LogError("ZeroAlloc.Rest: Output is required and cannot be empty.");
+            return false;
+        }
+        if (string.IsNullOrWhiteSpace(Spec))
+        {
+            Log.LogError("ZeroAlloc.Rest: Spec is required and cannot be empty.");
+            return false;
+        }
+
         try
         {
             string content;
-            if (Spec.StartsWith("http://") || Spec.StartsWith("https://"))
-                content = OpenApiInterfaceGenerator.GenerateFromUrlAsync(Spec, Namespace, InterfaceName)
+            if (Spec.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || Spec.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                content = System.Threading.Tasks.Task.Run(() => OpenApiInterfaceGenerator.GenerateFromUrlAsync(Spec, Namespace, InterfaceName))
                     .GetAwaiter().GetResult();
             else
-                content = OpenApiInterfaceGenerator.GenerateFromFileAsync(Spec, Namespace, InterfaceName)
+                content = System.Threading.Tasks.Task.Run(() => OpenApiInterfaceGenerator.GenerateFromFileAsync(Spec, Namespace, InterfaceName))
                     .GetAwaiter().GetResult();
 
             var dir = Path.GetDirectoryName(Output);
@@ -31,7 +47,7 @@ public sealed class GenerateRestClientTask : Task
         }
         catch (Exception ex)
         {
-            Log.LogError($"ZeroAlloc.Rest generation failed: {ex.Message}");
+            Log.LogError($"ZeroAlloc.Rest generation failed: {ex}");
             return false;
         }
     }
