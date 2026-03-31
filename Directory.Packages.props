@@ -1,0 +1,28 @@
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Roslyn -->
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="4.13.0" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.Analyzers" Version="3.11.0" />
+    <!-- Serializers -->
+    <PackageVersion Include="MessagePack" Version="3.1.4" />
+    <PackageVersion Include="MessagePack.SourceGenerator" Version="2.6.100-alpha" />
+    <PackageVersion Include="MemoryPack" Version="1.21.4" />
+    <!-- OpenAPI -->
+    <PackageVersion Include="Microsoft.OpenApi.Readers" Version="1.6.28" />
+    <!-- CLI -->
+    <PackageVersion Include="System.CommandLine" Version="2.0.0-beta4.22272.1" />
+    <!-- Testing -->
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="2.8.2" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.13.0" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.SourceGenerators.Testing.XUnit" Version="1.1.2" />
+    <PackageVersion Include="WireMock.Net" Version="2.2.0" />
+    <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.0" />
+    <PackageVersion Include="Basic.Reference.Assemblies.Net80" Version="1.8.0" />
+    <PackageVersion Include="Microsoft.Build.Framework" Version="17.13.9" />
+    <PackageVersion Include="Microsoft.Build.Utilities.Core" Version="17.13.9" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../ZeroAlloc.Rest/ZeroAlloc.Rest.csproj" />
+    <PackageReference Include="MessagePack" />
+    <PackageReference Include="MessagePack.SourceGenerator" />
+  </ItemGroup>
+</Project>

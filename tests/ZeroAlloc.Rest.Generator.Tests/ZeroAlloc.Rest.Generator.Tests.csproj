@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- Suppress NU1608: Microsoft.CodeAnalysis.CSharp.SourceGenerators.Testing.XUnit 1.1.2 internally
+         references Roslyn 3.8.0 but we resolve 4.x — this is intentional and safe. -->
+    <NoWarn>$(NoWarn);NU1608</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.SourceGenerators.Testing.XUnit" />
+    <PackageReference Include="Basic.Reference.Assemblies.Net80" />
+    <ProjectReference Include="../../src/ZeroAlloc.Rest.Generator/ZeroAlloc.Rest.Generator.csproj" />
+    <ProjectReference Include="../../src/ZeroAlloc.Rest/ZeroAlloc.Rest.csproj" />
+  </ItemGroup>
+</Project>

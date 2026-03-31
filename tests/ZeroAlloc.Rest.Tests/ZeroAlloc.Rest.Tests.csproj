@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <ProjectReference Include="../../src/ZeroAlloc.Rest/ZeroAlloc.Rest.csproj" />
+  </ItemGroup>
+</Project>
