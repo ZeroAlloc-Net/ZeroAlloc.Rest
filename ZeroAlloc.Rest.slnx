@@ -1,0 +1,17 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ZeroAlloc.Rest/ZeroAlloc.Rest.csproj" />
+    <Project Path="src/ZeroAlloc.Rest.Generator/ZeroAlloc.Rest.Generator.csproj" />
+    <Project Path="src/ZeroAlloc.Rest.SystemTextJson/ZeroAlloc.Rest.SystemTextJson.csproj" />
+    <Project Path="src/ZeroAlloc.Rest.MemoryPack/ZeroAlloc.Rest.MemoryPack.csproj" />
+    <Project Path="src/ZeroAlloc.Rest.MessagePack/ZeroAlloc.Rest.MessagePack.csproj" />
+    <Project Path="src/ZeroAlloc.Rest.Tools/ZeroAlloc.Rest.Tools.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ZeroAlloc.Rest.Tests/ZeroAlloc.Rest.Tests.csproj" />
+    <Project Path="tests/ZeroAlloc.Rest.Generator.Tests/ZeroAlloc.Rest.Generator.Tests.csproj" />
+    <Project Path="tests/ZeroAlloc.Rest.Integration.Tests/ZeroAlloc.Rest.Integration.Tests.csproj" />
+    <Project Path="tests/ZeroAlloc.Rest.Tools.Tests/ZeroAlloc.Rest.Tools.Tests.csproj" />
+    <Project Path="tests/ZeroAlloc.Rest.Benchmarks/ZeroAlloc.Rest.Benchmarks.csproj" />
+  </Folder>
+</Solution>
