@@ -20,7 +20,7 @@ public sealed class SystemTextJsonSerializer : IRestSerializer
     [RequiresUnreferencedCode("JSON serialization of arbitrary types may require unreferenced code.")]
     public async ValueTask<T?> DeserializeAsync<T>(Stream stream, CancellationToken ct = default)
     {
-        if (stream.Length == 0) return default;
+        if (stream.CanSeek && stream.Position >= stream.Length) return default;
         return await JsonSerializer.DeserializeAsync<T>(stream, _options, ct).ConfigureAwait(false);
     }
 
