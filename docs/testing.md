@@ -96,13 +96,27 @@ public sealed class UserApiTests : IDisposable
 - **Nullable query params** — assert the query string is absent when a nullable param is `null`
 - **Delete / void methods** — assert no exception is thrown and the correct status code was returned
 
-## Testing with ApiResponse&lt;T&gt;
+## Testing with Result&lt;T, HttpError&gt;
 
-If your interface method returns `ApiResponse<T>`, assert the status code and headers too:
+If your interface method returns `Result<T, HttpError>`, assert both the success and failure paths:
 
 ```csharp
-var response = await _client.GetUserWithHeadersAsync(1);
-Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-Assert.Equal(1, response.Content.Id);
-Assert.True(response.Headers.ContainsKey("X-Request-Id"));
+// Success path
+_server.Given(Request.Create().WithPath("/users/1").UsingGet())
+    .RespondWith(Response.Create().WithStatusCode(200)
+        .WithBodyAsJson(new { id = 1, name = "Alice" }));
+
+var result = await _client.GetUserResultAsync(1);
+Assert.True(result.IsSuccess);
+Assert.Equal(1, result.Value.Id);
+
+// Failure path
+_server.Given(Request.Create().WithPath("/users/99").UsingGet())
+    .RespondWith(Response.Create().WithStatusCode(404));
+
+var notFound = await _client.GetUserResultAsync(99);
+Assert.False(notFound.IsSuccess);
+Assert.Equal(HttpStatusCode.NotFound, notFound.Error.StatusCode);
 ```
+
+No exception is thrown on 4xx/5xx when the return type is `Result<T, HttpError>` — the error is returned as a value.

@@ -24,7 +24,7 @@ public sealed class MessagePackUserDto
     [Key(1)] public string Name { get; set; } = "";
 }
 
-// ── Benchmark: serializer throughput (serialize + deserialize round-trip) ─────
+// ── Benchmark: serializer throughput (serialize + deserialize) ────────────────
 
 [MemoryDiagnoser]
 [SimpleJob]
@@ -38,6 +38,26 @@ public class SerializerBenchmarks
     private readonly SystemTextJsonSerializer _stj = new();
     private readonly MemoryPackRestSerializer _mp = new();
     private readonly MessagePackRestSerializer _msg = new();
+
+    // Pre-serialized payloads — computed once in GlobalSetup so Deserialize_*
+    // benchmarks measure deserialization only, not a serialize+deserialize round-trip.
+    private byte[] _stjBytes = [];
+    private byte[] _mpBytes = [];
+    private byte[] _msgBytes = [];
+
+    [GlobalSetup]
+    public void Setup()
+    {
+        _stjBytes = JsonSerializer.SerializeToUtf8Bytes(s_stjDto, s_jsonOptions);
+
+        using var mpMs = new MemoryStream();
+        _mp.SerializeAsync(mpMs, s_mpDto).AsTask().GetAwaiter().GetResult();
+        _mpBytes = mpMs.ToArray();
+
+        using var msgMs = new MemoryStream();
+        _msg.SerializeAsync(msgMs, s_msgDto).AsTask().GetAwaiter().GetResult();
+        _msgBytes = msgMs.ToArray();
+    }
 
     // ── Serialize ─────────────────────────────────────────────────────────────
 
@@ -70,26 +90,21 @@ public class SerializerBenchmarks
     [Benchmark]
     public async Task<UserDto?> Deserialize_SystemTextJson()
     {
-        var bytes = JsonSerializer.SerializeToUtf8Bytes(s_stjDto, s_jsonOptions);
-        using var ms = new MemoryStream(bytes);
+        using var ms = new MemoryStream(_stjBytes);
         return await _stj.DeserializeAsync<UserDto>(ms).ConfigureAwait(false);
     }
 
     [Benchmark]
     public async Task<MemoryPackUserDto?> Deserialize_MemoryPack()
     {
-        using var serMs = new MemoryStream();
-        await _mp.SerializeAsync(serMs, s_mpDto).ConfigureAwait(false);
-        serMs.Position = 0;
-        return await _mp.DeserializeAsync<MemoryPackUserDto>(serMs).ConfigureAwait(false);
+        using var ms = new MemoryStream(_mpBytes);
+        return await _mp.DeserializeAsync<MemoryPackUserDto>(ms).ConfigureAwait(false);
     }
 
     [Benchmark]
     public async Task<MessagePackUserDto?> Deserialize_MessagePack()
     {
-        using var serMs = new MemoryStream();
-        await _msg.SerializeAsync(serMs, s_msgDto).ConfigureAwait(false);
-        serMs.Position = 0;
-        return await _msg.DeserializeAsync<MessagePackUserDto>(serMs).ConfigureAwait(false);
+        using var ms = new MemoryStream(_msgBytes);
+        return await _msg.DeserializeAsync<MessagePackUserDto>(ms).ConfigureAwait(false);
     }
 }

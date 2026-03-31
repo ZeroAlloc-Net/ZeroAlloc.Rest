@@ -8,7 +8,7 @@ description: Result<T, HttpError>, multiple serializers, CancellationToken, and 
 
 # Advanced
 
-## Result<T, HttpError>
+## Result&lt;T, HttpError&gt;
 
 ZeroAlloc.Rest integrates with [`ZeroAlloc.Results`](https://github.com/ZeroAlloc-Net/ZeroAlloc.Results) to provide typed error returns without exceptions.
 
