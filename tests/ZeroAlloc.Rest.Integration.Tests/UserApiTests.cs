@@ -1,0 +1,87 @@
+using Microsoft.Extensions.DependencyInjection;
+using System.Text.Json;
+using WireMock.RequestBuilders;
+using WireMock.ResponseBuilders;
+using WireMock.Server;
+using Xunit;
+using ZeroAlloc.Rest.Integration.Tests.TestInterfaces;
+using ZeroAlloc.Rest.SystemTextJson;
+
+namespace ZeroAlloc.Rest.Integration.Tests;
+
+public sealed class UserApiTests : IDisposable
+{
+    private static readonly JsonSerializerOptions s_camelCase = new(JsonSerializerDefaults.Web);
+
+    private readonly WireMockServer _server;
+    private readonly IUserApi _client;
+
+    public UserApiTests()
+    {
+        _server = WireMockServer.Start();
+
+        var services = new ServiceCollection();
+        // Use the generated AddIUserApi extension method
+        services.AddIUserApi(options =>
+        {
+            options.BaseAddress = new Uri(_server.Url!);
+            options.UseSerializer<SystemTextJsonSerializer>();
+        });
+
+        var provider = services.BuildServiceProvider();
+        _client = provider.GetRequiredService<IUserApi>();
+    }
+
+    [Fact]
+    public async Task GetUser_ReturnsDeserializedUser()
+    {
+        _server.Given(Request.Create().WithPath("/users/1").UsingGet())
+               .RespondWith(Response.Create()
+                   .WithStatusCode(200)
+                   .WithHeader("Content-Type", "application/json")
+                   .WithBody(JsonSerializer.Serialize(new UserDto(1, "Alice"), s_camelCase)));
+
+        var user = await _client.GetUserAsync(1);
+        Assert.Equal(1, user.Id);
+        Assert.Equal("Alice", user.Name);
+    }
+
+    [Fact]
+    public async Task CreateUser_SerializesBody_ReturnsCreatedUser()
+    {
+        _server.Given(Request.Create().WithPath("/users").UsingPost())
+               .RespondWith(Response.Create()
+                   .WithStatusCode(201)
+                   .WithHeader("Content-Type", "application/json")
+                   .WithBody(JsonSerializer.Serialize(new UserDto(2, "Bob"), s_camelCase)));
+
+        var result = await _client.CreateUserAsync(new CreateUserRequest("Bob"));
+        Assert.Equal(2, result.Id);
+        Assert.Equal("Bob", result.Name);
+    }
+
+    [Fact]
+    public async Task ListUsers_WithQueryParam_AppendsToUrl()
+    {
+        _server.Given(Request.Create().WithPath("/users").WithParam("name", "Alice").UsingGet())
+               .RespondWith(Response.Create()
+                   .WithStatusCode(200)
+                   .WithHeader("Content-Type", "application/json")
+                   .WithBody(JsonSerializer.Serialize(new List<UserDto> { new(1, "Alice") }, s_camelCase)));
+
+        var result = await _client.ListUsersAsync("Alice");
+        Assert.Single(result);
+        Assert.Equal("Alice", result[0].Name);
+    }
+
+    [Fact]
+    public async Task DeleteUser_SendsDeleteRequest()
+    {
+        _server.Given(Request.Create().WithPath("/users/5").UsingDelete())
+               .RespondWith(Response.Create().WithStatusCode(204));
+
+        await _client.DeleteUserAsync(5); // Should not throw
+    }
+
+    public void Dispose() => _server.Dispose();
+}

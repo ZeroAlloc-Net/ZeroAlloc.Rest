@@ -9,7 +9,7 @@ public sealed class ZeroAllocClientOptions
     // [DynamicallyAccessedMembers] is required for AOT safety: it tells the trimmer to preserve
     // the public constructors of the registered serializer type so DI can instantiate it.
     [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)]
-    internal Type? SerializerType { get; private set; }
+    public Type? SerializerType { get; private set; }
 
     public void UseSerializer<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TSerializer>()
         where TSerializer : IRestSerializer
