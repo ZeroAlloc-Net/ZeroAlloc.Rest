@@ -5,5 +5,7 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <ProjectReference Include="../../src/ZeroAlloc.Rest/ZeroAlloc.Rest.csproj" />
     <ProjectReference Include="../../src/ZeroAlloc.Rest.SystemTextJson/ZeroAlloc.Rest.SystemTextJson.csproj" />
+    <ProjectReference Include="../../src/ZeroAlloc.Rest.MessagePack/ZeroAlloc.Rest.MessagePack.csproj" />
+    <PackageReference Include="MessagePack" />
   </ItemGroup>
 </Project>
