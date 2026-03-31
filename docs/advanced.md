@@ -3,32 +3,54 @@ id: advanced
 title: Advanced
 slug: /advanced
 sidebar_position: 10
-description: ApiResponse<T>, multiple serializers, CancellationToken, and edge cases.
+description: Result<T, HttpError>, multiple serializers, CancellationToken, and edge cases.
 ---
 
 # Advanced
 
-## ApiResponse&lt;T&gt;
+## Result<T, HttpError>
 
-When you need the HTTP status code or response headers alongside the body, change the return type from `Task<T>` to `Task<ApiResponse<T>>`:
+ZeroAlloc.Rest integrates with [`ZeroAlloc.Results`](https://github.com/ZeroAlloc-Net/ZeroAlloc.Results) to provide typed error returns without exceptions.
 
-```csharp
-[Get("/users/{id}")]
-Task<ApiResponse<UserDto>> GetUserAsync(int id, CancellationToken ct = default);
-```
-
-`ApiResponse<T>` carries:
+Declare a method with a `Result<T, HttpError>` return type:
 
 ```csharp
-public sealed class ApiResponse<T>
+using ZeroAlloc.Results;
+using ZeroAlloc.Rest;
+
+[ZeroAllocRestClient]
+public interface IUserApi
 {
-    public T? Content { get; }
-    public HttpStatusCode StatusCode { get; }
-    public IReadOnlyDictionary<string, IReadOnlyList<string>> Headers { get; }
+    [Get("/users/{id}")]
+    Task<Result<UserDto, HttpError>> GetUserAsync(int id, CancellationToken ct = default);
 }
 ```
 
-`ApiResponse<T>` does **not** call `EnsureSuccessStatusCode`. You must check `StatusCode` yourself.
+The generated client will:
+- Return `Result<T, HttpError>.Success(value)` on a 2xx response
+- Return `Result<T, HttpError>.Failure(error)` on any non-2xx response — **no exception is thrown**
+
+`HttpError` exposes:
+
+| Property | Type | Description |
+|---|---|---|
+| `StatusCode` | `HttpStatusCode` | HTTP status code of the failed response |
+| `Headers` | `IReadOnlyDictionary<string, IReadOnlyList<string>>` | Response headers |
+| `Message` | `string?` | Optional error message (null by default for HTTP failures) |
+
+Consuming the result:
+
+```csharp
+var result = await api.GetUserAsync(42);
+if (result.IsSuccess)
+{
+    Console.WriteLine($"User: {result.Value.Name}");
+}
+else
+{
+    Console.WriteLine($"Error: {result.Error.StatusCode}");
+}
+```
 
 ## CancellationToken
 
