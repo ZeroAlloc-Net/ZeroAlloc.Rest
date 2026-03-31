@@ -59,7 +59,7 @@ public class ServiceCollectionExtensionsTests
         });
         var provider = services.BuildServiceProvider();
         var factory = provider.GetRequiredService<IHttpClientFactory>();
-        var client = factory.CreateClient("ZeroAllocClient");
+        var client = factory.CreateClient(ServiceCollectionExtensions.DefaultClientName);
         Assert.Equal(new Uri("https://example.com"), client.BaseAddress);
     }
 
