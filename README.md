@@ -72,16 +72,16 @@ The generator produces `UserApiClient` — a sealed class implementing `IUserApi
 
 ## Performance
 
-Measured on .NET 10, Ubuntu, AMD64. In-memory handler; no real network I/O.
+Measured on .NET 10.0.4, Windows 11, X64. In-memory handler; no real network I/O.
 See [docs/benchmarks.md](docs/benchmarks.md) for methodology and full results.
 
-<!-- TODO: replace placeholder numbers below with results from `dotnet run -c Release` in tests/ZeroAlloc.Rest.Benchmarks -->
-
-| Method | Mean | Allocated |
-|---|---|---|
-| Raw HttpClient (baseline) | ~5.2 μs | 744 B |
-| **ZeroAlloc.Rest** | ~6.1 μs | 1.1 KB |
-| Refit | ~18.4 μs | 4.8 KB |
+| Method | Mean | vs Refit | Allocated |
+|---|---:|---:|---:|
+| Raw HttpClient (GET baseline) | 1,648 ns | — | 1.38 KB |
+| **ZeroAlloc.Rest GET** | 1,933 ns | **3.2× faster** | 1.74 KB |
+| Refit GET | 6,123 ns | 1× | 3.03 KB |
+| **ZeroAlloc.Rest QueryParam** | 2,474 ns | **5.5× faster** | 1.85 KB |
+| Refit QueryParam | 13,509 ns | 1× | 3.67 KB |
 
 ## Features
 
