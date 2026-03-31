@@ -1,4 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- MA0016: collection abstraction — test helpers; MA0048: multiple types per file in test fixtures -->
+    <NoWarn>$(NoWarn);MA0016;MA0048</NoWarn>
+  </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />

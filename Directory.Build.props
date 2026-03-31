@@ -1,11 +1,48 @@
 <Project>
+  <!-- Build settings shared by all projects -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <Authors>ZeroAlloc.Rest Contributors</Authors>
-    <RepositoryUrl>https://github.com/TODO/ZeroAlloc.Rest</RepositoryUrl>
   </PropertyGroup>
+
+  <!-- NuGet metadata -->
+  <PropertyGroup>
+    <Authors>Marcel Roozekrans</Authors>
+    <Company>ZeroAlloc</Company>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://rest.zeroalloc.net</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>rest;http;client;source-generator;aot;native-aot;zero-allocation</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>icon.png</PackageIcon>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <Copyright>Copyright © Marcel Roozekrans</Copyright>
+    <Description>Source-generated, AOT-compatible REST client for .NET</Description>
+  </PropertyGroup>
+
+  <!-- Pack root README and icon into every NuGet package -->
+  <ItemGroup Condition="'$(IsPackable)' != 'false'">
+    <None Include="$(MSBuildThisFileDirectory)README.md"
+          Pack="true" PackagePath="\" Visible="false" />
+    <None Include="$(MSBuildThisFileDirectory)assets\icon.png"
+          Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
+
+  <!-- Disable packing for test and benchmark projects -->
+  <PropertyGroup Condition="$(MSBuildProjectName.Contains('.Tests')) Or
+                            $(MSBuildProjectName.Contains('.Benchmarks'))">
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <!-- Global analyzers (PrivateAssets=all — do not flow to consumers) -->
+  <ItemGroup Condition="'$(IsRoslynComponent)' != 'true'">
+    <PackageReference Include="Meziantou.Analyzer" PrivateAssets="all" />
+    <PackageReference Include="Roslynator.Analyzers" PrivateAssets="all" />
+    <PackageReference Include="ErrorProne.NET.CoreAnalyzers" PrivateAssets="all" />
+    <PackageReference Include="ErrorProne.NET.Structs" PrivateAssets="all" />
+  </ItemGroup>
 </Project>

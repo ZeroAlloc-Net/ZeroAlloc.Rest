@@ -3,6 +3,8 @@
     <OutputType>Exe</OutputType>
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>zeroalloc</ToolCommandName>
+    <!-- MA0004: ConfigureAwait — console tool, no sync context; MA0006/MA0011: string comparison style in codegen output -->
+    <NoWarn>$(NoWarn);MA0004;MA0006;MA0011</NoWarn>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.OpenApi.Readers" />

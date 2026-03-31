@@ -27,5 +27,10 @@
     <!-- Benchmarks -->
     <PackageVersion Include="BenchmarkDotNet" Version="0.14.0" />
     <PackageVersion Include="Refit" Version="7.2.1" />
+    <!-- Analyzers -->
+    <PackageVersion Include="Meziantou.Analyzer" Version="2.0.182" />
+    <PackageVersion Include="Roslynator.Analyzers" Version="4.12.10" />
+    <PackageVersion Include="ErrorProne.NET.CoreAnalyzers" Version="0.1.2" />
+    <PackageVersion Include="ErrorProne.NET.Structs" Version="0.1.2" />
   </ItemGroup>
 </Project>

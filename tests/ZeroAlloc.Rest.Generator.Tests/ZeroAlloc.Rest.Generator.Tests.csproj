@@ -2,7 +2,8 @@
   <PropertyGroup>
     <!-- Suppress NU1608: Microsoft.CodeAnalysis.CSharp.SourceGenerators.Testing.XUnit 1.1.2 internally
          references Roslyn 3.8.0 but we resolve 4.x — this is intentional and safe. -->
-    <NoWarn>$(NoWarn);NU1608</NoWarn>
+    <!-- EPS06: ImmutableArray hidden copy — test helpers, not perf-critical; MA0006/MA0074: string comparison style in test assertions -->
+    <NoWarn>$(NoWarn);NU1608;EPS06;MA0006;MA0074</NoWarn>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="xunit" />

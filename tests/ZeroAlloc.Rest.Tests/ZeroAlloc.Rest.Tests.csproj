@@ -1,4 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- MA0002/MA0074: string comparison in test assertions; MA0048: multiple types per file in test fixtures; MA0061: override default values in test doubles -->
+    <NoWarn>$(NoWarn);MA0002;MA0048;MA0061;MA0074</NoWarn>
+  </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
