@@ -20,6 +20,9 @@ TestResults/
 *.coverage
 *.coveragexml
 
+# BenchmarkDotNet
+BenchmarkDotNet.Artifacts/
+
 # OS
 .DS_Store
 Thumbs.db
