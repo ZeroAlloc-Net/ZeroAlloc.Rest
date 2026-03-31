@@ -31,6 +31,7 @@ internal static class ClientEmitter
         sb.AppendLine("using System.Net.Http.Headers;");
         sb.AppendLine("using System.Threading;");
         sb.AppendLine("using System.Threading.Tasks;");
+        sb.AppendLine("using ZeroAlloc.Collections;");
         sb.AppendLine("using ZeroAlloc.Rest;");
         sb.AppendLine();
 
@@ -128,15 +129,30 @@ internal static class ClientEmitter
         else
         {
             sb.AppendLine($"        var urlBase = $\"{routeExpr}\";");
-            sb.AppendLine("        var urlBuilder = new System.Text.StringBuilder(urlBase).Append('?');");
+            sb.AppendLine("        using var urlBuilder = new ZeroAlloc.Collections.HeapPooledList<char>(urlBase.Length + 64);");
+            sb.AppendLine("        ZeroAlloc.Rest.Internal.HeapPooledListExtensions.Append(urlBuilder, urlBase.AsSpan());");
+            sb.AppendLine("        var hasQuery = false;");
             foreach (var q in queryParams)
+            {
                 if (q.IsNullable)
-                    sb.AppendLine($"        if ({q.Name} != null) urlBuilder.Append(\"{q.QueryName}=\").Append(Uri.EscapeDataString({q.Name}!.ToString()!)).Append('&');");
+                {
+                    sb.AppendLine($"        if ({q.Name} != null)");
+                    sb.AppendLine("        {");
+                    sb.AppendLine($"            ZeroAlloc.Rest.Internal.HeapPooledListExtensions.Append(urlBuilder, hasQuery ? '&' : '?');");
+                    sb.AppendLine($"            ZeroAlloc.Rest.Internal.HeapPooledListExtensions.Append(urlBuilder, \"{q.QueryName}=\".AsSpan());");
+                    sb.AppendLine($"            ZeroAlloc.Rest.Internal.HeapPooledListExtensions.Append(urlBuilder, System.Uri.EscapeDataString({q.Name}!.ToString()!).AsSpan());");
+                    sb.AppendLine("            hasQuery = true;");
+                    sb.AppendLine("        }");
+                }
                 else
-                    sb.AppendLine($"        urlBuilder.Append(\"{q.QueryName}=\").Append(Uri.EscapeDataString({q.Name}.ToString()!)).Append('&');");
-            sb.AppendLine("        var lastChar = urlBuilder[urlBuilder.Length - 1];");
-            sb.AppendLine("        if (lastChar == '&' || lastChar == '?') urlBuilder.Length--;");
-            sb.AppendLine("        var url = urlBuilder.ToString();");
+                {
+                    sb.AppendLine($"        ZeroAlloc.Rest.Internal.HeapPooledListExtensions.Append(urlBuilder, hasQuery ? '&' : '?');");
+                    sb.AppendLine($"        ZeroAlloc.Rest.Internal.HeapPooledListExtensions.Append(urlBuilder, \"{q.QueryName}=\".AsSpan());");
+                    sb.AppendLine($"        ZeroAlloc.Rest.Internal.HeapPooledListExtensions.Append(urlBuilder, System.Uri.EscapeDataString({q.Name}.ToString()!).AsSpan());");
+                    sb.AppendLine("        hasQuery = true;");
+                }
+            }
+            sb.AppendLine("        var url = new string(urlBuilder.AsReadOnlySpan());");
         }
     }
 
@@ -183,12 +199,20 @@ internal static class ClientEmitter
         }
         else if (method.ReturnsResult)
         {
-            sb.AppendLine($"        var responseStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);");
-            sb.AppendLine($"        var content = await {serializerExpr}.DeserializeAsync<{method.InnerTypeName}>(responseStream, {ctArg}).ConfigureAwait(false);");
-            sb.AppendLine("        var headers = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IReadOnlyList<string>>();");
-            sb.AppendLine("        foreach (var header in response.Headers)");
-            sb.AppendLine("            headers[header.Key] = new System.Collections.Generic.List<string>(header.Value).AsReadOnly();");
-            sb.AppendLine($"        return new ZeroAlloc.Rest.ApiResponse<{method.InnerTypeName}>(content, response.StatusCode, headers);");
+            sb.AppendLine("        if (response.IsSuccessStatusCode)");
+            sb.AppendLine("        {");
+            sb.AppendLine($"            var responseStream = await response.Content.ReadAsStreamAsync({ctArg}).ConfigureAwait(false);");
+            sb.AppendLine($"            var content = await {serializerExpr}.DeserializeAsync<{method.InnerTypeName}>(responseStream, {ctArg}).ConfigureAwait(false);");
+            sb.AppendLine($"            return ZeroAlloc.Results.Result<{method.InnerTypeName}, ZeroAlloc.Rest.HttpError>.Success(content!);");
+            sb.AppendLine("        }");
+            sb.AppendLine("        else");
+            sb.AppendLine("        {");
+            sb.AppendLine("            var headers = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IReadOnlyList<string>>();");
+            sb.AppendLine("            foreach (var kvp in response.Headers)");
+            sb.AppendLine("                headers[kvp.Key] = new System.Collections.Generic.List<string>(kvp.Value).AsReadOnly();");
+            sb.AppendLine($"            return ZeroAlloc.Results.Result<{method.InnerTypeName}, ZeroAlloc.Rest.HttpError>.Failure(");
+            sb.AppendLine($"                new ZeroAlloc.Rest.HttpError(response.StatusCode, headers));");
+            sb.AppendLine("        }");
         }
         else
         {
