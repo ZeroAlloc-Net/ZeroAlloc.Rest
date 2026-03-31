@@ -89,7 +89,7 @@ See [docs/benchmarks.md](docs/benchmarks.md) for methodology and full results.
 - **Native AOT compatible** — no `DynamicMethod`, no IL emit, no `Type.GetType`
 - **Per-method serializer override** — `[Serializer(typeof(MySerializer))]` for mixed protocols
 - **Path, query, body, and header parameters** — `{id}`, `[Query]`, `[Body]`, `[Header("X-Api-Key")]`
-- **`ApiResponse<T>`** — access status code and headers alongside the deserialized body
+- **`Result<T, HttpError>`** — typed success/error returns via `ZeroAlloc.Results`; no exception-throwing on 4xx/5xx
 - **OpenAPI code generation** — `OpenApiInterfaceGenerator` API + MSBuild `<ZeroAllocApiSpec>` task
 - **Pluggable serializers** — System.Text.Json, MemoryPack, MessagePack, or bring your own
 - **IHttpClientFactory integration** — `AddI{Interface}` generated extension method
@@ -107,7 +107,7 @@ See [docs/benchmarks.md](docs/benchmarks.md) for methodology and full results.
 | [OpenAPI Code Generation](docs/openapi-codegen.md) | Generate interfaces from OpenAPI specs |
 | [Benchmarks](docs/benchmarks.md) | Performance comparison vs Refit and raw HttpClient |
 | [Testing](docs/testing.md) | Testing patterns with WireMock.Net |
-| [Advanced](docs/advanced.md) | `ApiResponse<T>`, multiple serializers, edge cases |
+| [Advanced](docs/advanced.md) | `Result<T, HttpError>`, multiple serializers, edge cases |
 | [Cookbook](docs/cookbook/) | End-to-end recipes |
 
 ## License
