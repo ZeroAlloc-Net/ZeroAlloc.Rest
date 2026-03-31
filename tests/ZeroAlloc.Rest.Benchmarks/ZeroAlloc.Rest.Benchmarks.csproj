@@ -12,11 +12,15 @@
                       OutputItemType="Analyzer"
                       ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../src/ZeroAlloc.Rest.SystemTextJson/ZeroAlloc.Rest.SystemTextJson.csproj" />
+    <ProjectReference Include="../../src/ZeroAlloc.Rest.MemoryPack/ZeroAlloc.Rest.MemoryPack.csproj" />
+    <ProjectReference Include="../../src/ZeroAlloc.Rest.MessagePack/ZeroAlloc.Rest.MessagePack.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="BenchmarkDotNet" />
     <PackageReference Include="Refit" />
     <PackageReference Include="Microsoft.Extensions.Http" />
+    <PackageReference Include="MemoryPack" />
+    <PackageReference Include="MessagePack" />
   </ItemGroup>
 </Project>
