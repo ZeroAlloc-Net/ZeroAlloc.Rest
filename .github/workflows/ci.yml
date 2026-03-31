@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, 'release-please--**' ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore tools
+        run: dotnet tool restore
+
+      - name: Run GitVersion
+        id: gitversion
+        run: |
+          VERSION=$(dotnet tool run dotnet-gitversion /output json /showvariable SemVer)
+          echo "semver=$VERSION" >> $GITHUB_OUTPUT
+          echo "Computed version: $VERSION"
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore -c Release -p:Version=${{ steps.gitversion.outputs.semver }}
+
+      - name: Test
+        run: dotnet test --no-build -c Release --logger "trx" --results-directory ./test-results
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: ./test-results
+
+      - name: Pack
+        run: dotnet pack --no-build -c Release -p:Version=${{ steps.gitversion.outputs.semver }} -o ./nupkg
+
+      - name: Push to NuGet (pre-release alpha)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          dotnet nuget push ./nupkg/*.nupkg \
+            --api-key ${{ secrets.NUGET_API_KEY }} \
+            --source https://api.nuget.org/v3/index.json \
+            --skip-duplicate
