@@ -10,4 +10,7 @@
     <PackageReference Include="ZeroAlloc.Collections" />
     <PackageReference Include="ZeroAlloc.Analyzers" PrivateAssets="all" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="ZeroAlloc.Serialisation" />
+  </ItemGroup>
 </Project>

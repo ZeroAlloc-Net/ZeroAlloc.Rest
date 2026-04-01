@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Threading;
@@ -24,8 +25,9 @@ public sealed class MemoryPackRestSerializer : IRestSerializer
     [RequiresUnreferencedCode("MemoryPack serialization of arbitrary types may require unreferenced code.")]
     public async ValueTask SerializeAsync<T>(Stream stream, T value, CancellationToken ct = default)
     {
-        var bytes = MemoryPackSerializer.Serialize(value);
-        await stream.WriteAsync(bytes, 0, bytes.Length, ct).ConfigureAwait(false);
+        var buffer = new ArrayBufferWriter<byte>();
+        MemoryPackSerializer.Serialize(buffer, value);
+        await stream.WriteAsync(buffer.WrittenMemory, ct).ConfigureAwait(false);
     }
 
     private static async Task<byte[]> ReadAllBytesAsync(Stream stream, CancellationToken ct)
