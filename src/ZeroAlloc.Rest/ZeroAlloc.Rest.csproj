@@ -11,6 +11,6 @@
     <PackageReference Include="ZeroAlloc.Analyzers" PrivateAssets="all" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="../../../ZeroAlloc.Serialisation/src/ZeroAlloc.Serialisation/ZeroAlloc.Serialisation.csproj" />
+    <PackageReference Include="ZeroAlloc.Serialisation" />
   </ItemGroup>
 </Project>
