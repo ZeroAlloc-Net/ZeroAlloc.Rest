@@ -1,7 +1,7 @@
 ---
 id: getting-started
 title: Getting Started
-slug: /getting-started
+slug: /
 sidebar_position: 1
 description: Install ZeroAlloc.Rest, register the DI extension, and make your first HTTP call.
 ---
