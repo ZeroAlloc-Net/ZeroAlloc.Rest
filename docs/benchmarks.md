@@ -17,7 +17,7 @@ All benchmarks use an in-memory `HttpMessageHandler` that returns a fixed pre-se
 - Tool: BenchmarkDotNet v0.14.0
 - Baseline: `RawHttpClient_Get` (manual `HttpClient` + `JsonSerializer.DeserializeAsync`)
 
-Source: [`tests/ZeroAlloc.Rest.Benchmarks/`](../tests/ZeroAlloc.Rest.Benchmarks/)
+Source: `tests/ZeroAlloc.Rest.Benchmarks/`
 
 ---
 
