@@ -17,7 +17,7 @@
     <!-- Testing -->
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="2.8.2" />
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.13.0" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.SourceGenerators.Testing.XUnit" Version="1.1.2" />
     <PackageVersion Include="WireMock.Net" Version="2.2.0" />
     <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.5" />
@@ -25,11 +25,11 @@
     <PackageVersion Include="Microsoft.Build.Framework" Version="17.14.28" />
     <PackageVersion Include="Microsoft.Build.Utilities.Core" Version="17.14.28" />
     <!-- Benchmarks -->
-    <PackageVersion Include="BenchmarkDotNet" Version="0.14.0" />
+    <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
     <PackageVersion Include="Refit" Version="7.2.22" />
     <!-- Analyzers -->
     <PackageVersion Include="Meziantou.Analyzer" Version="2.0.302" />
-    <PackageVersion Include="Roslynator.Analyzers" Version="4.12.10" />
+    <PackageVersion Include="Roslynator.Analyzers" Version="4.15.0" />
     <PackageVersion Include="ErrorProne.NET.CoreAnalyzers" Version="0.1.2" />
     <PackageVersion Include="ErrorProne.NET.Structs" Version="0.1.2" />
     <!-- ZeroAlloc ecosystem -->
