@@ -180,6 +180,10 @@ internal static class ClientEmitter
         sb.AppendLine($"            url);");
         sb.AppendLine($"        request.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue({serializerExpr}.ContentType));");
 
+        // Static headers declared with [Header("Name", Value = "...")] are added additively.
+        // For Accept, this means both the serializer's content type and the static value will
+        // appear in the header. This is intentional — use ConfigureHttpClient to override
+        // the serializer's Accept if exclusive control is needed.
         foreach (var (name, value) in method.StaticHeaders)
             sb.AppendLine($"        request.Headers.TryAddWithoutValidation(\"{name}\", \"{value}\");");
 

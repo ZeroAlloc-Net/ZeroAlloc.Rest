@@ -125,6 +125,10 @@ public sealed class UserApiTests : IDisposable
 
         var result = await _client.GetUserRawAsync(1);
         Assert.Equal("raw-data", result);
+
+        var logEntry = _server.LogEntries.Single(e => string.Equals(e.RequestMessage?.Path, "/users/1/raw", StringComparison.Ordinal));
+        var acceptValues = string.Join(", ", logEntry.RequestMessage!.Headers!["Accept"]);
+        Assert.Contains("application/octet-stream", acceptValues, StringComparison.Ordinal);
     }
 
     public void Dispose()
