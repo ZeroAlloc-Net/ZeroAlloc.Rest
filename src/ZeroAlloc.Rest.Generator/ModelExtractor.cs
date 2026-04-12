@@ -82,6 +82,9 @@ internal static class ModelExtractor
                     break;
                 }
             }
+            // A method-level [Header] without a Value is intentionally ignored — there is nothing
+            // to emit at compile time. Users who omit Value get no output and no diagnostic.
+            // Consider adding ZRA002 here in future to warn about this silent no-op.
             if (headerValue != null)
                 staticHeaders.Add((headerName, headerValue));
         }

@@ -75,3 +75,51 @@ Every method should end with `CancellationToken ct = default`. The generator rec
 | `[Body]` | Request body | Serialized by `IRestSerializer` |
 | `[Header("Name")]` | Request header | Exact header name required |
 | `CancellationToken` | (automatic) | Recognised by type, no attribute needed |
+| `[Header("Name", Value = "...")]` on method | Static request header | Compile-time constant; silently ignored when `Value` is omitted |
+| `[Query]` on `IEnumerable<T>` | Repeated query keys | Null items skipped; null collection emits nothing |
+| `[FormBody]` | Form-encoded body | `IEnumerable<KeyValuePair<string,string>>`; no serializer used |
+
+### Static headers on methods
+
+Use `[Header("Name", Value = "literal")]` on a method to emit a compile-time header. The header is added to every request for that method, independent of the serializer.
+
+```csharp
+[Get("/files/{id}")]
+[Header("Accept", Value = "application/octet-stream")]
+Task<byte[]> GetFileAsync(int id, CancellationToken ct = default);
+```
+
+> **Note:** Static headers are *additive*. If you set `Accept` via `[Header]` and the serializer also sets `Accept`, both values appear in the outgoing header. Use `ConfigureHttpClient` if you need exclusive control over `Accept`.
+
+If `Value` is omitted on a method-level `[Header]`, the attribute is silently ignored.
+
+### Multi-value query parameters
+
+Annotate an `IEnumerable<T>` parameter with `[Query]` to emit repeated query string keys (`?tags=a&tags=b`).
+
+```csharp
+[Get("/items")]
+Task<List<ItemDto>> SearchAsync([Query] IEnumerable<string>? tags, CancellationToken ct = default);
+// ?tags=admin&tags=active
+```
+
+Null items inside the collection are skipped. A `null` collection emits no query keys. The parameter type must implement `IEnumerable<T>` (e.g. `List<T>`, `string[]`, `IReadOnlyList<T>`). Passing `string` is treated as a scalar (strings are `IEnumerable<char>` but that case is excluded).
+
+### Form-encoded body
+
+Use `[FormBody]` to send `application/x-www-form-urlencoded` content without a serializer. The parameter type must be `IEnumerable<KeyValuePair<string, string>>` (e.g. `Dictionary<string, string>`).
+
+```csharp
+[Post("/oauth/token")]
+Task<TokenResponse> GetTokenAsync([FormBody] Dictionary<string, string> form, CancellationToken ct = default);
+```
+
+```csharp
+var token = await api.GetTokenAsync(new Dictionary<string, string>
+{
+    ["grant_type"] = "client_credentials",
+    ["client_id"] = "my-app"
+});
+```
+
+`[FormBody]` and `[Body]` are mutually exclusive on the same method. Using both produces a `ZRA001` compile-time error.
