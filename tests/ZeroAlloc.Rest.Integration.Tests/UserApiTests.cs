@@ -131,6 +131,23 @@ public sealed class UserApiTests : IDisposable
         Assert.Contains("application/octet-stream", acceptValues, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task ListUsers_WithCollectionQuery_RepeatsKey()
+    {
+        _server.Given(Request.Create()
+                    .WithPath("/users")
+                    .WithParam("tags", "admin", "active")
+                    .UsingGet())
+               .RespondWith(Response.Create()
+                   .WithStatusCode(200)
+                   .WithHeader("Content-Type", "application/json")
+                   .WithBody(JsonSerializer.Serialize(new List<UserDto> { new(1, "Alice") }, s_camelCase)));
+
+        var result = await _client.ListUsersByTagsAsync(["admin", "active"]);
+        Assert.Single(result);
+        Assert.Equal("Alice", result[0].Name);
+    }
+
     public void Dispose()
     {
         _provider.Dispose();

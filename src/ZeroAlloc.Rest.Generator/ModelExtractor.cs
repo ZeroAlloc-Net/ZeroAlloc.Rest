@@ -171,7 +171,32 @@ internal static class ModelExtractor
             // Nullable value types (int?) have OriginalDefinition == System.Nullable<T>.
             bool isNullable = !param.Type.IsValueType
                 || param.Type.OriginalDefinition.SpecialType == Microsoft.CodeAnalysis.SpecialType.System_Nullable_T;
-            result.Add(new ParameterModel(param.Name, typeName, kind, headerName, queryName ?? param.Name, isNullable));
+
+            bool isCollection = false;
+            if (kind == ParameterKind.Query
+                && param.Type.SpecialType != Microsoft.CodeAnalysis.SpecialType.System_String)
+            {
+                // Check if the type itself is IEnumerable<T>
+                if (param.Type is INamedTypeSymbol namedParamType
+                    && namedParamType.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.IEnumerable<T>")
+                {
+                    isCollection = true;
+                }
+                else
+                {
+                    // Check if it implements IEnumerable<T>
+                    foreach (var iface in param.Type.AllInterfaces)
+                    {
+                        if (iface.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.IEnumerable<T>")
+                        {
+                            isCollection = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            result.Add(new ParameterModel(param.Name, typeName, kind, headerName, queryName ?? param.Name, isNullable, isCollection));
         }
         return result.AsReadOnly();
     }

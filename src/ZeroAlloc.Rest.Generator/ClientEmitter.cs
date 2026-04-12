@@ -150,7 +150,20 @@ internal static class ClientEmitter
             sb.AppendLine("        var hasQuery = false;");
             foreach (var q in queryParams)
             {
-                if (q.IsNullable)
+                if (q.IsCollection)
+                {
+                    sb.AppendLine($"        if ({q.Name} != null)");
+                    sb.AppendLine("        {");
+                    sb.AppendLine($"            foreach (var __item in {q.Name})");
+                    sb.AppendLine("            {");
+                    sb.AppendLine($"                AppendToUrl(urlBuilder, hasQuery ? '&' : '?');");
+                    sb.AppendLine($"                AppendToUrl(urlBuilder, \"{q.QueryName}=\".AsSpan());");
+                    sb.AppendLine($"                AppendToUrl(urlBuilder, System.Uri.EscapeDataString(__item?.ToString() ?? string.Empty).AsSpan());");
+                    sb.AppendLine("                hasQuery = true;");
+                    sb.AppendLine("            }");
+                    sb.AppendLine("        }");
+                }
+                else if (q.IsNullable)
                 {
                     sb.AppendLine($"        if ({q.Name} != null)");
                     sb.AppendLine("        {");

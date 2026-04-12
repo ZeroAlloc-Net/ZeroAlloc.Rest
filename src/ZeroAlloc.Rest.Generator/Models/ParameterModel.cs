@@ -8,4 +8,5 @@ internal record ParameterModel(
     ParameterKind Kind,
     string? HeaderName = null,
     string? QueryName = null,
-    bool IsNullable = true);
+    bool IsNullable = true,
+    bool IsCollection = false);

@@ -270,6 +270,27 @@ public class GeneratorEmissionTests
         Assert.Contains("TryAddWithoutValidation", output);
     }
 
+    [Fact]
+    public void QueryParam_Collection_EmitsForEachLoop()
+    {
+        var source = """
+            using System.Collections.Generic;
+            using ZeroAlloc.Rest.Attributes;
+            namespace MyApp;
+            [ZeroAllocRestClient]
+            public interface ISearchApi
+            {
+                [Get("/items")]
+                System.Threading.Tasks.Task<string> SearchAsync(
+                    [Query] IEnumerable<string> tags,
+                    System.Threading.CancellationToken ct = default);
+            }
+            """;
+        var output = GetGeneratedSource(source, "ISearchApi.g.cs");
+        Assert.Contains("foreach", output);
+        Assert.Contains("\"tags=\"", output);
+    }
+
     private static string GetGeneratedSource(string source, string hintName)
     {
         var compilation = CSharpCompilation.Create(
