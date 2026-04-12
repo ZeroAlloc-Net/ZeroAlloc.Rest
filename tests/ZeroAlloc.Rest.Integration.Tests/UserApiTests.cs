@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Net;
 using Microsoft.Extensions.DependencyInjection;
 using System.Text.Json;
@@ -146,6 +147,26 @@ public sealed class UserApiTests : IDisposable
         var result = await _client.ListUsersByTagsAsync(new List<string> { "admin", "active" });
         Assert.Single(result);
         Assert.Equal("Alice", result[0].Name);
+    }
+
+    [Fact]
+    public async Task FormBody_SendsFormEncodedContent()
+    {
+        _server.Given(Request.Create()
+                    .WithPath("/oauth/token")
+                    .WithBody(b => b != null && b.Contains("grant_type=client_credentials", StringComparison.Ordinal))
+                    .UsingPost())
+               .RespondWith(Response.Create()
+                   .WithStatusCode(200)
+                   .WithHeader("Content-Type", "application/json")
+                   .WithBody(JsonSerializer.Serialize(new UserDto(1, "token"), s_camelCase)));
+
+        var result = await _client.GetTokenAsync(new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["grant_type"] = "client_credentials",
+            ["client_id"] = "my-app"
+        });
+        Assert.Equal(1, result.Id);
     }
 
     public void Dispose()

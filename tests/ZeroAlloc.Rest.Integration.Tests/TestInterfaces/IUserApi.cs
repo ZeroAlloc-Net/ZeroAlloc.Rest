@@ -31,4 +31,7 @@ public interface IUserApi
     [Get("/users/{id}/raw")]
     [Header("Accept", Value = "application/octet-stream")]
     Task<string> GetUserRawAsync(int id, CancellationToken ct = default);
+
+    [Post("/oauth/token")]
+    Task<UserDto> GetTokenAsync([FormBody] Dictionary<string, string> form, CancellationToken ct = default);
 }

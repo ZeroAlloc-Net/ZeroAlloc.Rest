@@ -104,6 +104,7 @@ internal static class ClientEmitter
         var pathParams = FilterParameters(method.Parameters, ParameterKind.Path);
         var queryParams = FilterParameters(method.Parameters, ParameterKind.Query);
         var bodyParam = FirstOrDefault(method.Parameters, ParameterKind.Body);
+        var formBodyParam = FirstOrDefault(method.Parameters, ParameterKind.FormBody);
         var headerParams = FilterParameters(method.Parameters, ParameterKind.Header);
 
         // If the method has its own [Serializer], use that injected field; otherwise fall back to _serializer.
@@ -117,7 +118,7 @@ internal static class ClientEmitter
         sb.AppendLine("    {");
 
         EmitUrlBuilding(sb, method.Route, pathParams, queryParams);
-        EmitRequestCreation(sb, method, headerParams, bodyParam, ctArg, serializerExpr);
+        EmitRequestCreation(sb, method, headerParams, bodyParam, formBodyParam, ctArg, serializerExpr);
         EmitSendAndResponse(sb, method, ctArg, serializerExpr);
 
         sb.AppendLine("    }");
@@ -187,7 +188,8 @@ internal static class ClientEmitter
     }
 
     private static void EmitRequestCreation(StringBuilder sb, MethodModel method,
-        List<ParameterModel> headerParams, ParameterModel? bodyParam, string ctArg, string serializerExpr)
+        List<ParameterModel> headerParams, ParameterModel? bodyParam, ParameterModel? formBodyParam,
+        string ctArg, string serializerExpr)
     {
         sb.AppendLine($"        using var request = new System.Net.Http.HttpRequestMessage(");
         sb.AppendLine($"            System.Net.Http.HttpMethod.{Capitalize(method.HttpMethod)},");
@@ -219,6 +221,11 @@ internal static class ClientEmitter
             sb.AppendLine("        bodyStream.Position = 0;");
             sb.AppendLine("        request.Content = new System.Net.Http.StreamContent(bodyStream);");
             sb.AppendLine($"        request.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue({serializerExpr}.ContentType);");
+        }
+
+        if (formBodyParam != null)
+        {
+            sb.AppendLine($"        request.Content = new System.Net.Http.FormUrlEncodedContent({formBodyParam.Name});");
         }
     }
 

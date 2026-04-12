@@ -12,7 +12,8 @@ internal static class ModelExtractor
     private const string PutAttr    = "ZeroAlloc.Rest.Attributes.PutAttribute";
     private const string PatchAttr  = "ZeroAlloc.Rest.Attributes.PatchAttribute";
     private const string DeleteAttr = "ZeroAlloc.Rest.Attributes.DeleteAttribute";
-    private const string BodyAttr   = "ZeroAlloc.Rest.Attributes.BodyAttribute";
+    private const string BodyAttr     = "ZeroAlloc.Rest.Attributes.BodyAttribute";
+    private const string FormBodyAttr = "ZeroAlloc.Rest.Attributes.FormBodyAttribute";
     private const string QueryAttr  = "ZeroAlloc.Rest.Attributes.QueryAttribute";
     private const string HeaderAttr = "ZeroAlloc.Rest.Attributes.HeaderAttribute";
     private const string SerializerAttr = "ZeroAlloc.Rest.Attributes.SerializerAttribute";
@@ -140,6 +141,11 @@ internal static class ModelExtractor
                 if (attrClass == BodyAttr)
                 {
                     kind = ParameterKind.Body;
+                    break;
+                }
+                if (attrClass == FormBodyAttr)
+                {
+                    kind = ParameterKind.FormBody;
                     break;
                 }
                 if (attrClass == QueryAttr)

@@ -1,6 +1,6 @@
 namespace ZeroAlloc.Rest.Generator.Models;
 
-internal enum ParameterKind { Path, Query, Body, Header, CancellationToken }
+internal enum ParameterKind { Path, Query, Body, FormBody, Header, CancellationToken }
 
 internal record ParameterModel(
     string Name,

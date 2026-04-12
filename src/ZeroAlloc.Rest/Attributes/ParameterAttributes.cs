@@ -16,6 +16,9 @@ public sealed class HeaderAttribute(string name) : Attribute
     public string? Value { get; init; }
 }
 
+[AttributeUsage(AttributeTargets.Parameter)]
+public sealed class FormBodyAttribute : Attribute { }
+
 [AttributeUsage(AttributeTargets.Interface | AttributeTargets.Method)]
 public sealed class SerializerAttribute(Type serializerType) : Attribute
 {

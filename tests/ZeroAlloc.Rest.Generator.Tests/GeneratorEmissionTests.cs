@@ -314,6 +314,27 @@ public class GeneratorEmissionTests
         Assert.DoesNotContain("__item?.ToString() ?? string.Empty", output);
     }
 
+    [Fact]
+    public void FormBody_EmitsFormUrlEncodedContent()
+    {
+        var source = """
+            using System.Collections.Generic;
+            using ZeroAlloc.Rest.Attributes;
+            namespace MyApp;
+            [ZeroAllocRestClient]
+            public interface ITokenApi
+            {
+                [Post("/oauth/token")]
+                System.Threading.Tasks.Task<string> GetTokenAsync(
+                    [FormBody] Dictionary<string, string> form,
+                    System.Threading.CancellationToken ct = default);
+            }
+            """;
+        var output = GetGeneratedSource(source, "ITokenApi.g.cs");
+        Assert.Contains("FormUrlEncodedContent", output);
+        Assert.DoesNotContain("SerializeAsync", output);
+    }
+
     private static string GetGeneratedSource(string source, string hintName)
     {
         var compilation = CSharpCompilation.Create(
