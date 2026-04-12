@@ -289,6 +289,29 @@ public class GeneratorEmissionTests
         var output = GetGeneratedSource(source, "ISearchApi.g.cs");
         Assert.Contains("foreach", output);
         Assert.Contains("\"tags=\"", output);
+        Assert.Contains("EscapeDataString", output);
+    }
+
+    [Fact]
+    public void QueryParam_EmptyCollection_ProducesNoQueryString()
+    {
+        var source = """
+            using System.Collections.Generic;
+            using ZeroAlloc.Rest.Attributes;
+            namespace MyApp;
+            [ZeroAllocRestClient]
+            public interface ISearchApi
+            {
+                [Get("/items")]
+                System.Threading.Tasks.Task<string> SearchAsync(
+                    [Query] IEnumerable<string>? tags,
+                    System.Threading.CancellationToken ct = default);
+            }
+            """;
+        var output = GetGeneratedSource(source, "ISearchApi.g.cs");
+        // The foreach branch must guard null items — no unconditional emission of empty values
+        Assert.Contains("if (__item == null) continue;", output);
+        Assert.DoesNotContain("__item?.ToString() ?? string.Empty", output);
     }
 
     private static string GetGeneratedSource(string source, string hintName)

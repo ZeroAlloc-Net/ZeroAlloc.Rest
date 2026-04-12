@@ -26,7 +26,7 @@ public interface IUserApi
     Task DeleteUserAsync(int id, CancellationToken ct = default);
 
     [Get("/users")]
-    Task<List<UserDto>> ListUsersByTagsAsync([Query] IEnumerable<string> tags, CancellationToken ct = default);
+    Task<List<UserDto>> ListUsersByTagsAsync([Query] IEnumerable<string>? tags, CancellationToken ct = default);
 
     [Get("/users/{id}/raw")]
     [Header("Accept", Value = "application/octet-stream")]

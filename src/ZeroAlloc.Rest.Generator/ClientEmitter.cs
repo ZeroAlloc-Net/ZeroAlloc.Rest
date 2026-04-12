@@ -156,9 +156,10 @@ internal static class ClientEmitter
                     sb.AppendLine("        {");
                     sb.AppendLine($"            foreach (var __item in {q.Name})");
                     sb.AppendLine("            {");
+                    sb.AppendLine($"                if (__item == null) continue;");
                     sb.AppendLine($"                AppendToUrl(urlBuilder, hasQuery ? '&' : '?');");
                     sb.AppendLine($"                AppendToUrl(urlBuilder, \"{q.QueryName}=\".AsSpan());");
-                    sb.AppendLine($"                AppendToUrl(urlBuilder, System.Uri.EscapeDataString(__item?.ToString() ?? string.Empty).AsSpan());");
+                    sb.AppendLine($"                AppendToUrl(urlBuilder, System.Uri.EscapeDataString(__item.ToString()!).AsSpan());");
                     sb.AppendLine("                hasQuery = true;");
                     sb.AppendLine("            }");
                     sb.AppendLine("        }");

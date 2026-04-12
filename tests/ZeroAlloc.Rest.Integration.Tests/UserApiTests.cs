@@ -143,7 +143,7 @@ public sealed class UserApiTests : IDisposable
                    .WithHeader("Content-Type", "application/json")
                    .WithBody(JsonSerializer.Serialize(new List<UserDto> { new(1, "Alice") }, s_camelCase)));
 
-        var result = await _client.ListUsersByTagsAsync(["admin", "active"]);
+        var result = await _client.ListUsersByTagsAsync(new List<string> { "admin", "active" });
         Assert.Single(result);
         Assert.Equal("Alice", result[0].Name);
     }
