@@ -167,6 +167,10 @@ public sealed class UserApiTests : IDisposable
             ["client_id"] = "my-app"
         });
         Assert.Equal(1, result.Id);
+        var logEntry = _server.LogEntries.Single(e =>
+            string.Equals(e.RequestMessage?.Path, "/oauth/token", StringComparison.Ordinal));
+        var contentType = string.Join(", ", logEntry.RequestMessage!.Headers!["Content-Type"]);
+        Assert.Contains("application/x-www-form-urlencoded", contentType, StringComparison.Ordinal);
     }
 
     public void Dispose()

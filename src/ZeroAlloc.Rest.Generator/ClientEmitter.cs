@@ -7,6 +7,14 @@ namespace ZeroAlloc.Rest.Generator;
 
 internal static class ClientEmitter
 {
+    private static readonly DiagnosticDescriptor s_conflictingBodyDescriptor = new DiagnosticDescriptor(
+        id: "ZRA001",
+        title: "Conflicting body attributes",
+        messageFormat: "Method '{0}' has both [Body] and [FormBody] parameters; only one is allowed",
+        category: "ZeroAlloc.Rest.Generator",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
     internal static void Emit(SourceProductionContext ctx, ClientModel model)
     {
         // Collect unique method-level serializer types (ordered, deduped)
@@ -80,7 +88,7 @@ internal static class ClientEmitter
         sb.AppendLine();
 
         foreach (var method in model.Methods)
-            EmitMethod(sb, method, serializerFieldMap);
+            EmitMethod(ctx, sb, method, serializerFieldMap);
 
         if (hasQueryParams)
         {
@@ -97,7 +105,7 @@ internal static class ClientEmitter
         ctx.AddSource($"{model.InterfaceName}.g.cs", sb.ToString());
     }
 
-    private static void EmitMethod(StringBuilder sb, MethodModel method, IReadOnlyDictionary<string, string> serializerFieldMap)
+    private static void EmitMethod(SourceProductionContext ctx, StringBuilder sb, MethodModel method, IReadOnlyDictionary<string, string> serializerFieldMap)
     {
         var ctParam = FindCancellationToken(method.Parameters);
         var ctArg = ctParam != null ? ctParam.Name : "default";
@@ -106,6 +114,13 @@ internal static class ClientEmitter
         var bodyParam = FirstOrDefault(method.Parameters, ParameterKind.Body);
         var formBodyParam = FirstOrDefault(method.Parameters, ParameterKind.FormBody);
         var headerParams = FilterParameters(method.Parameters, ParameterKind.Header);
+
+        if (bodyParam != null && formBodyParam != null)
+        {
+            ctx.ReportDiagnostic(Diagnostic.Create(s_conflictingBodyDescriptor, Location.None, method.Name));
+            // Still emit valid (if incomplete) code so compilation continues
+            formBodyParam = null; // suppress the FormBody branch
+        }
 
         // If the method has its own [Serializer], use that injected field; otherwise fall back to _serializer.
         var serializerExpr = method.SerializerTypeName != null && serializerFieldMap.TryGetValue(method.SerializerTypeName, out var fieldName)

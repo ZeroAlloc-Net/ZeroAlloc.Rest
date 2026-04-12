@@ -333,6 +333,41 @@ public class GeneratorEmissionTests
         var output = GetGeneratedSource(source, "ITokenApi.g.cs");
         Assert.Contains("FormUrlEncodedContent", output);
         Assert.DoesNotContain("SerializeAsync", output);
+        Assert.DoesNotContain("StreamContent", output);
+    }
+
+    [Fact]
+    public void ConflictingBodyAndFormBody_ReportsDiagnostic()
+    {
+        var source = """
+            using System.Collections.Generic;
+            using ZeroAlloc.Rest.Attributes;
+            namespace MyApp;
+            [ZeroAllocRestClient]
+            public interface ITokenApi
+            {
+                [Post("/token")]
+                System.Threading.Tasks.Task<string> BadAsync(
+                    [Body] string body,
+                    [FormBody] Dictionary<string, string> form,
+                    System.Threading.CancellationToken ct = default);
+            }
+            """;
+        var compilation = CSharpCompilation.Create(
+            "TestAssembly",
+            new[] { CSharpSyntaxTree.ParseText(source) },
+            Basic.Reference.Assemblies.Net100.References.All
+                .Append(MetadataReference.CreateFromFile(AttributesAssembly.Location)),
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var generator = new RestClientGenerator();
+        var driver = CSharpGeneratorDriver
+            .Create(generator)
+            .RunGenerators(compilation);
+
+        var result = driver.GetRunResult();
+        var diagnostics = result.Results[0].Diagnostics;
+        Assert.Contains(diagnostics, d => d.Id == "ZRA001");
     }
 
     private static string GetGeneratedSource(string source, string hintName)
