@@ -23,4 +23,8 @@ public interface IUserApi
 
     [Delete("/users/{id}")]
     Task DeleteUserAsync(int id, CancellationToken ct = default);
+
+    [Get("/users/{id}/raw")]
+    [Header("Accept", Value = "application/octet-stream")]
+    Task<string> GetUserRawAsync(int id, CancellationToken ct = default);
 }

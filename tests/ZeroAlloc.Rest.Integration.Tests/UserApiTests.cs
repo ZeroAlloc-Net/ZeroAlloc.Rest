@@ -111,6 +111,22 @@ public sealed class UserApiTests : IDisposable
         Assert.Equal(HttpStatusCode.NotFound, result.Error.StatusCode);
     }
 
+    [Fact]
+    public async Task StaticHeader_SentWithRequest()
+    {
+        _server.Given(Request.Create()
+                    .WithPath("/users/1/raw")
+                    .WithHeader("Accept", "*application/octet-stream*")
+                    .UsingGet())
+               .RespondWith(Response.Create()
+                   .WithStatusCode(200)
+                   .WithHeader("Content-Type", "application/json")
+                   .WithBody("\"raw-data\""));
+
+        var result = await _client.GetUserRawAsync(1);
+        Assert.Equal("raw-data", result);
+    }
+
     public void Dispose()
     {
         _provider.Dispose();

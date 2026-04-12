@@ -180,6 +180,9 @@ internal static class ClientEmitter
         sb.AppendLine($"            url);");
         sb.AppendLine($"        request.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue({serializerExpr}.ContentType));");
 
+        foreach (var (name, value) in method.StaticHeaders)
+            sb.AppendLine($"        request.Headers.TryAddWithoutValidation(\"{name}\", \"{value}\");");
+
         foreach (var h in headerParams)
             sb.AppendLine($"        request.Headers.TryAddWithoutValidation(\"{h.HeaderName}\", {h.Name}?.ToString());");
 

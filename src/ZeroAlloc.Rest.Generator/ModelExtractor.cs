@@ -65,6 +65,26 @@ internal static class ModelExtractor
             if (attrClass == DeleteAttr && attr.ConstructorArguments.Length > 0) { httpMethod = "DELETE"; route = (string?)attr.ConstructorArguments[0].Value; break; }
         }
 
+        var staticHeaders = new List<(string, string)>();
+        foreach (var attr in method.GetAttributes())
+        {
+            if (attr.AttributeClass?.ToDisplayString() != HeaderAttr) continue;
+            if (attr.ConstructorArguments.Length == 0) continue;
+            var headerName = attr.ConstructorArguments[0].Value as string;
+            if (headerName is null) continue;
+            string? headerValue = null;
+            foreach (var namedArg in attr.NamedArguments)
+            {
+                if (namedArg.Key == "Value" && namedArg.Value.Value is string v)
+                {
+                    headerValue = v;
+                    break;
+                }
+            }
+            if (headerValue != null)
+                staticHeaders.Add((headerName, headerValue));
+        }
+
         if (httpMethod is null || route is null) return null;
 
         var returnType = method.ReturnType as INamedTypeSymbol;
@@ -94,7 +114,7 @@ internal static class ModelExtractor
         return new MethodModel(
             method.Name, httpMethod, route, returnTypeName,
             innerTypeName, returnsResult, returnsVoid,
-            parameters, methodSerializer);
+            parameters, methodSerializer, staticHeaders.AsReadOnly());
     }
 
     private static IReadOnlyList<ParameterModel> ExtractParameters(IMethodSymbol method)

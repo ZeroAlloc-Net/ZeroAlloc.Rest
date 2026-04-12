@@ -250,6 +250,26 @@ public class GeneratorEmissionTests
         Assert.Contains(".Failure(", output);
     }
 
+    [Fact]
+    public void StaticHeader_OnMethod_EmittedInGeneratedCode()
+    {
+        var source = """
+            using ZeroAlloc.Rest.Attributes;
+            namespace MyApp;
+            [ZeroAllocRestClient]
+            public interface IFileApi
+            {
+                [Get("/files/{id}")]
+                [Header("Accept", Value = "application/octet-stream")]
+                System.Threading.Tasks.Task<string> GetFileAsync(int id, System.Threading.CancellationToken ct = default);
+            }
+            """;
+        var output = GetGeneratedSource(source, "IFileApi.g.cs");
+        Assert.Contains("\"Accept\"", output);
+        Assert.Contains("\"application/octet-stream\"", output);
+        Assert.Contains("TryAddWithoutValidation", output);
+    }
+
     private static string GetGeneratedSource(string source, string hintName)
     {
         var compilation = CSharpCompilation.Create(
