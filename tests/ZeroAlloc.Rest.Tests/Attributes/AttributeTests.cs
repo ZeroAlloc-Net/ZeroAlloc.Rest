@@ -62,4 +62,19 @@ public class AttributeTests
         var attr = new SerializerAttribute(typeof(object));
         Assert.Equal(typeof(object), attr.SerializerType);
     }
+
+    [Fact]
+    public void HeaderAttribute_StoresStaticValue()
+    {
+        var attr = new HeaderAttribute("Accept") { Value = "application/octet-stream" };
+        Assert.Equal("Accept", attr.Name);
+        Assert.Equal("application/octet-stream", attr.Value);
+    }
+
+    [Fact]
+    public void FormBodyAttribute_IsAnAttribute()
+    {
+        var attr = new FormBodyAttribute();
+        Assert.IsAssignableFrom<Attribute>(attr);
+    }
 }
