@@ -11,7 +11,7 @@
     <!-- MessagePack 3.x bundles the source generator; no separate MessagePack.SourceGenerator package exists for 3.x -->
     <PackageVersion Include="MemoryPack" Version="1.21.4" />
     <!-- OpenAPI -->
-    <PackageVersion Include="Microsoft.OpenApi.Readers" Version="1.6.28" />
+    <PackageVersion Include="Microsoft.OpenApi.Readers" Version="1.6.29" />
     <!-- CLI -->
     <PackageVersion Include="System.CommandLine" Version="2.0.6" />
     <!-- Testing -->
