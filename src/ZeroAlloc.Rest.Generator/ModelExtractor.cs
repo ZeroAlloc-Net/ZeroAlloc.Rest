@@ -12,7 +12,8 @@ internal static class ModelExtractor
     private const string PutAttr    = "ZeroAlloc.Rest.Attributes.PutAttribute";
     private const string PatchAttr  = "ZeroAlloc.Rest.Attributes.PatchAttribute";
     private const string DeleteAttr = "ZeroAlloc.Rest.Attributes.DeleteAttribute";
-    private const string BodyAttr   = "ZeroAlloc.Rest.Attributes.BodyAttribute";
+    private const string BodyAttr     = "ZeroAlloc.Rest.Attributes.BodyAttribute";
+    private const string FormBodyAttr = "ZeroAlloc.Rest.Attributes.FormBodyAttribute";
     private const string QueryAttr  = "ZeroAlloc.Rest.Attributes.QueryAttribute";
     private const string HeaderAttr = "ZeroAlloc.Rest.Attributes.HeaderAttribute";
     private const string SerializerAttr = "ZeroAlloc.Rest.Attributes.SerializerAttribute";
@@ -65,6 +66,29 @@ internal static class ModelExtractor
             if (attrClass == DeleteAttr && attr.ConstructorArguments.Length > 0) { httpMethod = "DELETE"; route = (string?)attr.ConstructorArguments[0].Value; break; }
         }
 
+        var staticHeaders = new List<(string, string)>();
+        foreach (var attr in method.GetAttributes())
+        {
+            if (attr.AttributeClass?.ToDisplayString() != HeaderAttr) continue;
+            if (attr.ConstructorArguments.Length == 0) continue;
+            var headerName = attr.ConstructorArguments[0].Value as string;
+            if (headerName is null) continue;
+            string? headerValue = null;
+            foreach (var namedArg in attr.NamedArguments)
+            {
+                if (namedArg.Key == "Value" && namedArg.Value.Value is string v)
+                {
+                    headerValue = v;
+                    break;
+                }
+            }
+            // A method-level [Header] without a Value is intentionally ignored — there is nothing
+            // to emit at compile time. Users who omit Value get no output and no diagnostic.
+            // Consider adding ZRA002 here in future to warn about this silent no-op.
+            if (headerValue != null)
+                staticHeaders.Add((headerName, headerValue));
+        }
+
         if (httpMethod is null || route is null) return null;
 
         var returnType = method.ReturnType as INamedTypeSymbol;
@@ -94,7 +118,7 @@ internal static class ModelExtractor
         return new MethodModel(
             method.Name, httpMethod, route, returnTypeName,
             innerTypeName, returnsResult, returnsVoid,
-            parameters, methodSerializer);
+            parameters, methodSerializer, staticHeaders.AsReadOnly());
     }
 
     private static IReadOnlyList<ParameterModel> ExtractParameters(IMethodSymbol method)
@@ -120,6 +144,11 @@ internal static class ModelExtractor
                 if (attrClass == BodyAttr)
                 {
                     kind = ParameterKind.Body;
+                    break;
+                }
+                if (attrClass == FormBodyAttr)
+                {
+                    kind = ParameterKind.FormBody;
                     break;
                 }
                 if (attrClass == QueryAttr)
@@ -151,7 +180,32 @@ internal static class ModelExtractor
             // Nullable value types (int?) have OriginalDefinition == System.Nullable<T>.
             bool isNullable = !param.Type.IsValueType
                 || param.Type.OriginalDefinition.SpecialType == Microsoft.CodeAnalysis.SpecialType.System_Nullable_T;
-            result.Add(new ParameterModel(param.Name, typeName, kind, headerName, queryName ?? param.Name, isNullable));
+
+            bool isCollection = false;
+            if (kind == ParameterKind.Query
+                && param.Type.SpecialType != Microsoft.CodeAnalysis.SpecialType.System_String)
+            {
+                // Check if the type itself is IEnumerable<T>
+                if (param.Type is INamedTypeSymbol namedParamType
+                    && namedParamType.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.IEnumerable<T>")
+                {
+                    isCollection = true;
+                }
+                else
+                {
+                    // Check if it implements IEnumerable<T>
+                    foreach (var iface in param.Type.AllInterfaces)
+                    {
+                        if (iface.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.IEnumerable<T>")
+                        {
+                            isCollection = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            result.Add(new ParameterModel(param.Name, typeName, kind, headerName, queryName ?? param.Name, isNullable, isCollection));
         }
         return result.AsReadOnly();
     }

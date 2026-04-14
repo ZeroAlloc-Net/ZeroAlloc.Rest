@@ -7,6 +7,14 @@ namespace ZeroAlloc.Rest.Generator;
 
 internal static class ClientEmitter
 {
+    private static readonly DiagnosticDescriptor s_conflictingBodyDescriptor = new DiagnosticDescriptor(
+        id: "ZRA001",
+        title: "Conflicting body attributes",
+        messageFormat: "Method '{0}' has both [Body] and [FormBody] parameters; only one is allowed",
+        category: "ZeroAlloc.Rest.Generator",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
     internal static void Emit(SourceProductionContext ctx, ClientModel model)
     {
         // Collect unique method-level serializer types (ordered, deduped)
@@ -80,7 +88,7 @@ internal static class ClientEmitter
         sb.AppendLine();
 
         foreach (var method in model.Methods)
-            EmitMethod(sb, method, serializerFieldMap);
+            EmitMethod(ctx, sb, method, serializerFieldMap);
 
         if (hasQueryParams)
         {
@@ -97,14 +105,22 @@ internal static class ClientEmitter
         ctx.AddSource($"{model.InterfaceName}.g.cs", sb.ToString());
     }
 
-    private static void EmitMethod(StringBuilder sb, MethodModel method, IReadOnlyDictionary<string, string> serializerFieldMap)
+    private static void EmitMethod(SourceProductionContext ctx, StringBuilder sb, MethodModel method, IReadOnlyDictionary<string, string> serializerFieldMap)
     {
         var ctParam = FindCancellationToken(method.Parameters);
         var ctArg = ctParam != null ? ctParam.Name : "default";
         var pathParams = FilterParameters(method.Parameters, ParameterKind.Path);
         var queryParams = FilterParameters(method.Parameters, ParameterKind.Query);
         var bodyParam = FirstOrDefault(method.Parameters, ParameterKind.Body);
+        var formBodyParam = FirstOrDefault(method.Parameters, ParameterKind.FormBody);
         var headerParams = FilterParameters(method.Parameters, ParameterKind.Header);
+
+        if (bodyParam != null && formBodyParam != null)
+        {
+            ctx.ReportDiagnostic(Diagnostic.Create(s_conflictingBodyDescriptor, Location.None, method.Name));
+            // Still emit valid (if incomplete) code so compilation continues
+            formBodyParam = null; // suppress the FormBody branch
+        }
 
         // If the method has its own [Serializer], use that injected field; otherwise fall back to _serializer.
         var serializerExpr = method.SerializerTypeName != null && serializerFieldMap.TryGetValue(method.SerializerTypeName, out var fieldName)
@@ -117,7 +133,7 @@ internal static class ClientEmitter
         sb.AppendLine("    {");
 
         EmitUrlBuilding(sb, method.Route, pathParams, queryParams);
-        EmitRequestCreation(sb, method, headerParams, bodyParam, ctArg, serializerExpr);
+        EmitRequestCreation(sb, method, headerParams, bodyParam, formBodyParam, ctArg, serializerExpr);
         EmitSendAndResponse(sb, method, ctArg, serializerExpr);
 
         sb.AppendLine("    }");
@@ -150,7 +166,21 @@ internal static class ClientEmitter
             sb.AppendLine("        var hasQuery = false;");
             foreach (var q in queryParams)
             {
-                if (q.IsNullable)
+                if (q.IsCollection)
+                {
+                    sb.AppendLine($"        if ({q.Name} != null)");
+                    sb.AppendLine("        {");
+                    sb.AppendLine($"            foreach (var __item in {q.Name})");
+                    sb.AppendLine("            {");
+                    sb.AppendLine($"                if (__item == null) continue;");
+                    sb.AppendLine($"                AppendToUrl(urlBuilder, hasQuery ? '&' : '?');");
+                    sb.AppendLine($"                AppendToUrl(urlBuilder, \"{q.QueryName}=\".AsSpan());");
+                    sb.AppendLine($"                AppendToUrl(urlBuilder, System.Uri.EscapeDataString(__item.ToString()!).AsSpan());");
+                    sb.AppendLine("                hasQuery = true;");
+                    sb.AppendLine("            }");
+                    sb.AppendLine("        }");
+                }
+                else if (q.IsNullable)
                 {
                     sb.AppendLine($"        if ({q.Name} != null)");
                     sb.AppendLine("        {");
@@ -173,12 +203,20 @@ internal static class ClientEmitter
     }
 
     private static void EmitRequestCreation(StringBuilder sb, MethodModel method,
-        List<ParameterModel> headerParams, ParameterModel? bodyParam, string ctArg, string serializerExpr)
+        List<ParameterModel> headerParams, ParameterModel? bodyParam, ParameterModel? formBodyParam,
+        string ctArg, string serializerExpr)
     {
         sb.AppendLine($"        using var request = new System.Net.Http.HttpRequestMessage(");
         sb.AppendLine($"            System.Net.Http.HttpMethod.{Capitalize(method.HttpMethod)},");
         sb.AppendLine($"            url);");
         sb.AppendLine($"        request.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue({serializerExpr}.ContentType));");
+
+        // Static headers declared with [Header("Name", Value = "...")] are added additively.
+        // For Accept, this means both the serializer's content type and the static value will
+        // appear in the header. This is intentional — use ConfigureHttpClient to override
+        // the serializer's Accept if exclusive control is needed.
+        foreach (var (name, value) in method.StaticHeaders)
+            sb.AppendLine($"        request.Headers.TryAddWithoutValidation(\"{name}\", \"{value}\");");
 
         foreach (var h in headerParams)
             sb.AppendLine($"        request.Headers.TryAddWithoutValidation(\"{h.HeaderName}\", {h.Name}?.ToString());");
@@ -198,6 +236,11 @@ internal static class ClientEmitter
             sb.AppendLine("        bodyStream.Position = 0;");
             sb.AppendLine("        request.Content = new System.Net.Http.StreamContent(bodyStream);");
             sb.AppendLine($"        request.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue({serializerExpr}.ContentType);");
+        }
+
+        if (formBodyParam != null)
+        {
+            sb.AppendLine($"        request.Content = new System.Net.Http.FormUrlEncodedContent({formBodyParam.Name});");
         }
     }
 

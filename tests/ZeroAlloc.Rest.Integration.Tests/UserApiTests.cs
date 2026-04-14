@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Net;
 using Microsoft.Extensions.DependencyInjection;
 using System.Text.Json;
@@ -109,6 +110,67 @@ public sealed class UserApiTests : IDisposable
         var result = await _client.GetUserResultAsync(99);
         Assert.False(result.IsSuccess);
         Assert.Equal(HttpStatusCode.NotFound, result.Error.StatusCode);
+    }
+
+    [Fact]
+    public async Task StaticHeader_SentWithRequest()
+    {
+        _server.Given(Request.Create()
+                    .WithPath("/users/1/raw")
+                    .WithHeader("Accept", "*application/octet-stream*")
+                    .UsingGet())
+               .RespondWith(Response.Create()
+                   .WithStatusCode(200)
+                   .WithHeader("Content-Type", "application/json")
+                   .WithBody("\"raw-data\""));
+
+        var result = await _client.GetUserRawAsync(1);
+        Assert.Equal("raw-data", result);
+
+        var logEntry = _server.LogEntries.Single(e => string.Equals(e.RequestMessage?.Path, "/users/1/raw", StringComparison.Ordinal));
+        var acceptValues = string.Join(", ", logEntry.RequestMessage!.Headers!["Accept"]);
+        Assert.Contains("application/octet-stream", acceptValues, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ListUsers_WithCollectionQuery_RepeatsKey()
+    {
+        _server.Given(Request.Create()
+                    .WithPath("/users")
+                    .WithParam("tags", "admin", "active")
+                    .UsingGet())
+               .RespondWith(Response.Create()
+                   .WithStatusCode(200)
+                   .WithHeader("Content-Type", "application/json")
+                   .WithBody(JsonSerializer.Serialize(new List<UserDto> { new(1, "Alice") }, s_camelCase)));
+
+        var result = await _client.ListUsersByTagsAsync(new List<string> { "admin", "active" });
+        Assert.Single(result);
+        Assert.Equal("Alice", result[0].Name);
+    }
+
+    [Fact]
+    public async Task FormBody_SendsFormEncodedContent()
+    {
+        _server.Given(Request.Create()
+                    .WithPath("/oauth/token")
+                    .WithBody(b => b != null && b.Contains("grant_type=client_credentials", StringComparison.Ordinal))
+                    .UsingPost())
+               .RespondWith(Response.Create()
+                   .WithStatusCode(200)
+                   .WithHeader("Content-Type", "application/json")
+                   .WithBody(JsonSerializer.Serialize(new UserDto(1, "token"), s_camelCase)));
+
+        var result = await _client.GetTokenAsync(new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["grant_type"] = "client_credentials",
+            ["client_id"] = "my-app"
+        });
+        Assert.Equal(1, result.Id);
+        var logEntry = _server.LogEntries.Single(e =>
+            string.Equals(e.RequestMessage?.Path, "/oauth/token", StringComparison.Ordinal));
+        var contentType = string.Join(", ", logEntry.RequestMessage!.Headers!["Content-Type"]);
+        Assert.Contains("application/x-www-form-urlencoded", contentType, StringComparison.Ordinal);
     }
 
     public void Dispose()

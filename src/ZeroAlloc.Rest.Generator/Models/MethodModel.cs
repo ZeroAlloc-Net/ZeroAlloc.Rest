@@ -11,4 +11,5 @@ internal record MethodModel(
     bool ReturnsResult,
     bool ReturnsVoid,
     IReadOnlyList<ParameterModel> Parameters,
-    string? SerializerTypeName);
+    string? SerializerTypeName,
+    IReadOnlyList<(string Name, string Value)> StaticHeaders);
