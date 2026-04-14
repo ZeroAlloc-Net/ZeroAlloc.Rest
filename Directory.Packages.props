@@ -26,7 +26,7 @@
     <PackageVersion Include="Microsoft.Build.Utilities.Core" Version="18.4.0" />
     <!-- Benchmarks -->
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
-    <PackageVersion Include="Refit" Version="7.2.22" />
+    <PackageVersion Include="Refit" Version="10.1.6" />
     <!-- Analyzers -->
     <PackageVersion Include="Meziantou.Analyzer" Version="3.0.48" />
     <PackageVersion Include="Roslynator.Analyzers" Version="4.15.0" />
