@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.1.2](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v0.1.1...v0.1.2) (2026-04-14)
+
+
+### Features
+
+* **generator:** add [FormBody] attribute for form-encoded requests ([01889e5](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/01889e55c5867346a768011a51270fd529960c58))
+* **generator:** emit static [Header] values on methods ([e236bc4](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/e236bc4da30071c614c1c9dd79f82c4a81fc85f2))
+* **generator:** static headers, collection query params, and [FormBody] ([ee96cf2](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/ee96cf2eca06600205829ed9863529f926ae7489))
+* **generator:** support IEnumerable&lt;T&gt; [Query] params as repeated keys ([1c4eedc](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/1c4eedc9e53b98fe9bf36ea0d601de1f9b43dbce))
+
+
+### Bug Fixes
+
+* **generator:** diagnose conflicting [Body]+[FormBody]; assert Content-Type in form body test ([c7bb02f](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/c7bb02f9b9c4633c2797fec0c6a78d0eb301f465))
+* **generator:** document additive Accept header behavior; strengthen static header test assertion ([17cbab7](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/17cbab7b20cb1560af05d29940ab954706112c25))
+* **generator:** skip null collection items; align NRT annotation on collection query params ([94ba264](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/94ba2643f9395c19a650754ad854bc9c8b78f588))
+
 ## [0.1.1](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v0.1.0...v0.1.1) (2026-04-01)
 
 
