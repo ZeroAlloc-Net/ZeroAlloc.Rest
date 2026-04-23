@@ -32,13 +32,13 @@ jobs:
           echo "Computed version: $VERSION"
 
       - name: Restore
-        run: dotnet restore ZeroAlloc.Rest.sln
+        run: dotnet restore ZeroAlloc.Rest.slnx
 
       - name: Build
-        run: dotnet build ZeroAlloc.Rest.sln --no-restore -c Release -p:Version=${{ steps.gitversion.outputs.semver }}
+        run: dotnet build ZeroAlloc.Rest.slnx --no-restore -c Release -p:Version=${{ steps.gitversion.outputs.semver }}
 
       - name: Test
-        run: dotnet test ZeroAlloc.Rest.sln --no-build -c Release --logger "trx" --results-directory ./test-results
+        run: dotnet test ZeroAlloc.Rest.slnx --no-build -c Release --logger "trx" --results-directory ./test-results
 
       - name: Upload test results
         uses: actions/upload-artifact@v7
@@ -48,7 +48,7 @@ jobs:
           path: ./test-results
 
       - name: Pack
-        run: dotnet pack ZeroAlloc.Rest.sln --no-build -c Release -p:Version=${{ steps.gitversion.outputs.semver }} -o ./nupkg
+        run: dotnet pack ZeroAlloc.Rest.slnx --no-build -c Release -p:Version=${{ steps.gitversion.outputs.semver }} -o ./nupkg
 
       - name: Push to NuGet (pre-release alpha)
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'

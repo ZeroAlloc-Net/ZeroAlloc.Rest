@@ -44,16 +44,16 @@ jobs:
           TAG: ${{ needs.release-please.outputs.tag_name }}
 
       - name: Restore
-        run: dotnet restore ZeroAlloc.Rest.sln
+        run: dotnet restore ZeroAlloc.Rest.slnx
 
       - name: Build
-        run: dotnet build ZeroAlloc.Rest.sln --no-restore -c Release -p:Version=${{ steps.version.outputs.version }}
+        run: dotnet build ZeroAlloc.Rest.slnx --no-restore -c Release -p:Version=${{ steps.version.outputs.version }}
 
       - name: Test
-        run: dotnet test ZeroAlloc.Rest.sln --no-build -c Release
+        run: dotnet test ZeroAlloc.Rest.slnx --no-build -c Release
 
       - name: Pack
-        run: dotnet pack ZeroAlloc.Rest.sln --no-build -c Release -p:Version=${{ steps.version.outputs.version }} -o ./nupkg
+        run: dotnet pack ZeroAlloc.Rest.slnx --no-build -c Release -p:Version=${{ steps.version.outputs.version }} -o ./nupkg
 
       - name: Push to NuGet (stable)
         run: |
