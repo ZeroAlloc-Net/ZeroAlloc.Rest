@@ -127,8 +127,14 @@ internal static class ClientEmitter
             ? fieldName
             : "_serializer";
 
-        sb.AppendLine("    [System.Diagnostics.CodeAnalysis.RequiresDynamicCode(\"Serialization of arbitrary types may require dynamic code.\")]");
-        sb.AppendLine("    [System.Diagnostics.CodeAnalysis.RequiresUnreferencedCode(\"Serialization of arbitrary types may require unreferenced code.\")]");
+        // IL3051/IL2046: Previously we emitted [RequiresDynamicCode] / [RequiresUnreferencedCode]
+        // here, but the user-authored interface doesn't carry those annotations — ILC rejects
+        // the mismatch and forces consumers to propagate the Requires attributes to every
+        // caller. Switch to [UnconditionalSuppressMessage] which flows no obligation to the
+        // caller: the serializer is provided by the consumer, so its trim/AOT-unsafety is
+        // their concern, not the client wrapper's.
+        sb.AppendLine("    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(\"Trimming\", \"IL2026\", Justification = \"IRestSerializer is provided by the consumer; its trim-unsafety is their concern. The generated client only forwards the call.\")]");
+        sb.AppendLine("    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(\"AOT\", \"IL3050\", Justification = \"IRestSerializer is provided by the consumer; its AOT-unsafety is their concern. The generated client only forwards the call.\")]");
         sb.AppendLine($"    public async {method.ReturnTypeName} {method.Name}({BuildParamList(method.Parameters)})");
         sb.AppendLine("    {");
 
