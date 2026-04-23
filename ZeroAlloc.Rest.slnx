@@ -7,6 +7,9 @@
     <Project Path="src/ZeroAlloc.Rest.MessagePack/ZeroAlloc.Rest.MessagePack.csproj" />
     <Project Path="src/ZeroAlloc.Rest.Tools/ZeroAlloc.Rest.Tools.csproj" />
   </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/ZeroAlloc.Rest.AotSmoke/ZeroAlloc.Rest.AotSmoke.csproj" />
+  </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/ZeroAlloc.Rest.Tests/ZeroAlloc.Rest.Tests.csproj" />
     <Project Path="tests/ZeroAlloc.Rest.Generator.Tests/ZeroAlloc.Rest.Generator.Tests.csproj" />
