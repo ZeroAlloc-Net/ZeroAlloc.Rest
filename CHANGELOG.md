@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.3](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v0.1.2...v0.1.3) (2026-04-23)
+
+
+### Bug Fixes
+
+* **generator:** emit [UnconditionalSuppressMessage] instead of [RequiresDynamicCode] on client methods ([#43](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/43)) ([879335e](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/879335e8ab6aba2a1c9933652da78be32e8ab684))
+
 ## [0.1.2](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v0.1.1...v0.1.2) (2026-04-14)
 
 
