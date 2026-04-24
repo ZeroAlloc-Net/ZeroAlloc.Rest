@@ -6,6 +6,7 @@
     <Project Path="src/ZeroAlloc.Rest.MemoryPack/ZeroAlloc.Rest.MemoryPack.csproj" />
     <Project Path="src/ZeroAlloc.Rest.MessagePack/ZeroAlloc.Rest.MessagePack.csproj" />
     <Project Path="src/ZeroAlloc.Rest.Tools/ZeroAlloc.Rest.Tools.csproj" />
+    <Project Path="src/ZeroAlloc.Rest.Resilience/ZeroAlloc.Rest.Resilience.csproj" />
   </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/ZeroAlloc.Rest.AotSmoke/ZeroAlloc.Rest.AotSmoke.csproj" />
@@ -16,5 +17,6 @@
     <Project Path="tests/ZeroAlloc.Rest.Integration.Tests/ZeroAlloc.Rest.Integration.Tests.csproj" />
     <Project Path="tests/ZeroAlloc.Rest.Tools.Tests/ZeroAlloc.Rest.Tools.Tests.csproj" />
     <Project Path="tests/ZeroAlloc.Rest.Benchmarks/ZeroAlloc.Rest.Benchmarks.csproj" />
+    <Project Path="tests/ZeroAlloc.Rest.Resilience.Tests/ZeroAlloc.Rest.Resilience.Tests.csproj" />
   </Folder>
 </Solution>

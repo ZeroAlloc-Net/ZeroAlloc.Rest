@@ -57,6 +57,7 @@ internal static class ClientEmitter
 
         sb.AppendLine($"public sealed partial class {model.ClassName} : {model.InterfaceName}");
         sb.AppendLine("{");
+        sb.AppendLine("    private static readonly global::System.Diagnostics.ActivitySource _activitySource = new(\"ZeroAlloc.Rest\");");
         sb.AppendLine("    private readonly System.Net.Http.HttpClient _httpClient;");
         sb.AppendLine("    private readonly ZeroAlloc.Rest.IRestSerializer _serializer;");
         foreach (var st in overrideSerializers)
@@ -88,7 +89,7 @@ internal static class ClientEmitter
         sb.AppendLine();
 
         foreach (var method in model.Methods)
-            EmitMethod(ctx, sb, method, serializerFieldMap);
+            EmitMethod(ctx, sb, model.InterfaceName, method, serializerFieldMap);
 
         if (hasQueryParams)
         {
@@ -105,7 +106,7 @@ internal static class ClientEmitter
         ctx.AddSource($"{model.InterfaceName}.g.cs", sb.ToString());
     }
 
-    private static void EmitMethod(SourceProductionContext ctx, StringBuilder sb, MethodModel method, IReadOnlyDictionary<string, string> serializerFieldMap)
+    private static void EmitMethod(SourceProductionContext ctx, StringBuilder sb, string interfaceName, MethodModel method, IReadOnlyDictionary<string, string> serializerFieldMap)
     {
         var ctParam = FindCancellationToken(method.Parameters);
         var ctArg = ctParam != null ? ctParam.Name : "default";
@@ -138,9 +139,13 @@ internal static class ClientEmitter
         sb.AppendLine($"    public async {method.ReturnTypeName} {method.Name}({BuildParamList(method.Parameters)})");
         sb.AppendLine("    {");
 
+        var spanName = $"{interfaceName}.{method.Name}";
+        sb.AppendLine($"        using var __activity = _activitySource.StartActivity(\"{spanName}\");");
+        sb.AppendLine($"        __activity?.SetTag(\"http.method\", \"{method.HttpMethod.ToUpper()}\");");
+
         EmitUrlBuilding(sb, method.Route, pathParams, queryParams);
         EmitRequestCreation(sb, method, headerParams, bodyParam, formBodyParam, ctArg, serializerExpr);
-        EmitSendAndResponse(sb, method, ctArg, serializerExpr);
+        EmitSendAndResponse(sb, method, ctArg, serializerExpr, interfaceName);
 
         sb.AppendLine("    }");
         sb.AppendLine();
@@ -250,40 +255,53 @@ internal static class ClientEmitter
         }
     }
 
-    private static void EmitSendAndResponse(StringBuilder sb, MethodModel method, string ctArg, string serializerExpr)
+    private static void EmitSendAndResponse(StringBuilder sb, MethodModel method, string ctArg, string serializerExpr, string interfaceName)
     {
-        sb.AppendLine($"        using var response = await _httpClient.SendAsync(request, {ctArg}).ConfigureAwait(false);");
-        EmitResponseHandling(sb, method, ctArg, serializerExpr);
+        sb.AppendLine("        try");
+        sb.AppendLine("        {");
+        sb.AppendLine($"            using var response = await _httpClient.SendAsync(request, {ctArg}).ConfigureAwait(false);");
+        sb.AppendLine("            __activity?.SetTag(\"http.status_code\", (int)response.StatusCode);");
+        sb.AppendLine("            __activity?.SetTag(\"server.address\", request.RequestUri?.Host ?? string.Empty);");
+        EmitResponseHandling(sb, method, ctArg, serializerExpr, indent: "            ");
+        sb.AppendLine("        }");
+        sb.AppendLine("#pragma warning disable EPC12");
+        sb.AppendLine("        catch (global::System.Exception __ex)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            __activity?.SetStatus(global::System.Diagnostics.ActivityStatusCode.Error, __ex.Message);");
+        sb.AppendLine("            throw;");
+        sb.AppendLine("        }");
+        sb.AppendLine("#pragma warning restore EPC12");
     }
 
-    private static void EmitResponseHandling(StringBuilder sb, MethodModel method, string ctArg, string serializerExpr)
+    private static void EmitResponseHandling(StringBuilder sb, MethodModel method, string ctArg, string serializerExpr, string indent = "        ")
     {
+        var i1 = indent + "    ";
         if (method.ReturnsVoid)
         {
-            sb.AppendLine("        response.EnsureSuccessStatusCode();");
+            sb.AppendLine($"{indent}response.EnsureSuccessStatusCode();");
         }
         else if (method.ReturnsResult)
         {
-            sb.AppendLine("        if (response.IsSuccessStatusCode)");
-            sb.AppendLine("        {");
-            sb.AppendLine($"            var responseStream = await response.Content.ReadAsStreamAsync({ctArg}).ConfigureAwait(false);");
-            sb.AppendLine($"            var content = await {serializerExpr}.DeserializeAsync<{method.InnerTypeName}>(responseStream, {ctArg}).ConfigureAwait(false);");
-            sb.AppendLine($"            return ZeroAlloc.Results.Result<{method.InnerTypeName}, ZeroAlloc.Rest.HttpError>.Success(content!);");
-            sb.AppendLine("        }");
-            sb.AppendLine("        else");
-            sb.AppendLine("        {");
-            sb.AppendLine("            var headers = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IReadOnlyList<string>>();");
-            sb.AppendLine("            foreach (var kvp in response.Headers)");
-            sb.AppendLine("                headers[kvp.Key] = new System.Collections.Generic.List<string>(kvp.Value).AsReadOnly();");
-            sb.AppendLine($"            return ZeroAlloc.Results.Result<{method.InnerTypeName}, ZeroAlloc.Rest.HttpError>.Failure(");
-            sb.AppendLine($"                new ZeroAlloc.Rest.HttpError(response.StatusCode, headers));");
-            sb.AppendLine("        }");
+            sb.AppendLine($"{indent}if (response.IsSuccessStatusCode)");
+            sb.AppendLine($"{indent}{{");
+            sb.AppendLine($"{i1}var responseStream = await response.Content.ReadAsStreamAsync({ctArg}).ConfigureAwait(false);");
+            sb.AppendLine($"{i1}var content = await {serializerExpr}.DeserializeAsync<{method.InnerTypeName}>(responseStream, {ctArg}).ConfigureAwait(false);");
+            sb.AppendLine($"{i1}return ZeroAlloc.Results.Result<{method.InnerTypeName}, ZeroAlloc.Rest.HttpError>.Success(content!);");
+            sb.AppendLine($"{indent}}}");
+            sb.AppendLine($"{indent}else");
+            sb.AppendLine($"{indent}{{");
+            sb.AppendLine($"{i1}var headers = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IReadOnlyList<string>>();");
+            sb.AppendLine($"{i1}foreach (var kvp in response.Headers)");
+            sb.AppendLine($"{i1}    headers[kvp.Key] = new System.Collections.Generic.List<string>(kvp.Value).AsReadOnly();");
+            sb.AppendLine($"{i1}return ZeroAlloc.Results.Result<{method.InnerTypeName}, ZeroAlloc.Rest.HttpError>.Failure(");
+            sb.AppendLine($"{i1}    new ZeroAlloc.Rest.HttpError(response.StatusCode, headers));");
+            sb.AppendLine($"{indent}}}");
         }
         else
         {
-            sb.AppendLine("        response.EnsureSuccessStatusCode();");
-            sb.AppendLine($"        var responseStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);");
-            sb.AppendLine($"        return (await {serializerExpr}.DeserializeAsync<{method.InnerTypeName}>(responseStream, {ctArg}).ConfigureAwait(false))!;");
+            sb.AppendLine($"{indent}response.EnsureSuccessStatusCode();");
+            sb.AppendLine($"{indent}var responseStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);");
+            sb.AppendLine($"{indent}return (await {serializerExpr}.DeserializeAsync<{method.InnerTypeName}>(responseStream, {ctArg}).ConfigureAwait(false))!;");
         }
     }
 
