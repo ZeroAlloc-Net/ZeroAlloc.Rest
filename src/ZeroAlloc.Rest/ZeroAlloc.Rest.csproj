@@ -13,4 +13,7 @@
   <ItemGroup>
     <PackageReference Include="ZeroAlloc.Serialisation" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="ZeroAlloc.ValueObjects" Version="1.2.0" />
+  </ItemGroup>
 </Project>

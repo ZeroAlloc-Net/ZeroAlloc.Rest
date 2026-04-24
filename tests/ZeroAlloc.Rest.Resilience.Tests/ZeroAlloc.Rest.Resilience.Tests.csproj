@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- MA0016/MA0048: test helpers use collections and multi-type files -->
+    <NoWarn>$(NoWarn);MA0016;MA0048;ZR0002</NoWarn>
+    <!-- ZR0002: resilience attributes on Task-returning methods — acceptable in tests -->
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="WireMock.Net" />
+    <!-- Rest source generator -->
+    <ProjectReference Include="../../src/ZeroAlloc.Rest.Generator/ZeroAlloc.Rest.Generator.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+    <!-- Resilience source generator -->
+    <ProjectReference Include="../../../ZeroAlloc.Resilience/src/ZeroAlloc.Resilience.Generator/ZeroAlloc.Resilience.Generator.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+    <!-- Bridge package (the subject under test) -->
+    <ProjectReference Include="../../src/ZeroAlloc.Rest.Resilience/ZeroAlloc.Rest.Resilience.csproj" />
+    <!-- Serializer for integration tests -->
+    <ProjectReference Include="../../src/ZeroAlloc.Rest.SystemTextJson/ZeroAlloc.Rest.SystemTextJson.csproj" />
+  </ItemGroup>
+</Project>
