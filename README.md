@@ -25,6 +25,16 @@ Or via `<PackageReference>`:
 <PackageReference Include="ZeroAlloc.Rest.SystemTextJson" Version="x.y.z" />
 ```
 
+### Optional: resilience policies
+
+To add retry, timeout, and circuit-breaker behaviour to a client, install the bridge package alongside [ZeroAlloc.Resilience](https://github.com/ZeroAlloc-Net/ZeroAlloc.Resilience):
+
+```sh
+dotnet add package ZeroAlloc.Rest.Resilience
+dotnet add package ZeroAlloc.Resilience
+dotnet add package ZeroAlloc.Resilience.Generator  # analyzer reference
+```
+
 ## Quick Start
 
 **1. Define your API interface:**
@@ -93,6 +103,7 @@ See [docs/benchmarks.md](docs/benchmarks.md) for methodology and full results.
 - **OpenAPI code generation** — `OpenApiInterfaceGenerator` API + MSBuild `<ZeroAllocApiSpec>` task
 - **Pluggable serializers** — System.Text.Json, MemoryPack, MessagePack, or bring your own
 - **IHttpClientFactory integration** — `AddI{Interface}` generated extension method
+- **Resilience bridge** — `ZeroAlloc.Rest.Resilience` wraps any client with `[Retry]`, `[Timeout]`, `[CircuitBreaker]`, and `[RateLimit]` via `AddRestResilience<,,>()`
 
 ## Documentation
 
@@ -108,6 +119,7 @@ See [docs/benchmarks.md](docs/benchmarks.md) for methodology and full results.
 | [Benchmarks](docs/benchmarks.md) | Performance comparison vs Refit and raw HttpClient |
 | [Testing](docs/testing.md) | Testing patterns with WireMock.Net |
 | [Advanced](docs/advanced.md) | `Result<T, HttpError>`, multiple serializers, edge cases |
+| [Resilience](docs/resilience.md) | Retry, timeout, circuit-breaker, and rate-limit via `ZeroAlloc.Rest.Resilience` |
 | [Cookbook](docs/cookbook/) | End-to-end recipes |
 
 ## License
