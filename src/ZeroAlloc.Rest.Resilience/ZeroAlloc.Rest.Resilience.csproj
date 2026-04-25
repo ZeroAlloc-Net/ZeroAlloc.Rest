@@ -8,6 +8,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\ZeroAlloc.Rest\ZeroAlloc.Rest.csproj" />
-    <PackageReference Include="ZeroAlloc.Resilience" Version="1.0.0" />
+    <PackageReference Include="ZeroAlloc.Resilience" />
   </ItemGroup>
 </Project>

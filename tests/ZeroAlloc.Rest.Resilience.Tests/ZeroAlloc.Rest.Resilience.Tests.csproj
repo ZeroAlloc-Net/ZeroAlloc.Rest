@@ -13,10 +13,6 @@
     <ProjectReference Include="../../src/ZeroAlloc.Rest.Generator/ZeroAlloc.Rest.Generator.csproj"
                       OutputItemType="Analyzer"
                       ReferenceOutputAssembly="false" />
-    <!-- Resilience source generator -->
-    <ProjectReference Include="../../../ZeroAlloc.Resilience/src/ZeroAlloc.Resilience.Generator/ZeroAlloc.Resilience.Generator.csproj"
-                      OutputItemType="Analyzer"
-                      ReferenceOutputAssembly="false" />
     <!-- Bridge package (the subject under test) -->
     <ProjectReference Include="../../src/ZeroAlloc.Rest.Resilience/ZeroAlloc.Rest.Resilience.csproj" />
     <!-- Serializer for integration tests -->
