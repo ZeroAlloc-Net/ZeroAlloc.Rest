@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.1.4](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v0.1.3...v0.1.4) (2026-04-25)
+
+
+### Features
+
+* telemetry spans, TypedId route params, Rest.Resilience bridge + NuGet isolation ([#51](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/51)) ([ad5b7ff](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/ad5b7ff238edf60175f06ab3e0dc7d843980772c))
+
+
+### Bug Fixes
+
+* resolve CPM violations, cross-repo test references, and transitive NuGet audit warnings ([103cad3](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/103cad312162a7d0564fd5716925a984bca80230))
+* resolve CPM violations, cross-repo test refs, and transitive NuGet audit warnings ([494ce81](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/494ce8119ad037610eec7148e04cf4963e5bca3c))
+
 ## [0.1.3](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v0.1.2...v0.1.3) (2026-04-23)
 
 
