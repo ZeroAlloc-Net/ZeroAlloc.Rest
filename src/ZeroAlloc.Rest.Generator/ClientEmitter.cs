@@ -144,7 +144,11 @@ internal static class ClientEmitter
 
         var spanName = $"{interfaceName}.{method.Name}";
         sb.AppendLine($"        using var __activity = _activitySource.StartActivity(\"{spanName}\");");
-        sb.AppendLine($"        __activity?.SetTag(\"http.method\", \"{method.HttpMethod.ToUpper()}\");");
+        sb.AppendLine($"        const string __RestMethodTag = \"{spanName}\";");
+        sb.AppendLine($"        const string __httpMethod = \"{method.HttpMethod.ToUpper()}\";");
+        sb.AppendLine($"        __activity?.SetTag(\"http.method\", __httpMethod);");
+        sb.AppendLine($"        __activity?.SetTag(\"rest.method\", __RestMethodTag);");
+        sb.AppendLine($"        var __sw = global::System.Diagnostics.Stopwatch.GetTimestamp();");
 
         EmitUrlBuilding(sb, method.Route, pathParams, queryParams);
         EmitRequestCreation(sb, method, headerParams, bodyParam, formBodyParam, ctArg, serializerExpr);
