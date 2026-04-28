@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.0
+
+Stability milestone — public API of `ZeroAlloc.Rest` is now considered stable. Bundles in PR #58 (added `rest.requests_total` counter + `rest.request_duration_ms` histogram + `rest.method` tag for OpenTelemetry instrumentation). This release marks the transition out of pre-1.0 SemVer.
+
 ## [0.1.4](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v0.1.3...v0.1.4) (2026-04-25)
 
 
