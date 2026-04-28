@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.0.0](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v0.1.4...v1.0.0) (2026-04-28)
+
+
+### Features
+
+* **rest:** emit rest.requests_total + rest.request_duration_ms ([#47](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/47)) ([#58](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/58)) ([6d1e67a](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/6d1e67a08f4514e1388346a84f17e5739c804dfd))
+
+
+### Miscellaneous Chores
+
+* **release:** promote to 1.0.0 stability milestone ([0623145](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/0623145f0628f5d9225ac4644f4a36735ada8dff))
+
 ## 1.0.0
 
 Stability milestone — public API of `ZeroAlloc.Rest` is now considered stable. Bundles in PR #58 (added `rest.requests_total` counter + `rest.request_duration_ms` histogram + `rest.method` tag for OpenTelemetry instrumentation). This release marks the transition out of pre-1.0 SemVer.
