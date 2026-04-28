@@ -58,6 +58,9 @@ internal static class ClientEmitter
         sb.AppendLine($"public sealed partial class {model.ClassName} : {model.InterfaceName}");
         sb.AppendLine("{");
         sb.AppendLine("    private static readonly global::System.Diagnostics.ActivitySource _activitySource = new(\"ZeroAlloc.Rest\");");
+        sb.AppendLine("    private static readonly global::System.Diagnostics.Metrics.Meter _meter = new(\"ZeroAlloc.Rest\");");
+        sb.AppendLine("    private static readonly global::System.Diagnostics.Metrics.Counter<long> _requestsTotal = _meter.CreateCounter<long>(\"rest.requests_total\");");
+        sb.AppendLine("    private static readonly global::System.Diagnostics.Metrics.Histogram<double> _requestDurationMs = _meter.CreateHistogram<double>(\"rest.request_duration_ms\");");
         sb.AppendLine("    private readonly System.Net.Http.HttpClient _httpClient;");
         sb.AppendLine("    private readonly ZeroAlloc.Rest.IRestSerializer _serializer;");
         foreach (var st in overrideSerializers)
@@ -141,7 +144,11 @@ internal static class ClientEmitter
 
         var spanName = $"{interfaceName}.{method.Name}";
         sb.AppendLine($"        using var __activity = _activitySource.StartActivity(\"{spanName}\");");
-        sb.AppendLine($"        __activity?.SetTag(\"http.method\", \"{method.HttpMethod.ToUpper()}\");");
+        sb.AppendLine($"        const string __RestMethodTag = \"{spanName}\";");
+        sb.AppendLine($"        const string __httpMethod = \"{method.HttpMethod.ToUpper()}\";");
+        sb.AppendLine($"        __activity?.SetTag(\"http.method\", __httpMethod);");
+        sb.AppendLine($"        __activity?.SetTag(\"rest.method\", __RestMethodTag);");
+        sb.AppendLine($"        var __sw = global::System.Diagnostics.Stopwatch.GetTimestamp();");
 
         EmitUrlBuilding(sb, method.Route, pathParams, queryParams);
         EmitRequestCreation(sb, method, headerParams, bodyParam, formBodyParam, ctArg, serializerExpr);
@@ -260,14 +267,31 @@ internal static class ClientEmitter
         sb.AppendLine("        try");
         sb.AppendLine("        {");
         sb.AppendLine($"            using var response = await _httpClient.SendAsync(request, {ctArg}).ConfigureAwait(false);");
-        sb.AppendLine("            __activity?.SetTag(\"http.status_code\", (int)response.StatusCode);");
-        sb.AppendLine("            __activity?.SetTag(\"server.address\", request.RequestUri?.Host ?? string.Empty);");
+        sb.AppendLine("            var __statusCode = (int)response.StatusCode;");
+        sb.AppendLine("            var __serverAddress = request.RequestUri?.Host ?? string.Empty;");
+        sb.AppendLine("            __activity?.SetTag(\"http.status_code\", __statusCode);");
+        sb.AppendLine("            __activity?.SetTag(\"server.address\", __serverAddress);");
+        sb.AppendLine("            var __elapsedMs = global::System.Diagnostics.Stopwatch.GetElapsedTime(__sw).TotalMilliseconds;");
+        sb.AppendLine("            _requestsTotal.Add(1,");
+        sb.AppendLine("                new global::System.Collections.Generic.KeyValuePair<string, object?>(\"http.method\", __httpMethod),");
+        sb.AppendLine("                new global::System.Collections.Generic.KeyValuePair<string, object?>(\"http.status_code\", __statusCode),");
+        sb.AppendLine("                new global::System.Collections.Generic.KeyValuePair<string, object?>(\"server.address\", __serverAddress),");
+        sb.AppendLine("                new global::System.Collections.Generic.KeyValuePair<string, object?>(\"rest.method\", __RestMethodTag));");
+        sb.AppendLine("            _requestDurationMs.Record(__elapsedMs,");
+        sb.AppendLine("                new global::System.Collections.Generic.KeyValuePair<string, object?>(\"http.method\", __httpMethod),");
+        sb.AppendLine("                new global::System.Collections.Generic.KeyValuePair<string, object?>(\"http.status_code\", __statusCode),");
+        sb.AppendLine("                new global::System.Collections.Generic.KeyValuePair<string, object?>(\"server.address\", __serverAddress),");
+        sb.AppendLine("                new global::System.Collections.Generic.KeyValuePair<string, object?>(\"rest.method\", __RestMethodTag));");
         EmitResponseHandling(sb, method, ctArg, serializerExpr, indent: "            ");
         sb.AppendLine("        }");
         sb.AppendLine("#pragma warning disable EPC12");
         sb.AppendLine("        catch (global::System.Exception __ex)");
         sb.AppendLine("        {");
         sb.AppendLine("            __activity?.SetStatus(global::System.Diagnostics.ActivityStatusCode.Error, __ex.Message);");
+        sb.AppendLine("            var __elapsedMsErr = global::System.Diagnostics.Stopwatch.GetElapsedTime(__sw).TotalMilliseconds;");
+        sb.AppendLine("            _requestDurationMs.Record(__elapsedMsErr,");
+        sb.AppendLine("                new global::System.Collections.Generic.KeyValuePair<string, object?>(\"http.method\", __httpMethod),");
+        sb.AppendLine("                new global::System.Collections.Generic.KeyValuePair<string, object?>(\"rest.method\", __RestMethodTag));");
         sb.AppendLine("            throw;");
         sb.AppendLine("        }");
         sb.AppendLine("#pragma warning restore EPC12");
