@@ -58,6 +58,9 @@ internal static class ClientEmitter
         sb.AppendLine($"public sealed partial class {model.ClassName} : {model.InterfaceName}");
         sb.AppendLine("{");
         sb.AppendLine("    private static readonly global::System.Diagnostics.ActivitySource _activitySource = new(\"ZeroAlloc.Rest\");");
+        sb.AppendLine("    private static readonly global::System.Diagnostics.Metrics.Meter _meter = new(\"ZeroAlloc.Rest\");");
+        sb.AppendLine("    private static readonly global::System.Diagnostics.Metrics.Counter<long> _requestsTotal = _meter.CreateCounter<long>(\"rest.requests_total\");");
+        sb.AppendLine("    private static readonly global::System.Diagnostics.Metrics.Histogram<double> _requestDurationMs = _meter.CreateHistogram<double>(\"rest.request_duration_ms\");");
         sb.AppendLine("    private readonly System.Net.Http.HttpClient _httpClient;");
         sb.AppendLine("    private readonly ZeroAlloc.Rest.IRestSerializer _serializer;");
         foreach (var st in overrideSerializers)
