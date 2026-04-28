@@ -17,6 +17,8 @@ Named in the route template with `{name}`. The method parameter with the same na
 Task<UserDto> GetUserAsync(int id, CancellationToken ct = default);
 ```
 
+Strongly-typed identifiers from [`ZeroAlloc.ValueObjects`](https://www.nuget.org/packages/ZeroAlloc.ValueObjects) `[TypedId]` are also supported as path or query parameters — the generator calls `id.ToString()` on the typed wrapper, which produces the strategy-specific string format (ULID base32 by default). See the [`Strongly-typed IDs` cookbook entry](cookbook/05-typed-ids.md) for a worked example.
+
 ## Query parameters
 
 Decorated with `[Query]`. They are appended to the URL as `?name=value`:
