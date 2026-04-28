@@ -106,6 +106,23 @@ See [docs/benchmarks.md](docs/benchmarks.md) for methodology and full results.
 - **IHttpClientFactory integration** — `AddI{Interface}` generated extension method
 - **Resilience bridge** — `ZeroAlloc.Rest.Resilience` wraps any client with `[Retry]`, `[Timeout]`, `[CircuitBreaker]`, and `[RateLimit]` via `AddRestResilience<,,>()`
 
+## Telemetry
+
+Every generated client emits OpenTelemetry-compatible signals out of the box, with no extra dependency beyond the BCL `System.Diagnostics` primitives.
+
+**Tracing.** An `ActivitySource("ZeroAlloc.Rest")` produces one span per call, named `Interface.Method`. Tags: `http.method`, `http.status_code`, `server.address`, `rest.method`. Exceptions set `ActivityStatusCode.Error` with the message.
+
+**Metrics.** The generator emits `rest.requests_total` (counter) and `rest.request_duration_ms` (histogram) under the `ZeroAlloc.Rest` Meter. Tags: `http.method`, `http.status_code`, `server.address`, `rest.method` (the generated `Interface.Method` identifier).
+
+The counter is incremented only on the success path. On exception, the histogram records the elapsed duration but the counter is left untouched — this lets operators distinguish failed attempts via histogram count vs. counter delta. The exception-path histogram carries only `http.method` and `rest.method`, since `http.status_code` and `server.address` may not be known.
+
+**Subscription:**
+```csharp
+services.AddOpenTelemetry()
+        .WithTracing(t => t.AddSource("ZeroAlloc.Rest"))
+        .WithMetrics(m => m.AddMeter("ZeroAlloc.Rest"));
+```
+
 ## Documentation
 
 | Page | Description |
