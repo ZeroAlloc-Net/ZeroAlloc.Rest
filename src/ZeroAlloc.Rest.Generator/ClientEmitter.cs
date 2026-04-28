@@ -288,6 +288,10 @@ internal static class ClientEmitter
         sb.AppendLine("        catch (global::System.Exception __ex)");
         sb.AppendLine("        {");
         sb.AppendLine("            __activity?.SetStatus(global::System.Diagnostics.ActivityStatusCode.Error, __ex.Message);");
+        sb.AppendLine("            var __elapsedMsErr = global::System.Diagnostics.Stopwatch.GetElapsedTime(__sw).TotalMilliseconds;");
+        sb.AppendLine("            _requestDurationMs.Record(__elapsedMsErr,");
+        sb.AppendLine("                new global::System.Collections.Generic.KeyValuePair<string, object?>(\"http.method\", __httpMethod),");
+        sb.AppendLine("                new global::System.Collections.Generic.KeyValuePair<string, object?>(\"rest.method\", __RestMethodTag));");
         sb.AppendLine("            throw;");
         sb.AppendLine("        }");
         sb.AppendLine("#pragma warning restore EPC12");
