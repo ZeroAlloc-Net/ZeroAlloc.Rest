@@ -3,6 +3,7 @@
 [![NuGet](https://img.shields.io/nuget/v/ZeroAlloc.Rest.svg)](https://www.nuget.org/packages/ZeroAlloc.Rest)
 [![Build](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/actions/workflows/ci.yml/badge.svg)](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![GitHub Sponsors](https://img.shields.io/github/sponsors/MarcelRoozekrans?style=flat&logo=githubsponsors&color=ea4aaa&label=Sponsor)](https://github.com/sponsors/MarcelRoozekrans)
 
 **ZeroAlloc.Rest** is a source-generated, Native AOT-compatible REST client for .NET 10+. Define your HTTP API as a C# interface — the Roslyn generator emits a fully type-safe, zero-reflection implementation at compile time. No runtime code generation, no IL emit, no allocations beyond the HTTP layer itself.
 
