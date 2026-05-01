@@ -16,4 +16,25 @@
   <ItemGroup>
     <PackageReference Include="ZeroAlloc.ValueObjects" />
   </ItemGroup>
+
+  <!--
+    Bundle the source generator into the NuGet package so consumers get it by
+    referencing only ZeroAlloc.Rest. The standalone ZeroAlloc.Rest.Generator
+    package is still published for backwards compatibility, but new consumers
+    should reference the main package only.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\ZeroAlloc.Rest.Generator\ZeroAlloc.Rest.Generator.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false"
+                      PrivateAssets="all" />
+  </ItemGroup>
+  <Target Name="IncludeGeneratorInPackage" BeforeTargets="_GetPackageFiles">
+    <ItemGroup>
+      <None Include="$(MSBuildThisFileDirectory)..\ZeroAlloc.Rest.Generator\bin\$(Configuration)\netstandard2.0\ZeroAlloc.Rest.Generator.dll"
+            Pack="true"
+            PackagePath="analyzers/dotnet/cs"
+            Visible="false" />
+    </ItemGroup>
+  </Target>
 </Project>
