@@ -9,6 +9,12 @@
     <PackageReference Include="ZeroAlloc.Results" />
     <PackageReference Include="ZeroAlloc.Collections" />
     <PackageReference Include="ZeroAlloc.Analyzers" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AdditionalFiles Include="PublicAPI.Shipped.txt" />
+    <AdditionalFiles Include="PublicAPI.Unshipped.txt" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="ZeroAlloc.Serialisation" />
