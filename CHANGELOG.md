@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.1.0](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v1.0.2...v1.1.0) (2026-05-01)
+
+
+### Features
+
+* bundle source generator into ZeroAlloc.Rest package ([58c5cec](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/58c5cec1cc15165c3ce69680a812b347da523550))
+* bundle source generator into ZeroAlloc.Rest package ([c061093](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/c061093c6d5f65687fa59779ed8c5d20f42605d1)), closes [#67](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/67)
+* lock public API surface (PublicApiAnalyzers + api-compat gate) ([#72](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/72)) ([357be70](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/357be703ae5bd043f1b1fc5c1c94d995ed5ac032))
+
+
+### Documentation
+
+* update install instructions for bundled generator ([de73231](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/de73231bbd878d4ba607390feb00283839836320))
+
 ## [1.0.2](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v1.0.1...v1.0.2) (2026-04-30)
 
 
