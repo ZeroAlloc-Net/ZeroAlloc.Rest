@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.2](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v1.0.1...v1.0.2) (2026-04-30)
+
+
+### Bug Fixes
+
+* pack generator DLL under analyzers/dotnet/cs ([#67](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/67)) ([c822910](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/c8229105341d1941f29d47d9f81ca5fed55e6c1c))
+* pack generator DLL under analyzers/dotnet/cs ([#67](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/67)) ([8852b8f](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/8852b8f8befda5397bd247de855c94f8380a4837))
+
 ## [1.0.1](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v1.0.0...v1.0.1) (2026-04-29)
 
 
