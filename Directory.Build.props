@@ -6,6 +6,12 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!--
+      Public API surface lock: RS0016 (missing entry) / RS0017 (extra entry) are
+      errors even if TreatWarningsAsErrors is locally disabled, so the public API
+      tracking files can never silently drift out of sync with the codebase.
+    -->
+    <WarningsAsErrors>$(WarningsAsErrors);RS0016;RS0017</WarningsAsErrors>
     <!-- Only audit direct dependencies; transitive vulnerability warnings (NU1902/NU1903) are owned by upstream packages -->
     <NuGetAuditMode>direct</NuGetAuditMode>
   </PropertyGroup>
