@@ -58,6 +58,12 @@ jobs:
             --source https://api.nuget.org/v3/index.json \
             --skip-duplicate
 
+  api-compat:
+    uses: ZeroAlloc-Net/.github/.github/workflows/api-compat.yml@main
+    with:
+      package-id: ZeroAlloc.Rest
+      csproj-path: src/ZeroAlloc.Rest/ZeroAlloc.Rest.csproj
+
   aot-smoke:
     runs-on: ubuntu-latest
     # Publishes samples/ZeroAlloc.Rest.AotSmoke with PublishAot=true. Verifies the
