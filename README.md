@@ -10,9 +10,10 @@
 
 ## Install
 
+The source generator is bundled into the main package — a single `PackageReference` is all you need:
+
 ```sh
 dotnet add package ZeroAlloc.Rest
-dotnet add package ZeroAlloc.Rest.Generator
 dotnet add package ZeroAlloc.Rest.SystemTextJson
 ```
 
@@ -20,12 +21,10 @@ Or via `<PackageReference>`:
 
 ```xml
 <PackageReference Include="ZeroAlloc.Rest" Version="x.y.z" />
-<PackageReference Include="ZeroAlloc.Rest.Generator"
-                  Version="x.y.z"
-                  OutputItemType="Analyzer"
-                  ReferenceOutputAssembly="false" />
 <PackageReference Include="ZeroAlloc.Rest.SystemTextJson" Version="x.y.z" />
 ```
+
+> The standalone `ZeroAlloc.Rest.Generator` package is still published for backwards compatibility with existing direct PackageReferences, but new consumers should reference only `ZeroAlloc.Rest`.
 
 ### Optional: resilience policies
 
@@ -34,7 +33,6 @@ To add retry, timeout, and circuit-breaker behaviour to a client, install the br
 ```sh
 dotnet add package ZeroAlloc.Rest.Resilience
 dotnet add package ZeroAlloc.Resilience
-dotnet add package ZeroAlloc.Resilience.Generator  # analyzer reference
 ```
 
 ## Quick Start
