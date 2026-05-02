@@ -29,7 +29,7 @@
     <PackageVersion Include="Refit" Version="10.1.6" />
     <!-- Analyzers -->
     <PackageVersion Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" Version="4.14.0" />
-    <PackageVersion Include="Meziantou.Analyzer" Version="3.0.58" />
+    <PackageVersion Include="Meziantou.Analyzer" Version="3.0.59" />
     <PackageVersion Include="Roslynator.Analyzers" Version="4.15.0" />
     <PackageVersion Include="ErrorProne.NET.CoreAnalyzers" Version="0.1.2" />
     <PackageVersion Include="ErrorProne.NET.Structs" Version="0.1.2" />
