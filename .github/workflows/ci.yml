@@ -50,14 +50,6 @@ jobs:
       - name: Pack
         run: dotnet pack ZeroAlloc.Rest.slnx --no-build -c Release -p:Version=${{ steps.gitversion.outputs.semver }} -o ./nupkg
 
-      - name: Push to NuGet (pre-release alpha)
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: |
-          dotnet nuget push ./nupkg/*.nupkg \
-            --api-key ${{ secrets.NUGET_API_KEY }} \
-            --source https://api.nuget.org/v3/index.json \
-            --skip-duplicate
-
   api-compat:
     uses: ZeroAlloc-Net/.github/.github/workflows/api-compat.yml@main
     with:
