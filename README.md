@@ -83,7 +83,7 @@ The generator produces `UserApiClient` — a sealed class implementing `IUserApi
 ## Performance
 
 Measured on .NET 10.0.4, Windows 11, X64. In-memory handler; no real network I/O.
-See [docs/benchmarks.md](docs/benchmarks.md) for methodology and full results.
+See [docs/benchmarks.md](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/blob/main/docs/benchmarks.md) for methodology and full results.
 
 | Method | Mean | vs Refit | Allocated |
 |---|---:|---:|---:|
@@ -126,18 +126,18 @@ services.AddOpenTelemetry()
 
 | Page | Description |
 |---|---|
-| [Getting Started](docs/getting-started.md) | Install, register, and make your first call |
-| [Routing](docs/routing.md) | Route templates and path parameters |
-| [Parameters](docs/parameters.md) | Query, body, header, and path parameters |
-| [Serialization](docs/serialization.md) | Built-in serializers and custom `IRestSerializer` |
-| [Dependency Injection](docs/dependency-injection.md) | Generated DI extension and `IHttpClientFactory` |
-| [Native AOT](docs/native-aot.md) | AOT safety guarantees and publish configuration |
-| [OpenAPI Code Generation](docs/openapi-codegen.md) | Generate interfaces from OpenAPI specs |
-| [Benchmarks](docs/benchmarks.md) | Performance comparison vs Refit and raw HttpClient |
-| [Testing](docs/testing.md) | Testing patterns with WireMock.Net |
-| [Advanced](docs/advanced.md) | `Result<T, HttpError>`, multiple serializers, edge cases |
-| [Resilience](docs/resilience.md) | Retry, timeout, circuit-breaker, and rate-limit via `ZeroAlloc.Rest.Resilience` |
-| [Cookbook](docs/cookbook/) | End-to-end recipes |
+| [Getting Started](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/blob/main/docs/getting-started.md) | Install, register, and make your first call |
+| [Routing](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/blob/main/docs/routing.md) | Route templates and path parameters |
+| [Parameters](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/blob/main/docs/parameters.md) | Query, body, header, and path parameters |
+| [Serialization](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/blob/main/docs/serialization.md) | Built-in serializers and custom `IRestSerializer` |
+| [Dependency Injection](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/blob/main/docs/dependency-injection.md) | Generated DI extension and `IHttpClientFactory` |
+| [Native AOT](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/blob/main/docs/native-aot.md) | AOT safety guarantees and publish configuration |
+| [OpenAPI Code Generation](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/blob/main/docs/openapi-codegen.md) | Generate interfaces from OpenAPI specs |
+| [Benchmarks](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/blob/main/docs/benchmarks.md) | Performance comparison vs Refit and raw HttpClient |
+| [Testing](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/blob/main/docs/testing.md) | Testing patterns with WireMock.Net |
+| [Advanced](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/blob/main/docs/advanced.md) | `Result<T, HttpError>`, multiple serializers, edge cases |
+| [Resilience](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/blob/main/docs/resilience.md) | Retry, timeout, circuit-breaker, and rate-limit via `ZeroAlloc.Rest.Resilience` |
+| [Cookbook](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/tree/main/docs/cookbook/) | End-to-end recipes |
 
 ## License
 
