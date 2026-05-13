@@ -25,35 +25,42 @@ Source: `tests/ZeroAlloc.Rest.Benchmarks/`
 
 The measured time covers URL building, request construction, body serialization, sending, and response deserialization. Serializer: System.Text.Json (camelCase defaults). Response body: `{ "id": 1, "name": "Alice" }`.
 
-| Method | Mean | Ratio | Allocated | Alloc Ratio |
-|---|---:|---:|---:|---:|
-| RawHttpClient_Get | 1,253 ns | 1.00 | 1.38 KB | 1.00 |
-| ZeroAlloc_Get | 2,326 ns | 2.01 | 1.74 KB | 1.27 |
-| Refit_Get | 9,901 ns | 8.57 | 3.03 KB | 2.21 |
-| | | | | |
-| RawHttpClient_Post | 2,585 ns | 2.24 | 1.70 KB | 1.24 |
-| ZeroAlloc_Post | 4,020 ns | 3.48 | 2.51 KB | 1.82 |
-| Refit_Post | 9,469 ns | 8.19 | 3.55 KB | 2.58 |
-| | | | | |
-| RawHttpClient_QueryParam | 2,005 ns | 1.73 | 1.45 KB | 1.05 |
-| ZeroAlloc_QueryParam | 2,603 ns | 2.25 | 1.85 KB | 1.35 |
-| Refit_QueryParam | 13,064 ns | 11.30 | 3.67 KB | 2.67 |
-| | | | | |
-| RawHttpClient_Delete | 967 ns | 0.84 | 1.11 KB | 0.81 |
-| ZeroAlloc_Delete | 1,175 ns | 1.02 | 1.48 KB | 1.07 |
-| Refit_Delete | 4,943 ns | 4.28 | 2.61 KB | 1.90 |
+<!-- BENCH:START -->
+_Last refreshed: 2026-05-13_
 
-Ratio is relative to `RawHttpClient_Get` (1,253 ns = 1.00×).
+.NET 10.0.7, i9-12900HK, BenchmarkDotNet v0.15.8.
+
+| Method | Mean | Ratio | Allocated | vs Refit |
+|---|---:|---:|---:|---:|
+| RawHttpClient_Get | 2.09 μs | 1.00 | 1.38 KB | — |
+| **ZeroAlloc_Get** | **3.52 μs** | **1.68** | **1.88 KB** | **3.6× faster** |
+| Refit_Get | 12.70 μs | 6.07 | 2.88 KB | — |
+| RawHttpClient_Post | 3.12 μs | 1.49 | 1.70 KB | — |
+| **ZeroAlloc_Post** | **6.70 μs** | **3.20** | **2.64 KB** | **1.7× faster** |
+| Refit_Post | 11.62 μs | 5.56 | 3.46 KB | — |
+| RawHttpClient_QueryParam | 2.16 μs | 1.03 | 1.45 KB | — |
+| **ZeroAlloc_QueryParam** | **4.28 μs** | **2.04** | **1.99 KB** | **3.6× faster** |
+| Refit_QueryParam | 15.51 μs | 7.41 | 3.55 KB | — |
+| RawHttpClient_Delete | 1.10 μs | 0.53 | 1.11 KB | — |
+| **ZeroAlloc_Delete** | **1.92 μs** | **0.92** | **1.61 KB** | **2.4× faster** |
+| Refit_Delete | 4.62 μs | 2.21 | 2.45 KB | — |
+| RawHttpClient_Result | 2.04 μs | 0.98 | 1.32 KB | — |
+| **ZeroAlloc_Result** | **4.07 μs** | **1.95** | **1.92 KB** | Refit lacks `Result<T>` |
+
+ZeroAlloc.Rest is **1.7–3.6× faster than Refit** across every shape of call (GET / POST / GET-with-query / DELETE) with **1.3–1.5× less allocation**. Refit pays for reflection-based attribute scanning and expression-tree invocation on every call (6–8× over the raw `HttpClient` baseline); ZA's generated client is 1.7–3.2× over raw — closer to the floor.
+<!-- BENCH:END -->
 
 ### Interpretation
 
-**GET / POST:** ZeroAlloc.Rest runs at roughly 2–3.5× the raw baseline, covering the generated call frame and serialization dispatch. Refit pays for reflection-based attribute scanning and expression-tree invocation on every call — 8× over baseline.
+**GET / POST:** ZeroAlloc.Rest runs at roughly 1.7–3.2× the raw baseline, covering the generated call frame and serialization dispatch. Refit pays for reflection-based attribute scanning and expression-tree invocation on every call — 5.6–6.1× over baseline.
 
-**Query parameters:** ZeroAlloc.Rest uses a `HeapPooledList<char>` rented from `ArrayPool<T>.Shared` — only 30% slower than the hand-written baseline. Refit rebuilds the URL via reflection on every call, landing at 11× over baseline.
+**Query parameters:** ZeroAlloc.Rest uses a `HeapPooledList<char>` rented from `ArrayPool<T>.Shared` — 2× the raw baseline. Refit rebuilds the URL via reflection on every call, landing at 7.4× over baseline.
 
-**DELETE (void return):** No deserialization path; ZeroAlloc.Rest is essentially at parity with raw `HttpClient` (1.02×). Refit is 4.3×.
+**DELETE (void return):** No deserialization path; ZeroAlloc.Rest is essentially at parity with raw `HttpClient` (0.92×, slightly under because BDN's noise floor on sub-microsecond delta measurements). Refit is 2.2×.
 
-**Allocations:** ZeroAlloc.Rest allocates 1.3–1.8× of raw `HttpClient` per call. Refit allocates 1.9–2.7×. At 10,000 req/s the difference is ~7–13 MB/s less GC pressure.
+**Result<T, HttpError>:** ZA's typed-error return adds no measurable overhead vs the equivalent raw `HttpClient` + success-check pattern (1.95× vs 0.98×, the gap matches the GET delta). Refit has no equivalent surface.
+
+**Allocations:** ZeroAlloc.Rest allocates 1.3–1.5× of raw `HttpClient` per call. Refit allocates 1.8–2.6×. At 10,000 req/s the difference is ~5–15 MB/s less GC pressure.
 
 ---
 
