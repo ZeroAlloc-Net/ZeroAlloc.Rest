@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.3](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v1.1.2...v1.1.3) (2026-05-13)
+
+
+### Documentation
+
+* **benchmarks:** refresh vs-Refit numbers and add BENCH sentinels ([#95](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/95)) ([a35e459](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/a35e45940b125227b6636fa86b65812944a17932))
+
 ## [1.1.2](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v1.1.1...v1.1.2) (2026-05-12)
 
 
