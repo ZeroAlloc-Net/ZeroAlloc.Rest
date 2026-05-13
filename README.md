@@ -82,16 +82,22 @@ The generator produces `UserApiClient` — a sealed class implementing `IUserApi
 
 ## Performance
 
-Measured on .NET 10.0.4, Windows 11, X64. In-memory handler; no real network I/O.
+Measured on .NET 10.0.7, i9-12900HK, BenchmarkDotNet v0.15.8. In-memory handler; no real network I/O.
 See [docs/benchmarks.md](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/blob/main/docs/benchmarks.md) for methodology and full results.
 
 | Method | Mean | vs Refit | Allocated |
 |---|---:|---:|---:|
-| Raw HttpClient (GET baseline) | 1,648 ns | — | 1.38 KB |
-| **ZeroAlloc.Rest GET** | 1,933 ns | **3.2× faster** | 1.74 KB |
-| Refit GET | 6,123 ns | 1× | 3.03 KB |
-| **ZeroAlloc.Rest QueryParam** | 2,474 ns | **5.5× faster** | 1.85 KB |
-| Refit QueryParam | 13,509 ns | 1× | 3.67 KB |
+| Raw HttpClient (GET baseline) | 2.09 μs | — | 1.38 KB |
+| **ZeroAlloc.Rest GET** | 3.52 μs | **3.6× faster** | 1.88 KB |
+| Refit GET | 12.70 μs | 1× | 2.88 KB |
+| **ZeroAlloc.Rest POST** | 6.70 μs | **1.7× faster** | 2.64 KB |
+| Refit POST | 11.62 μs | 1× | 3.46 KB |
+| **ZeroAlloc.Rest QueryParam** | 4.28 μs | **3.6× faster** | 1.99 KB |
+| Refit QueryParam | 15.51 μs | 1× | 3.55 KB |
+| **ZeroAlloc.Rest DELETE** | 1.92 μs | **2.4× faster** | 1.61 KB |
+| Refit DELETE | 4.62 μs | 1× | 2.45 KB |
+
+ZA is **1.7–3.6× faster than Refit** across every call shape with **1.3–1.5× less allocation**. Refit pays for reflection-based attribute scanning + expression-tree invocation on every call; ZA's generated client lives within 1.7–3.2× of the raw HttpClient floor.
 
 ## Features
 
