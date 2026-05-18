@@ -10,7 +10,7 @@
   <Target Name="ZeroAllocRestGeneratorDuplicateCheck" BeforeTargets="CoreCompile">
     <ItemGroup>
       <_RedundantZeroAllocRestGeneratorRef Include="@(PackageReference)"
-                                            Condition="'%(Identity)' == 'ZeroAlloc.Rest.Generator'" />
+                                            Condition="'$([MSBuild]::ValueOrDefault('%(Identity)', '').ToLowerInvariant())' == 'zeroalloc.rest.generator'" />
     </ItemGroup>
     <Error Condition="'@(_RedundantZeroAllocRestGeneratorRef)' != ''"
            Code="ZR9001"
