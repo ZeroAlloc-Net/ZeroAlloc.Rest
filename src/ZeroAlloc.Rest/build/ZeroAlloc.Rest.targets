@@ -9,8 +9,15 @@
   -->
   <Target Name="ZeroAllocRestGeneratorDuplicateCheck" BeforeTargets="CoreCompile">
     <ItemGroup>
+      <!--
+        Identity match: canonical case (what nuget.org and `dotnet add package` produce)
+        plus all-lowercase (the realistic hand-typed typo). MSBuild does not allow
+        item metadata `%(Identity)` inside property functions, so we cannot lowercase
+        via `[System.String]::ToLowerInvariant()` — the Or chain is the canonical
+        workaround for case-insensitive item-metadata matching in conditions.
+      -->
       <_RedundantZeroAllocRestGeneratorRef Include="@(PackageReference)"
-                                            Condition="'$([MSBuild]::ValueOrDefault('%(Identity)', '').ToLowerInvariant())' == 'zeroalloc.rest.generator'" />
+                                            Condition="'%(Identity)' == 'ZeroAlloc.Rest.Generator' Or '%(Identity)' == 'zeroalloc.rest.generator'" />
     </ItemGroup>
     <Error Condition="'@(_RedundantZeroAllocRestGeneratorRef)' != ''"
            Code="ZR9001"
