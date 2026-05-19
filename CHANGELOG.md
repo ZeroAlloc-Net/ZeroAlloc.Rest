@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v1.1.3...v1.2.0) (2026-05-19)
+
+
+### Features
+
+* **build:** emit ZR9001 when consumers reference both ZeroAlloc.Rest and ZeroAlloc.Rest.Generator ([#101](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/101)) ([1805260](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/1805260d3901a03c68b058dbd901f9cdeb45df4c))
+
 ## [1.1.3](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v1.1.2...v1.1.3) (2026-05-13)
 
 
