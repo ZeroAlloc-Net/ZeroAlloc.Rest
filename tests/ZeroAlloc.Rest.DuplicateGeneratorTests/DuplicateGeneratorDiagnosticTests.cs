@@ -14,7 +14,13 @@ public sealed class DuplicateGeneratorDiagnosticTests
         Assert.True(Directory.Exists(feed),
             $"Local nupkg feed not found at {feed}. Run `dotnet pack -c Release -o artifacts/local` first.");
 
-        var restNupkg = Directory.GetFiles(feed, "ZeroAlloc.Rest.*.nupkg");
+        // The "ZeroAlloc.Rest.*.nupkg" glob also matches "ZeroAlloc.Rest.Generator.*.nupkg"
+        // because `*` greedily eats "Generator.<version>". Filter it out explicitly — relying
+        // on enumeration order is unreliable across file systems (worked on Windows NTFS,
+        // returned Generator first on Linux ext4 in CI).
+        var restNupkg = Directory.GetFiles(feed, "ZeroAlloc.Rest.*.nupkg")
+            .Where(f => !Path.GetFileName(f).StartsWith("ZeroAlloc.Rest.Generator.", StringComparison.Ordinal))
+            .ToArray();
         var genNupkg = Directory.GetFiles(feed, "ZeroAlloc.Rest.Generator.*.nupkg");
         Assert.NotEmpty(restNupkg);
         Assert.NotEmpty(genNupkg);
