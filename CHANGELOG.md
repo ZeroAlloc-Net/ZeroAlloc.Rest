@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.1](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v1.2.0...v1.2.1) (2026-05-19)
+
+
+### Documentation
+
+* **backlog:** mark v1 deferred items as shipped ([#103](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/103)) ([aca4e3a](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/aca4e3a23e65c16410834cfac575ce1977fc5956))
+
 ## [1.2.0](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v1.1.3...v1.2.0) (2026-05-19)
 
 
