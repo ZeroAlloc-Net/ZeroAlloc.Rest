@@ -37,6 +37,11 @@ jobs:
       - name: Build
         run: dotnet build ZeroAlloc.Rest.slnx --no-restore -c Release -p:Version=${{ steps.gitversion.outputs.semver }}
 
+      - name: Pack ZA.Rest packages into local feed (for duplicate-generator test)
+        run: |
+          dotnet pack src/ZeroAlloc.Rest/ZeroAlloc.Rest.csproj -c Release -o artifacts/local
+          dotnet pack src/ZeroAlloc.Rest.Generator/ZeroAlloc.Rest.Generator.csproj -c Release -o artifacts/local
+
       - name: Test
         run: dotnet test ZeroAlloc.Rest.slnx --no-build -c Release --logger "trx" --results-directory ./test-results
 
