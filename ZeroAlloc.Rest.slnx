@@ -13,6 +13,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/ZeroAlloc.Rest.Tests/ZeroAlloc.Rest.Tests.csproj" />
+    <Project Path="tests/ZeroAlloc.Rest.DuplicateGeneratorTests/ZeroAlloc.Rest.DuplicateGeneratorTests.csproj" />
     <Project Path="tests/ZeroAlloc.Rest.Generator.Tests/ZeroAlloc.Rest.Generator.Tests.csproj" />
     <Project Path="tests/ZeroAlloc.Rest.Integration.Tests/ZeroAlloc.Rest.Integration.Tests.csproj" />
     <Project Path="tests/ZeroAlloc.Rest.Tools.Tests/ZeroAlloc.Rest.Tools.Tests.csproj" />

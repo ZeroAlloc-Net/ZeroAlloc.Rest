@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- Build-orchestration test: spawns dotnet build for a temp consumer project -->
+    <!-- MA0004: ConfigureAwait conflicts with xUnit1030 inside [Fact] bodies — xUnit's rule takes precedence in test projects -->
+    <NoWarn>$(NoWarn);MA0004;MA0048</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+  </ItemGroup>
+</Project>

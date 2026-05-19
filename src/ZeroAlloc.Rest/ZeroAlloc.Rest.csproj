@@ -43,4 +43,10 @@
             Visible="false" />
     </ItemGroup>
   </Target>
+  <ItemGroup>
+    <None Include="build/ZeroAlloc.Rest.targets"
+          Pack="true"
+          PackagePath="build/"
+          Visible="false" />
+  </ItemGroup>
 </Project>

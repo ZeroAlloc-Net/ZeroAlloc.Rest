@@ -1,0 +1,26 @@
+<Project>
+  <!--
+    Auto-imported by NuGet from build/<PackageId>.targets when a project
+    references the ZeroAlloc.Rest package.
+
+    Emits ZR9001 when the consumer also references ZeroAlloc.Rest.Generator
+    directly. ZeroAlloc.Rest bundles the generator already; the dual reference
+    causes the generator to load twice and produces duplicate-type errors.
+  -->
+  <Target Name="ZeroAllocRestGeneratorDuplicateCheck" BeforeTargets="CoreCompile">
+    <ItemGroup>
+      <!--
+        Identity match: canonical case (what nuget.org and `dotnet add package` produce)
+        plus all-lowercase (the realistic hand-typed typo). MSBuild does not allow
+        item metadata `%(Identity)` inside property functions, so we cannot lowercase
+        via `[System.String]::ToLowerInvariant()` — the Or chain is the canonical
+        workaround for case-insensitive item-metadata matching in conditions.
+      -->
+      <_RedundantZeroAllocRestGeneratorRef Include="@(PackageReference)"
+                                            Condition="'%(Identity)' == 'ZeroAlloc.Rest.Generator' Or '%(Identity)' == 'zeroalloc.rest.generator'" />
+    </ItemGroup>
+    <Error Condition="'@(_RedundantZeroAllocRestGeneratorRef)' != ''"
+           Code="ZR9001"
+           Text="ZeroAlloc.Rest bundles the source generator. Remove the redundant 'ZeroAlloc.Rest.Generator' PackageReference — reference only 'ZeroAlloc.Rest'. See https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest#install" />
+  </Target>
+</Project>
