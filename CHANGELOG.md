@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.2](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v1.2.1...v1.2.2) (2026-06-15)
+
+
+### Bug Fixes
+
+* **deps:** bump Refit 10.2.0 (revoked cert) + MessagePack 3.1.7 (CVE) ([#125](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/125)) ([56a0c8d](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/56a0c8db8e9977e84638f67d6132080d91520947))
+
 ## [1.2.1](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v1.2.0...v1.2.1) (2026-05-19)
 
 
