@@ -50,6 +50,22 @@ jobs:
       - name: Build
         run: dotnet build ZeroAlloc.Rest.slnx --no-restore -c Release -p:Version=${{ steps.version.outputs.version }}
 
+      # DuplicateGeneratorDiagnosticTests scaffolds a consumer project that restores
+      # ZeroAlloc.Rest and ZeroAlloc.Rest.Generator from a local feed, and asserts the
+      # build fails with ZR9001. Without this step the feed does not exist and the test
+      # fails on its first assertion — which is what stranded v1.2.2 and v1.3.0: the
+      # release was tagged, the publish job died here, and nothing reached NuGet.
+      # ci.yml has always had this step; the publish job never did.
+      #
+      # --no-build, unlike ci.yml's copy: a plain `dotnet pack` here would rebuild these
+      # projects at the default version and overwrite the output the Pack step below
+      # publishes with --no-build, shipping assemblies stamped 1.0.0 inside a package
+      # labelled with the real version.
+      - name: Pack ZA.Rest packages into local feed (for duplicate-generator test)
+        run: |
+          dotnet pack src/ZeroAlloc.Rest/ZeroAlloc.Rest.csproj --no-build -c Release -p:PackageVersion=${{ steps.version.outputs.version }} -o artifacts/local
+          dotnet pack src/ZeroAlloc.Rest.Generator/ZeroAlloc.Rest.Generator.csproj --no-build -c Release -p:PackageVersion=${{ steps.version.outputs.version }} -o artifacts/local
+
       - name: Test
         run: dotnet test ZeroAlloc.Rest.slnx --no-build -c Release
 
