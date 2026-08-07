@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.1](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v1.3.0...v1.3.1) (2026-08-07)
+
+
+### Bug Fixes
+
+* **ci:** pack the local feed before testing in the publish job ([#180](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/180)) ([5fdd1d8](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/5fdd1d86703fd9e56da6db975c16bf5948557534))
+* **ci:** pack the local feed in the rescue workflow too ([#182](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/182)) ([76ec18c](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/76ec18c2690e1336bd558ebc4da15bf3f2e891b1))
+
 ## [1.3.0](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v1.2.2...v1.3.0) (2026-08-07)
 
 
