@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v1.2.2...v1.3.0) (2026-08-07)
+
+
+### Bug Fixes
+
+* **deps:** release accumulated dependency updates ([#177](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/177)) ([1ee11db](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/1ee11db5a02b799f9dedc9f8bc64af3b65472bb0))
+
 ## [1.2.2](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v1.2.1...v1.2.2) (2026-06-15)
 
 
