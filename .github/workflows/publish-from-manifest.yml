@@ -42,6 +42,15 @@ jobs:
       - name: Build
         run: dotnet build --configuration Release --no-restore
 
+      # Same prerequisite the CI and release-please publish jobs need:
+      # DuplicateGeneratorDiagnosticTests restores from a local feed at
+      # artifacts/local and fails on its first assertion without one. Missing here,
+      # this rescue workflow fails on exactly the release it exists to rescue.
+      - name: Pack ZA.Rest packages into local feed (for duplicate-generator test)
+        run: |
+          dotnet pack src/ZeroAlloc.Rest/ZeroAlloc.Rest.csproj --no-build -c Release -p:PackageVersion=${{ steps.version.outputs.version }} -o artifacts/local
+          dotnet pack src/ZeroAlloc.Rest.Generator/ZeroAlloc.Rest.Generator.csproj --no-build -c Release -p:PackageVersion=${{ steps.version.outputs.version }} -o artifacts/local
+
       - name: Test
         run: dotnet test --configuration Release --no-build
 
