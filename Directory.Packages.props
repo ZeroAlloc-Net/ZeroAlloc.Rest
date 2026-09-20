@@ -34,7 +34,7 @@
     <PackageVersion Include="ErrorProne.NET.CoreAnalyzers" Version="0.1.2" />
     <PackageVersion Include="ErrorProne.NET.Structs" Version="0.1.2" />
     <!-- ZeroAlloc ecosystem -->
-    <PackageVersion Include="ZeroAlloc.Serialisation" Version="2.4.3" />
+    <PackageVersion Include="ZeroAlloc.Serialisation" Version="2.4.4" />
     <PackageVersion Include="ZeroAlloc.Results" Version="1.2.3" />
     <PackageVersion Include="ZeroAlloc.Collections" Version="1.1.7" />
     <PackageVersion Include="ZeroAlloc.Analyzers" Version="1.5.2" />
