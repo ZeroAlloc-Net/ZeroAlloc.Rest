@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.3](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v1.3.2...v1.3.3) (2026-09-20)
+
+
+### Bug Fixes
+
+* declare current sibling package versions ([#269](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/269)) ([5dcdbc8](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/5dcdbc81be25804cd077b585b680df328a6e920b))
+
 ## [1.3.2](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v1.3.1...v1.3.2) (2026-09-19)
 
 
