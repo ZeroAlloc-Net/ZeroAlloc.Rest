@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.5](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v1.3.4...v1.3.5) (2026-09-24)
+
+
+### Bug Fixes
+
+* generated client and DI extensions follow the interface's accessibility ([#296](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/296)) ([f3f1567](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/f3f1567f137ab14c4c8d26cd108f7df62ef6fac5)), closes [#295](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/295)
+
 ## [1.3.4](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v1.3.3...v1.3.4) (2026-09-20)
 
 
