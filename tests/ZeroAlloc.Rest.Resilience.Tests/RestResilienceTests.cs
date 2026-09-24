@@ -33,14 +33,15 @@ public sealed class RestResilienceTests : IDisposable
 
         var services = new ServiceCollection();
 
-        // Register retry policy (normally auto-registered by the Resilience generator's DI extension,
-        // but here we register manually because we bypass it to avoid the AddTransient<TImpl> conflict).
-        services.AddSingleton(new RetryPolicy(maxAttempts: 3, backoffMs: 10, jitter: false, perAttemptTimeoutMs: 0));
+        // Register only the proxy's policies: AddTestApiResilience<TImpl> would also register
+        // ITestApi, which AddRestResilience owns.
+        services.AddTestApiResiliencePolicies((_, p) =>
+            p.Retry = new RetryPolicy(maxAttempts: 3, backoffMs: 10, jitter: false, perAttemptTimeoutMs: 0));
 
         services.AddRestResilience<ITestApi, TestApiClient, ITestApiResilienceProxy>(
             resilienceFactory: (inner, sp) => new ITestApiResilienceProxy(
                 inner,
-                sp.GetRequiredService<RetryPolicy>()),
+                sp.GetRequiredService<TestApiResiliencePolicies>()),
             configure: options =>
             {
                 options.BaseAddress = new Uri("http://fake.local/");
