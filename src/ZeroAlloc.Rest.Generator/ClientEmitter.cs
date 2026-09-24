@@ -55,7 +55,7 @@ internal static class ClientEmitter
             sb.AppendLine();
         }
 
-        sb.AppendLine($"public sealed partial class {model.ClassName} : {model.InterfaceName}");
+        sb.AppendLine($"{model.Accessibility} sealed partial class {model.ClassName} : {model.InterfaceName}");
         sb.AppendLine("{");
         sb.AppendLine("    private static readonly global::System.Diagnostics.ActivitySource _activitySource = new(\"ZeroAlloc.Rest\");");
         sb.AppendLine("    private static readonly global::System.Diagnostics.Metrics.Meter _meter = new(\"ZeroAlloc.Rest\");");
