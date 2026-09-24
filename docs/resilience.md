@@ -9,14 +9,7 @@ dotnet add package ZeroAlloc.Rest.Resilience
 dotnet add package ZeroAlloc.Resilience
 ```
 
-The Resilience generator must be added as an analyzer:
-
-```xml
-<PackageReference Include="ZeroAlloc.Resilience.Generator"
-                  Version="x.y.z"
-                  OutputItemType="Analyzer"
-                  ReferenceOutputAssembly="false" />
-```
+The Resilience source generator ships inside the `ZeroAlloc.Resilience` package; there is no separate generator package to add. This page describes ZeroAlloc.Resilience 2.0 and later.
 
 ## Quick Start
 
@@ -24,7 +17,7 @@ The Resilience generator must be added as an analyzer:
 
 ```csharp
 using ZeroAlloc.Rest.Attributes;
-using ZeroAlloc.Resilience.Attributes;
+using ZeroAlloc.Resilience;
 
 [ZeroAllocRestClient]
 [Retry(MaxAttempts = 3, BackoffMs = 200)]
@@ -39,11 +32,15 @@ public interface IPaymentApi
 
 Both generators process `IPaymentApi`:
 - The **Rest generator** emits `PaymentApiClient` (the concrete HTTP client).
-- The **Resilience generator** emits `IPaymentApiResilienceProxy` (the policy wrapper).
+- The **Resilience generator** emits `IPaymentApiResilienceProxy` (the policy wrapper), `PaymentApiResiliencePolicies` (the policy settings, defaulting to the attribute values) and `AddPaymentApiResiliencePolicies()`.
 
 **2. Register with `AddRestResilience`:**
 
 ```csharp
+// The proxy's policy settings: attribute values, optionally changed here, for example from IOptions.
+builder.Services.AddPaymentApiResiliencePolicies((sp, p) =>
+    p.Retry = new RetryPolicy(maxAttempts: 5, backoffMs: 250, jitter: true, perAttemptTimeoutMs: 0));
+
 builder.Services.AddRestResilience<
     IPaymentApi,
     PaymentApiClient,          // Rest-generated client
@@ -51,10 +48,7 @@ builder.Services.AddRestResilience<
 >(
     resilienceFactory: (client, sp) => new IPaymentApiResilienceProxy(
         client,
-        sp.GetRequiredService<RetryPolicy>(),
-        sp.GetRequiredService<TimeoutPolicy>(),
-        sp.GetRequiredService<CircuitBreakerPolicy>()
-    ),
+        sp.GetRequiredService<PaymentApiResiliencePolicies>()),
     configure: options =>
     {
         options.BaseAddress = new Uri("https://payments.example.com");
@@ -73,7 +67,9 @@ public class OrderService(IPaymentApi payments)
 }
 ```
 
-Any transient failure is automatically retried; a sustained outage trips the circuit breaker and returns a `ResilienceException` rather than hanging.
+A call that throws is retried; a sustained outage opens the circuit breaker, and calls then throw `ResilienceException` instead of waiting on a failing server.
+
+Call `AddPaymentApiResiliencePolicies()` even without a callback: the factory resolves the policies from the container. Do not also call the Resilience generator's `AddPaymentApiResilience<TImpl>()`; `AddRestResilience` already registers `IPaymentApi`.
 
 ## How It Works
 
@@ -90,11 +86,11 @@ All attributes are from `ZeroAlloc.Resilience`. See the [ZeroAlloc.Resilience RE
 | Attribute | Key Properties | Description |
 |-----------|---------------|-------------|
 | `[Retry]` | `MaxAttempts`, `BackoffMs`, `Jitter` | Retries on transient failure with optional exponential back-off |
-| `[Timeout]` | `Ms` (required) | Per-call deadline; throws `ResilienceException` on expiry |
+| `[Timeout]` | `Ms` (required) | Per-call deadline; cancels the token passed to the client, so the call ends with `OperationCanceledException` |
 | `[CircuitBreaker]` | `MaxFailures`, `ResetMs`, `HalfOpenProbes` | Opens circuit after consecutive failures; rejects calls while open |
 | `[RateLimit]` | `MaxPerSecond` (required), `BurstSize` | Token-bucket rate limiter; throws `ResilienceException` when exhausted |
 
-Attributes can be applied at interface level (all methods) or per method.
+Attributes can be applied at interface level (all methods) or per method. Each method-level attribute gets its own settings slot, for example `ChargeAsyncRetry`, and its own state.
 
 ## Configuring the HTTP Pipeline
 
@@ -112,4 +108,20 @@ builder.Services
 
 ## Result Returns and Error Handling
 
-When an interface method returns `Result<T, HttpError>` (from `ZeroAlloc.Results`), resilience policies inspect the `HttpError` rather than catching exceptions. Configure this on the Resilience side by using `NonThrowing = true` on `[Retry]` — see the [ZeroAlloc.Resilience result-return-types guide](https://github.com/ZeroAlloc-Net/ZeroAlloc.Resilience/blob/main/docs/guides/result-return-types.md).
+Resilience policies act on exceptions. They do not inspect a returned `HttpError`.
+
+For a method that returns `Result<T, HttpError>`:
+
+| Policy | Behaviour |
+|---|---|
+| `[Retry]` | A returned `Result`, failed or successful, is passed through unchanged and not retried. Only a thrown exception is retried. |
+| `[Timeout]` | Cancels the token; whatever the client returns or throws is passed through. |
+| `[CircuitBreaker(Fallback = ...)]` | While open, the fallback's `Result` is returned. |
+| `[CircuitBreaker]` without `Fallback`, `[RateLimit]` | Compile error ZR0003: the generator cannot build an `HttpError`. |
+| `[Retry(NonThrowing = true)]` | Compile error ZR0003: `NonThrowing` requires `Result<T, ResilienceError>`. |
+
+So a 429 or 503 returned as a failed `Result` is **not** retried. To retry on those, either declare the method with a plain return type so the client throws on non-success, or handle the failed `Result` in the caller. Retrying on selected failed Results is tracked in [ZeroAlloc.Resilience#142](https://github.com/ZeroAlloc-Net/ZeroAlloc.Resilience/issues/142), and taking the delay from `Retry-After` in [#143](https://github.com/ZeroAlloc-Net/ZeroAlloc.Resilience/issues/143).
+
+Network failures, timeouts and malformed JSON still throw from a `Result<T, HttpError>` method rather than becoming an `HttpError`; see [#299](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/299). Those exceptions are what `[Retry]` retries.
+
+See the [ZeroAlloc.Resilience result-return-types guide](https://github.com/ZeroAlloc-Net/ZeroAlloc.Resilience/blob/main/docs/guides/result-return-types.md) for the full rules.
