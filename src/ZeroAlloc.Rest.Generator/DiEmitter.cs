@@ -27,7 +27,7 @@ internal static class DiEmitter
             sb.AppendLine();
         }
 
-        sb.AppendLine("public static partial class GeneratedRestClientExtensions");
+        sb.AppendLine($"{model.Accessibility} static partial class {model.ExtensionsClassName}");
         sb.AppendLine("{");
         sb.AppendLine($"    public static IHttpClientBuilder Add{model.InterfaceName}(");
         sb.AppendLine($"        this IServiceCollection services,");

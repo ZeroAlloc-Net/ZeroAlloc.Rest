@@ -47,7 +47,17 @@ internal static class ModelExtractor
             if (methodModel is not null) methods.Add(methodModel);
         }
 
-        return new ClientModel(ns, interfaceName, className, methods.AsReadOnly(), clientSerializer);
+        return new ClientModel(ns, interfaceName, className, methods.AsReadOnly(), clientSerializer, IsEffectivelyPublic(interfaceSymbol));
+    }
+
+    private static bool IsEffectivelyPublic(INamedTypeSymbol type)
+    {
+        for (INamedTypeSymbol? t = type; t is not null; t = t.ContainingType)
+        {
+            if (t.DeclaredAccessibility != Accessibility.Public)
+                return false;
+        }
+        return true;
     }
 
     private static MethodModel? ExtractMethod(IMethodSymbol method)
