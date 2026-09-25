@@ -81,3 +81,12 @@ ZeroAlloc.Rest.GeneratedRestClient
 static ZeroAlloc.Rest.GeneratedRestClient.AddSerializers<TClient>(Microsoft.Extensions.DependencyInjection.IServiceCollection! services, ZeroAlloc.Rest.ZeroAllocClientOptions! options) -> void
 static ZeroAlloc.Rest.GeneratedRestClient.Create<TClient>(System.Net.Http.HttpClient! httpClient, System.IServiceProvider! services) -> TClient!
 static ZeroAlloc.Rest.GeneratedRestClient.AddPerClientSerializer<TInterface>(Microsoft.Extensions.DependencyInjection.IServiceCollection! services, ZeroAlloc.Rest.ZeroAllocClientOptions! options) -> void
+ZeroAlloc.Rest.HttpError.Exception.get -> System.Exception?
+ZeroAlloc.Rest.HttpError.Exception.init -> void
+ZeroAlloc.Rest.HttpError.Kind.get -> ZeroAlloc.Rest.HttpErrorKind
+ZeroAlloc.Rest.HttpError.Kind.init -> void
+ZeroAlloc.Rest.HttpErrorKind
+ZeroAlloc.Rest.HttpErrorKind.Deserialization = 3 -> ZeroAlloc.Rest.HttpErrorKind
+ZeroAlloc.Rest.HttpErrorKind.Status = 0 -> ZeroAlloc.Rest.HttpErrorKind
+ZeroAlloc.Rest.HttpErrorKind.Timeout = 2 -> ZeroAlloc.Rest.HttpErrorKind
+ZeroAlloc.Rest.HttpErrorKind.Transport = 1 -> ZeroAlloc.Rest.HttpErrorKind

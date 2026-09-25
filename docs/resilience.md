@@ -127,14 +127,16 @@ For a method that returns `Result<T, HttpError>`:
 
 | Policy | Behaviour |
 |---|---|
-| `[Retry]` | A returned `Result`, failed or successful, is passed through unchanged and not retried. Only a thrown exception is retried. |
-| `[Timeout]` | Cancels the token; whatever the client returns or throws is passed through. |
+| `[Retry]` | A returned `Result`, failed or successful, is passed through unchanged and not retried. Only a thrown exception is retried. Transport failures and timeouts are returned, not thrown, so they are not retried. |
+| `[Timeout]` | Cancels the token; whatever the client returns or throws is passed through. The client sees that cancellation as requested by its caller, so it throws `OperationCanceledException` rather than returning a `Timeout` failure. |
 | `[CircuitBreaker(Fallback = ...)]` | While open, the fallback's `Result` is returned. |
 | `[CircuitBreaker]` without `Fallback`, `[RateLimit]` | Compile error ZR0003: the generator cannot build an `HttpError`. |
 | `[Retry(NonThrowing = true)]` | Compile error ZR0003: `NonThrowing` requires `Result<T, ResilienceError>`. |
 
-So a 429 or 503 returned as a failed `Result` is **not** retried. To retry on those, either declare the method with a plain return type so the client throws on non-success, or handle the failed `Result` in the caller. Retrying on selected failed Results is tracked in [ZeroAlloc.Resilience#142](https://github.com/ZeroAlloc-Net/ZeroAlloc.Resilience/issues/142), and taking the delay from `Retry-After` in [#143](https://github.com/ZeroAlloc-Net/ZeroAlloc.Resilience/issues/143).
+Since 2.0, a `Result<T, HttpError>` method also returns network failures, timeouts and bodies it cannot deserialize as a failed `Result`, with `HttpError.Kind` set to `Transport`, `Timeout` or `Deserialization`, instead of throwing them; see [Advanced](advanced.md). Those failures are no longer thrown, so `[Retry]` no longer retries them either.
 
-Network failures, timeouts and malformed JSON still throw from a `Result<T, HttpError>` method rather than becoming an `HttpError`; see [#299](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/299). Those exceptions are what `[Retry]` retries.
+So neither a 429 or 503 returned as a failed `Result` nor a refused connection or a timeout on such a method is retried. Only what still throws is retried: caller cancellation, which is never retried, and exceptions that are not transport, timeout or deserialization failures. To retry on transport failures and timeouts, either declare the method with a plain return type so the client throws, or handle the failed `Result` in the caller. Retrying on selected failed Results is tracked in [ZeroAlloc.Resilience#142](https://github.com/ZeroAlloc-Net/ZeroAlloc.Resilience/issues/142), and taking the delay from `Retry-After` in [#143](https://github.com/ZeroAlloc-Net/ZeroAlloc.Resilience/issues/143).
+
+`[Timeout]` works by cancelling the token it passes to the client. To the client that is cancellation its caller asked for, so it still throws `OperationCanceledException`, and the policy handles it as before. Only a timeout inside the client, such as `HttpClient.Timeout`, becomes a failed `Result` with `Kind` set to `Timeout`.
 
 See the [ZeroAlloc.Resilience result-return-types guide](https://github.com/ZeroAlloc-Net/ZeroAlloc.Resilience/blob/main/docs/guides/result-return-types.md) for the full rules.

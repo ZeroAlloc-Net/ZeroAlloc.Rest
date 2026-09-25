@@ -37,4 +37,29 @@ public sealed class HttpErrorTests
 
         Assert.Equal("Validation failed", error.Message);
     }
+
+    [Fact]
+    public void Kind_DefaultsToStatus_AndException_DefaultsToNull()
+    {
+        var error = new HttpError(HttpStatusCode.NotFound,
+            new Dictionary<string, IReadOnlyList<string>>());
+
+        Assert.Equal(HttpErrorKind.Status, error.Kind);
+        Assert.Null(error.Exception);
+    }
+
+    [Fact]
+    public void KindAndException_CanBeInitialised()
+    {
+        var cause = new HttpRequestException("connection refused");
+
+        var error = new HttpError((HttpStatusCode)0, new Dictionary<string, IReadOnlyList<string>>(), cause.Message)
+        {
+            Kind = HttpErrorKind.Transport,
+            Exception = cause,
+        };
+
+        Assert.Equal(HttpErrorKind.Transport, error.Kind);
+        Assert.Same(cause, error.Exception);
+    }
 }

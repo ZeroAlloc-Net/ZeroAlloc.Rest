@@ -26,17 +26,36 @@ public interface IUserApi
 }
 ```
 
-The generated client will:
-- Return `Result<T, HttpError>.Success(value)` on a 2xx response
-- Return `Result<T, HttpError>.Failure(error)` on any non-2xx response — **no exception is thrown**
+The generated client returns `Result<T, HttpError>.Success(value)` on a 2xx response whose body it could read. It returns `Result<T, HttpError>.Failure(error)`, and **throws no exception**, when:
+
+| Failure | `Kind` | `StatusCode` | `Headers` | `Exception` |
+|---|---|---|---|---|
+| The server answers with a non-2xx status | `Status` | The response status | The response headers | `null` |
+| The request fails before a response arrives: DNS, connection refused, TLS | `Transport` | `0`, or the status an `HttpRequestException` carries | Empty | The `HttpRequestException` |
+| The request times out, for example through `HttpClient.Timeout` | `Timeout` | `0` | Empty | The `OperationCanceledException` or `TaskCanceledException` |
+| The body of a 2xx response cannot be deserialized | `Deserialization` | The response status | The response headers | Whatever the serializer threw: a `JsonException`, a `MemoryPackSerializationException`, a `MessagePackSerializationException` and so on |
 
 `HttpError` exposes:
 
 | Property | Type | Description |
 |---|---|---|
-| `StatusCode` | `HttpStatusCode` | HTTP status code of the failed response |
-| `Headers` | `IReadOnlyDictionary<string, IReadOnlyList<string>>` | Response headers |
-| `Message` | `string?` | Optional error message (null by default for HTTP failures) |
+| `Kind` | `HttpErrorKind` | What went wrong: `Status`, `Transport`, `Timeout` or `Deserialization`. Defaults to `Status`. |
+| `StatusCode` | `HttpStatusCode` | Status code of the response, or `0` when none arrived |
+| `Headers` | `IReadOnlyDictionary<string, IReadOnlyList<string>>` | Response headers, or empty when no response arrived. Lookups ignore case. |
+| `Message` | `string?` | The exception message, or `null` for a `Status` failure |
+| `Exception` | `Exception?` | The exception behind a `Transport`, `Timeout` or `Deserialization` failure, or `null` for a `Status` failure |
+
+### What still throws
+
+Only transport, timeout and response-deserialization failures become an `HttpError`. These still throw from a `Result<T, HttpError>` method:
+
+- **Cancellation you asked for.** When the method's `CancellationToken` is cancelled, the `OperationCanceledException` propagates. Cancellation is not an error. Any other cancellation, such as `HttpClient.Timeout`, counts as a `Timeout`. A method without a `CancellationToken` parameter has no caller cancellation, so every cancellation it sees is a `Timeout`.
+- **Serializing the request body.** A `[Body]` value the serializer cannot write is a bug in the call, not a failure of the server.
+- **Everything else**, such as an argument the client cannot put in the URL, or an exception from your own `DelegatingHandler` that is not an `HttpRequestException`.
+
+Methods that do not return a `Result` throw in every case, as before.
+
+Failures that become an `HttpError` are still traced as failures: the span status is set to `Error` and the request duration is recorded, as for an exception that propagates.
 
 Consuming the result:
 

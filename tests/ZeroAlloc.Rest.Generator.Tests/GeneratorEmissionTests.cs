@@ -251,6 +251,99 @@ public class GeneratorEmissionTests
     }
 
     [Fact]
+    public void Generator_Result_ReturnType_MapsTransportTimeoutAndDeserializationFailures()
+    {
+        var source = """
+            using ZeroAlloc.Rest.Attributes;
+            namespace MyApp;
+            [ZeroAllocRestClient]
+            public interface IUserApi
+            {
+                [Get("/users/{id}")]
+                System.Threading.Tasks.Task<ZeroAlloc.Results.Result<string, ZeroAlloc.Rest.HttpError>> GetUserResultAsync(int id, System.Threading.CancellationToken ct = default);
+            }
+            """;
+        var output = GetGeneratedSourceWithResults(source, "IUserApi.g.cs");
+        Assert.Contains("catch (global::System.OperationCanceledException __ex) when (ct.IsCancellationRequested)", output);
+        Assert.Contains("HttpErrorKind.Timeout", output);
+        Assert.Contains("catch (global::System.Net.Http.HttpRequestException __ex)", output);
+        Assert.Contains("HttpErrorKind.Transport", output);
+        Assert.Contains("HttpErrorKind.Deserialization", output);
+        Assert.Contains("HttpErrorKind.Status", output);
+        // One place builds every HttpError, so a later error mapper has a single hook.
+        Assert.Equal(1, CountOccurrences(output, "new global::ZeroAlloc.Rest.HttpError("));
+    }
+
+    [Fact]
+    public void Generator_NonResult_ReturnType_KeepsRethrowingOnly()
+    {
+        var source = """
+            using ZeroAlloc.Rest.Attributes;
+            namespace MyApp;
+            [ZeroAllocRestClient]
+            public interface IUserApi
+            {
+                [Get("/users/{id}")]
+                System.Threading.Tasks.Task<string> GetUserAsync(int id, System.Threading.CancellationToken ct = default);
+            }
+            """;
+        var output = GetGeneratedSource(source, "IUserApi.g.cs");
+        Assert.DoesNotContain("HttpErrorKind", output);
+        Assert.DoesNotContain("__CreateHttpError", output);
+        Assert.DoesNotContain("HttpRequestException", output);
+        Assert.Contains("throw;", output);
+    }
+
+    [Fact]
+    public void Generator_Result_ReturnType_CompilesForValueNullableAndTokenlessShapes()
+    {
+        var source = """
+            using ZeroAlloc.Rest.Attributes;
+            #nullable enable
+            namespace MyApp;
+            [ZeroAllocRestClient]
+            public interface IShapesApi
+            {
+                [Get("/count")]
+                System.Threading.Tasks.Task<ZeroAlloc.Results.Result<int, ZeroAlloc.Rest.HttpError>> CountAsync(System.Threading.CancellationToken ct = default);
+
+                [Get("/maybe")]
+                System.Threading.Tasks.Task<ZeroAlloc.Results.Result<string?, ZeroAlloc.Rest.HttpError>> MaybeAsync(System.Threading.CancellationToken ct = default);
+
+                [Get("/no-token")]
+                System.Threading.Tasks.Task<ZeroAlloc.Results.Result<string, ZeroAlloc.Rest.HttpError>> NoTokenAsync();
+
+                [Get("/plain")]
+                System.Threading.Tasks.Task<string> PlainAsync();
+            }
+            """;
+        var compilation = CSharpCompilation.Create(
+            "TestAssembly",
+            new[] { CSharpSyntaxTree.ParseText(source) },
+            Basic.Reference.Assemblies.Net100.References.All
+                .Append(MetadataReference.CreateFromFile(AttributesAssembly.Location))
+                .Append(MetadataReference.CreateFromFile(ResultsAssembly.Location))
+                .Append(MetadataReference.CreateFromFile(typeof(Microsoft.Extensions.DependencyInjection.IServiceCollection).Assembly.Location))
+                .Append(MetadataReference.CreateFromFile(typeof(Microsoft.Extensions.DependencyInjection.HttpClientFactoryServiceCollectionExtensions).Assembly.Location)),
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        CSharpGeneratorDriver
+            .Create(new RestClientGenerator())
+            .RunGeneratorsAndUpdateCompilation(compilation, out var output, out _);
+
+        var errors = output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
+        Assert.True(errors.Count == 0, string.Join(Environment.NewLine, errors));
+    }
+
+    private static int CountOccurrences(string text, string value)
+    {
+        var count = 0;
+        for (var i = text.IndexOf(value, StringComparison.Ordinal); i >= 0; i = text.IndexOf(value, i + value.Length, StringComparison.Ordinal))
+            count++;
+        return count;
+    }
+
+    [Fact]
     public void StaticHeader_OnMethod_EmittedInGeneratedCode()
     {
         var source = """
