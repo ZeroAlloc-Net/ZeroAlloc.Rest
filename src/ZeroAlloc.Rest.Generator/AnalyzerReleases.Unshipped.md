@@ -1,5 +1,2 @@
-### New Rules
-
-Rule ID | Category | Severity | Notes
---------|----------|----------|-------
-ZRA001 | ZeroAlloc.Rest.Generator | Error | Conflicting body attributes
+; Unshipped analyzer release.
+; https://github.com/dotnet/roslyn-analyzers/blob/main/src/Microsoft.CodeAnalysis.Analyzers/ReleaseTrackingAnalyzers.Help.md
