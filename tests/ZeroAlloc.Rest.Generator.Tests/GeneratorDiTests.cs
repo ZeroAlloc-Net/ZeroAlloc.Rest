@@ -65,9 +65,9 @@ public class GeneratorDiTests
         var output = RunAndGetSources(source);
         var diFile = output.Single(f => f.HintName == "IUserApi.DI.g.cs");
         var content = diFile.SourceText.ToString();
-        Assert.Contains("AddHttpClient<", content);
-        Assert.Contains("IUserApi", content);
-        Assert.Contains("UserApiClient", content);
+        Assert.Contains("AddHttpClient(nameof(IUserApi)", content);
+        Assert.Contains(".AddTypedClient<IUserApi>(", content);
+        Assert.Contains("GeneratedRestClient.Create<UserApiClient>(httpClient, sp)", content);
     }
 
     [Fact]
@@ -120,9 +120,10 @@ public class GeneratorDiTests
             }
             """;
         var output = RunAndGetSources(source);
-        var diFile = output.Single(f => f.HintName == "IUploadApi.DI.g.cs");
-        var content = diFile.SourceText.ToString();
-        Assert.Contains("TryAddSingleton<MyApp.OverrideSerializer>", content);
+        // Registered by the client's AddSerializers, which the generated AddIUploadApi calls.
+        var clientFile = output.Single(f => f.HintName == "IUploadApi.g.cs");
+        var content = clientFile.SourceText.ToString();
+        Assert.Contains("TryAddSingleton<global::MyApp.OverrideSerializer>(services)", content);
     }
 
     private static ImmutableArray<GeneratedSourceResult> RunAndGetSources(string source)

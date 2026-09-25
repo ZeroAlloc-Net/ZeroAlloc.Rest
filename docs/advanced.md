@@ -58,7 +58,7 @@ Always add `CancellationToken ct = default` as the last parameter. The generator
 
 ## Multiple serializers on one interface
 
-Use `[Serializer(typeof(T))]` at the method level. Each override is injected as a separate constructor parameter:
+Use `[Serializer(typeof(T))]` at the method level. Each override becomes a separate `IRestSerializer` constructor parameter, named after its type, and the generated `Create` resolves the concrete type from DI:
 
 ```csharp
 [ZeroAllocRestClient]
@@ -68,7 +68,7 @@ public interface IMixedApi
     Task<DataDto> GetDataAsync(CancellationToken ct = default);  // uses default serializer
 
     [Post("/binary-upload")]
-    [Serializer(typeof(MemoryPackSerializer))]
+    [Serializer(typeof(MemoryPackRestSerializer))]
     Task UploadAsync([Body] byte[] payload, CancellationToken ct = default);  // uses MemoryPack
 
     [Get("/proto-endpoint")]
@@ -77,7 +77,7 @@ public interface IMixedApi
 }
 ```
 
-The DI emitter registers each override serializer type as a singleton via `TryAddSingleton<T>()`.
+The generated `AddSerializers`, called by `Add{I}` and `AddRestResilience`, registers each override serializer type as a singleton via `TryAddSingleton<T>()`. The override types may be `internal` even when the interface is public, because they never appear in the client's public constructor.
 
 ## Void methods (no response body)
 
@@ -101,4 +101,6 @@ var client = new UserApiClient(httpClient, serializer);
 var user = await client.GetUserAsync(1);
 ```
 
-The generated `UserApiClient` constructor always takes `HttpClient` and `IRestSerializer` (plus any method-level override serializers) directly, so it works without a DI container.
+The generated `UserApiClient` constructor takes `HttpClient` and `IRestSerializer` directly, plus one `IRestSerializer` parameter per method-level override type, so it works without a DI container. When the interface carries `[Serializer(typeof(T))]`, pass a `T` as the main `IRestSerializer`. Pass each override parameter an instance of the type the method's `[Serializer]` names.
+
+Every generated client also implements `IGeneratedRestClient<TSelf>`, explicitly, so the client's own surface is unchanged. Its static `Create(HttpClient, IServiceProvider)` builds the client with the serializer chosen by the rules in [Serialization](serialization.md#choosing-the-serializer-for-a-client), and its static `AddSerializers(IServiceCollection, ZeroAllocClientOptions)` registers the serializers the client needs. The generated `Add{I}` and `AddRestResilience` both use them. You rarely need to call them yourself.

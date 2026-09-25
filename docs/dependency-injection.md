@@ -14,7 +14,7 @@ For every interface annotated with `[ZeroAllocRestClient]`, the generator emits 
 
 ```csharp
 // Generated for IUserApi in namespace MyApp:
-public static IServiceCollection AddIUserApi(
+public static IHttpClientBuilder AddIUserApi(
     this IServiceCollection services,
     Action<ZeroAllocClientOptions>? configure = null)
 ```
@@ -34,11 +34,14 @@ builder.Services.AddIUserApi(options =>
 | Property / Method | Description |
 |---|---|
 | `BaseAddress` | Base URI for the `HttpClient` |
-| `UseSerializer<T>()` | Set the default `IRestSerializer` implementation |
+| `UseSerializer<T>()` | Use `T` as this client's serializer. It is registered as a keyed singleton under the client interface |
+| `UseSerializer(instance)` | Use this exact instance as this client's serializer |
+
+`UseSerializer` applies to one client only. To share one serializer across clients, register an app-wide default with `services.AddRestSerializer<T>()` or `services.AddRestSerializer(instance)`. See [Serialization](serialization.md#choosing-the-serializer-for-a-client) for the full precedence rules.
 
 ## IHttpClientFactory integration
 
-Under the hood, the generated extension calls `AddHttpClient<IUserApi, UserApiClient>()`. This means:
+Under the hood, the generated extension registers a named `HttpClient` called `IUserApi`, plus a typed-client factory that calls `UserApiClient`'s static `IGeneratedRestClient<UserApiClient>.Create`. That method passes in the client's serializer, with no reflection or `ActivatorUtilities`. This means:
 - The `HttpClient` is managed by `IHttpClientFactory` with proper handler lifetime rotation
 - You can further configure the named client via the returned `IHttpClientBuilder`:
 
@@ -52,13 +55,18 @@ builder.Services.AddIUserApi(options =>
 .AddPolicyHandler(retryPolicy);
 ```
 
-## Per-method serializer overrides in DI
+## Serializer overrides in DI
 
-When a method carries `[Serializer(typeof(T))]`, the DI emitter registers `T` as a singleton automatically:
+When the interface or a method carries `[Serializer(typeof(T))]`, `T` is registered as a singleton automatically. The generated client's explicit `IGeneratedRestClient<TSelf>.AddSerializers` does it, and both `AddI{Interface}()` and `AddRestResilience` call that method:
 
 ```csharp
-// Generated for IUploadApi:
-services.TryAddSingleton<MemoryPackSerializer>();
+// Generated in UploadApiClient for IUploadApi:
+static void global::ZeroAlloc.Rest.IGeneratedRestClient<UploadApiClient>.AddSerializers(
+    IServiceCollection services, ZeroAllocClientOptions options)
+{
+    global::ZeroAlloc.Rest.GeneratedRestClient.AddPerClientSerializer<IUploadApi>(services, options);
+    ServiceCollectionDescriptorExtensions.TryAddSingleton<global::ZeroAlloc.Rest.MemoryPack.MemoryPackRestSerializer>(services);
+}
 ```
 
-No manual registration needed.
+No manual registration is needed. The real output spells every type name out in full.

@@ -22,4 +22,5 @@ Source-generated, Native AOT-compatible REST client for .NET 10+.
 - [Benchmarks](benchmarks.md)
 - [Testing](testing.md)
 - [Advanced](advanced.md)
+- [Migrating to 2.0](migrating-to-v2.md)
 - [Cookbook](cookbook/)

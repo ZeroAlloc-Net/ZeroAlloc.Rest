@@ -228,7 +228,8 @@ internal static class ModelExtractor
                 && attr.ConstructorArguments.Length > 0
                 && attr.ConstructorArguments[0].Value is INamedTypeSymbol t)
             {
-                return t.ToDisplayString();
+                // global::-qualified, so a namespace in scope at the interface cannot capture the name.
+                return t.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             }
         }
         return null;

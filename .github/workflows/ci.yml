@@ -65,9 +65,9 @@ jobs:
   aot-smoke:
     runs-on: ubuntu-latest
     # Publishes samples/ZeroAlloc.Rest.AotSmoke with PublishAot=true. Verifies the
-    # generator-emitted REST client type survives ILC (implements IUserApi, loadable
-    # via Type.GetType). End-to-end HTTP + serializer flow is covered by the
-    # integration tests; this smoke is the AOT guarantee.
+    # generator-emitted REST client type survives ILC, and resolves clients through
+    # both the generated Add{I} and the Resilience bridge. End-to-end HTTP + serializer
+    # flow is covered by the integration tests; this smoke is the AOT guarantee.
     steps:
       - uses: actions/checkout@v7
         with:

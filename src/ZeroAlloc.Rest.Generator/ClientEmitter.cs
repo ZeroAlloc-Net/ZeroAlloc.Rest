@@ -55,7 +55,7 @@ internal static class ClientEmitter
             sb.AppendLine();
         }
 
-        sb.AppendLine($"{model.Accessibility} sealed partial class {model.ClassName} : {model.InterfaceName}");
+        sb.AppendLine($"{model.Accessibility} sealed partial class {model.ClassName} : {model.InterfaceName}, global::ZeroAlloc.Rest.IGeneratedRestClient<{model.ClassName}>");
         sb.AppendLine("{");
         sb.AppendLine("    private static readonly global::System.Diagnostics.ActivitySource _activitySource = new(\"ZeroAlloc.Rest\");");
         sb.AppendLine("    private static readonly global::System.Diagnostics.Metrics.Meter _meter = new(\"ZeroAlloc.Rest\");");
@@ -63,20 +63,25 @@ internal static class ClientEmitter
         sb.AppendLine("    private static readonly global::System.Diagnostics.Metrics.Histogram<double> _requestDurationMs = _meter.CreateHistogram<double>(\"rest.request_duration_ms\");");
         sb.AppendLine("    private readonly System.Net.Http.HttpClient _httpClient;");
         sb.AppendLine("    private readonly ZeroAlloc.Rest.IRestSerializer _serializer;");
+        // Override serializers are held and taken as IRestSerializer, like the main one, so an
+        // internal serializer type never appears in the public constructor. Create resolves the
+        // concrete types.
         foreach (var st in overrideSerializers)
-            sb.AppendLine($"    private readonly {st} {serializerFieldMap[st]};");
+            sb.AppendLine($"    private readonly ZeroAlloc.Rest.IRestSerializer {serializerFieldMap[st]};");
         sb.AppendLine();
 
         // Build constructor parameter list
         var ctorParams = new System.Collections.Generic.List<string>
         {
             "System.Net.Http.HttpClient httpClient",
+            // Always IRestSerializer, even with an interface-level [Serializer]: that type may be
+            // internal while the client is public. Create resolves the concrete type.
             "ZeroAlloc.Rest.IRestSerializer serializer"
         };
         foreach (var st in overrideSerializers)
         {
             var fieldName = serializerFieldMap[st];
-            ctorParams.Add($"{st} {fieldName.Substring(1)}"); // strip leading '_' for param name
+            ctorParams.Add($"ZeroAlloc.Rest.IRestSerializer {fieldName.Substring(1)}"); // strip leading '_' for param name
         }
 
         sb.AppendLine($"    public {model.ClassName}({string.Join(", ", ctorParams)})");
@@ -90,6 +95,8 @@ internal static class ClientEmitter
         }
         sb.AppendLine("    }");
         sb.AppendLine();
+
+        EmitGeneratedClientMembers(sb, model, overrideSerializers);
 
         foreach (var method in model.Methods)
             EmitMethod(ctx, sb, model.InterfaceName, method, serializerFieldMap);
@@ -107,6 +114,56 @@ internal static class ClientEmitter
         sb.AppendLine("}");
 
         ctx.AddSource($"{model.InterfaceName}.g.cs", sb.ToString());
+    }
+
+    // IGeneratedRestClient<TSelf>: how Add{I} and the Resilience bridge build the client and register
+    // its serializers, with no reflection or ActivatorUtilities. Implemented explicitly, so the client
+    // gains no public Create or AddSerializers that could clash with the interface's own methods.
+    private static void EmitGeneratedClientMembers(StringBuilder sb, ClientModel model, IReadOnlyList<string> overrideSerializers)
+    {
+        var self = $"global::ZeroAlloc.Rest.IGeneratedRestClient<{model.ClassName}>";
+        const string GetRequired = "global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService";
+        const string TryAddSingleton = "global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddSingleton";
+
+        var serializerArg = model.SerializerTypeName != null
+            ? $"{GetRequired}<{model.SerializerTypeName}>(services)"
+            : $"global::ZeroAlloc.Rest.RestSerializerServiceProviderExtensions.GetRequiredRestSerializer<{model.InterfaceName}>(services)";
+        var ctorArgs = new List<string> { "httpClient", serializerArg };
+        foreach (var st in overrideSerializers)
+            ctorArgs.Add($"{GetRequired}<{st}>(services)");
+
+        sb.AppendLine($"    static {model.ClassName} {self}.Create(global::System.Net.Http.HttpClient httpClient, global::System.IServiceProvider services)");
+        sb.AppendLine($"        => new {model.ClassName}(");
+        for (var i = 0; i < ctorArgs.Count; i++)
+            sb.AppendLine($"            {ctorArgs[i]}{(i < ctorArgs.Count - 1 ? "," : ");")}");
+        sb.AppendLine();
+
+        sb.AppendLine($"    static void {self}.AddSerializers(global::Microsoft.Extensions.DependencyInjection.IServiceCollection services, global::ZeroAlloc.Rest.ZeroAllocClientOptions options)");
+        sb.AppendLine("    {");
+        if (model.SerializerTypeName != null)
+        {
+            // The interface-level [Serializer] fixes this client's serializer at compile time, so a
+            // UseSerializer for it is a contradiction: reject it instead of ignoring it.
+            var interfaceFullName = string.IsNullOrEmpty(model.Namespace)
+                ? model.InterfaceName
+                : model.Namespace + "." + model.InterfaceName;
+            var serializerDisplayName = StripGlobal(model.SerializerTypeName);
+            sb.AppendLine("        if (options.SerializerType is not null || options.SerializerInstance is not null)");
+            sb.AppendLine("            throw new global::System.InvalidOperationException(");
+            sb.AppendLine($"                \"The REST client '{interfaceFullName}' declares [Serializer(typeof({serializerDisplayName}))], \" +");
+            sb.AppendLine("                \"so it cannot also be given a serializer with UseSerializer. Use one or the other.\");");
+            sb.AppendLine($"        {TryAddSingleton}<{model.SerializerTypeName}>(services);");
+        }
+        else
+        {
+            // UseSerializer is per client: keyed by the interface, it never touches the app-wide
+            // IRestSerializer, so two clients cannot overwrite each other's serializer.
+            sb.AppendLine($"        global::ZeroAlloc.Rest.GeneratedRestClient.AddPerClientSerializer<{model.InterfaceName}>(services, options);");
+        }
+        foreach (var st in overrideSerializers)
+            sb.AppendLine($"        {TryAddSingleton}<{st}>(services);");
+        sb.AppendLine("    }");
+        sb.AppendLine();
     }
 
     private static void EmitMethod(SourceProductionContext ctx, StringBuilder sb, string interfaceName, MethodModel method, IReadOnlyDictionary<string, string> serializerFieldMap)
@@ -351,8 +408,12 @@ internal static class ClientEmitter
     /// type name, deduplicating against already-assigned field names.
     /// "MyApp.OverrideSerializer" → "_overrideSerializer"; collisions get a numeric suffix (_overrideSerializer2, etc.)
     /// </summary>
+    private static string StripGlobal(string typeName)
+        => typeName.StartsWith("global::", System.StringComparison.Ordinal) ? typeName.Substring("global::".Length) : typeName;
+
     private static string GetSerializerFieldName(string fullTypeName, List<string> existingFieldNames)
     {
+        fullTypeName = StripGlobal(fullTypeName);
         var simpleName = fullTypeName.Contains('.')
             ? fullTypeName.Substring(fullTypeName.LastIndexOf('.') + 1)
             : fullTypeName;
