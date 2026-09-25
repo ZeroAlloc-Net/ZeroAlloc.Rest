@@ -105,7 +105,7 @@ ZA is **1.7–3.6× faster than Refit** across every call shape with **1.3–1.5
 - **Native AOT compatible** — no `DynamicMethod`, no IL emit, no `Type.GetType`
 - **Per-method serializer override** — `[Serializer(typeof(MySerializer))]` for mixed protocols
 - **Path, query, body, and header parameters** — `{id}`, `[Query]`, `[Body]`, `[Header("X-Api-Key")]`
-- **`Result<T, HttpError>`** — typed success/error returns via `ZeroAlloc.Results`; no exception-throwing on 4xx/5xx
+- **`Result<T, HttpError>`** — typed success/error returns via `ZeroAlloc.Results`; no exception on 4xx/5xx, network failures, timeouts or unreadable response bodies
 - **OpenAPI code generation** — `OpenApiInterfaceGenerator` API + MSBuild `<ZeroAllocApiSpec>` task
 - **Pluggable serializers** — System.Text.Json, MemoryPack, MessagePack, or bring your own
 - **IHttpClientFactory integration** — `AddI{Interface}` generated extension method

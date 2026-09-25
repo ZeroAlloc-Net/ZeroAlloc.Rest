@@ -3,7 +3,7 @@ id: migrating-to-v2
 title: Migrating to 2.0
 slug: /migrating-to-v2
 sidebar_position: 11
-description: ZeroAlloc.Rest 2.0 makes UseSerializer per client. Hosts that relied on it as the app-wide default must register one explicitly.
+description: ZeroAlloc.Rest 2.0 makes UseSerializer per client, and Result methods return transport, timeout and deserialization failures instead of throwing them.
 ---
 
 # Migrating to 2.0
@@ -18,6 +18,7 @@ ZeroAlloc.Rest 2.0 changes how serializers are chosen and registered; see [#301]
 4. **You pass a hand-written client to `AddRestResilience`.** It no longer compiles. See [`AddRestResilience` requires a generated client](#addrestresilience-requires-a-generated-client).
 5. **You construct a generated client by hand.** Every serializer parameter of the generated constructor is now typed `IRestSerializer`, including one per method-level override type. Calls that pass the concrete serializers still compile. See [Generated constructors take `IRestSerializer`](#generated-constructors-take-irestserializer).
 6. **You depend on the shape of the generated code**, for example the `Add{I}` registration or the interfaces the client implements. See [Generated clients implement `IGeneratedRestClient<TSelf>`](#generated-clients-implement-igeneratedrestclienttself) and [The generated `Add{I}` uses a typed-client factory](#the-generated-addi-uses-a-typed-client-factory).
+7. **A method returns `Result<T, HttpError>` and you catch exceptions around it**, or rely on `[Retry]` to retry its network failures. Transport failures, timeouts and unreadable response bodies now come back as a failed `Result`. See [Result methods return transport failures](#result-methods-return-transport-failures).
 
 ## `UseSerializer` is per client
 
@@ -117,3 +118,67 @@ services.AddTransient<IPaymentApi>(sp =>
     return new IPaymentApiResilienceProxy(inner, sp.GetRequiredService<PaymentApiResiliencePolicies>());
 });
 ```
+
+## Result methods return transport failures
+
+In 1.x, a method declared as returning `Result<T, HttpError>` returned a failure only for a non-2xx status. A refused connection threw `HttpRequestException`, `HttpClient.Timeout` threw `TaskCanceledException`, and a 2xx body the serializer could not read threw, for example, `JsonException`. See [#299](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/299).
+
+In 2.0, those three failures come back as a failed `Result`. `HttpError` gains two `init` properties to tell them apart:
+
+- `Kind`, an `HttpErrorKind`: `Status`, the default, for a non-2xx response, or `Transport`, `Timeout` or `Deserialization`.
+- `Exception`, the exception behind a `Transport`, `Timeout` or `Deserialization` failure.
+
+A `Deserialization` failure keeps the real status code and headers. `Transport` and `Timeout` failures have no response, so their `StatusCode` is `0` and their `Headers` are empty; a `Transport` failure uses the status code an `HttpRequestException` carries, if any.
+
+What has not changed:
+
+- **Cancellation you ask for still throws** `OperationCanceledException`, when the method's `CancellationToken` is cancelled.
+- **Methods that do not return a `Result` still throw** in every case.
+- **Serializing the request body, and any other exception, still throw.** Only transport, timeout and response-deserialization failures become an `HttpError`.
+
+Before, in 1.x:
+
+```csharp
+try
+{
+    var result = await api.GetUserAsync(42, ct);
+    if (result.IsFailure)
+        return Problem(statusCode: (int)result.Error.StatusCode);
+    return Ok(result.Value);
+}
+catch (HttpRequestException ex)
+{
+    return Problem(ex.Message, statusCode: 503);
+}
+catch (TaskCanceledException) when (!ct.IsCancellationRequested)
+{
+    return Problem("Timed out", statusCode: 504);
+}
+catch (JsonException ex)
+{
+    return Problem(ex.Message, statusCode: 502);
+}
+```
+
+After, in 2.0:
+
+```csharp
+var result = await api.GetUserAsync(42, ct);
+if (result.IsSuccess)
+    return Ok(result.Value);
+
+return result.Error.Kind switch
+{
+    HttpErrorKind.Transport => Problem(result.Error.Message, statusCode: 503),
+    HttpErrorKind.Timeout => Problem("Timed out", statusCode: 504),
+    HttpErrorKind.Deserialization => Problem(result.Error.Message, statusCode: 502),
+    _ => Problem(statusCode: (int)result.Error.StatusCode),
+};
+```
+
+### How to migrate
+
+- **Remove the `try`/`catch` for `HttpRequestException`, `TaskCanceledException` and serializer exceptions** around `Result` calls. Those catch blocks no longer run. Handle the failed `Result` instead, and switch on `Kind` where the reaction differs.
+- **Check code that treats every failure as an HTTP status.** Code that reads `result.Error.StatusCode` now also sees `0` for a transport failure or a timeout. Check `Kind` first.
+- **`[Retry]` no longer retries these failures on a `Result` method.** ZeroAlloc.Resilience retries only thrown exceptions and passes a returned `Result` through, so a refused connection or `HttpClient.Timeout` is returned after one attempt. To keep retrying them, declare the method with a plain return type so it throws, or retry the failed `Result` in the caller. Retrying on selected failed Results is tracked in [ZeroAlloc.Resilience#142](https://github.com/ZeroAlloc-Net/ZeroAlloc.Resilience/issues/142). See [Resilience](resilience.md#result-returns-and-error-handling).
+- **Header lookups on `HttpError.Headers` now ignore case.** `Headers["x-request-id"]` finds `X-Request-ID`. Lookups that worked before still work.

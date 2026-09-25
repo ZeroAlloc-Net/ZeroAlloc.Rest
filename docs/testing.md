@@ -119,4 +119,21 @@ Assert.False(notFound.IsSuccess);
 Assert.Equal(HttpStatusCode.NotFound, notFound.Error.StatusCode);
 ```
 
-No exception is thrown on 4xx/5xx when the return type is `Result<T, HttpError>` — the error is returned as a value.
+No exception is thrown on 4xx/5xx when the return type is `Result<T, HttpError>` — the error is returned as a value. The same holds for transport failures, timeouts and bodies that cannot be deserialized. Test those with a stub `HttpMessageHandler` and assert on `Kind`:
+
+```csharp
+sealed class RefusingHandler : HttpMessageHandler
+{
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        => throw new HttpRequestException("connection refused");
+}
+
+var client = new UserApiClient(new HttpClient(new RefusingHandler()) { BaseAddress = new Uri("http://stub/") },
+    new SystemTextJsonSerializer());
+
+var result = await client.GetUserResultAsync(1, CancellationToken.None);
+Assert.Equal(HttpErrorKind.Transport, result.Error.Kind);
+Assert.IsType<HttpRequestException>(result.Error.Exception);
+```
+
+See [Advanced](advanced.md) for the full mapping.

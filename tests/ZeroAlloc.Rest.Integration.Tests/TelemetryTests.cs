@@ -186,6 +186,50 @@ public sealed class TelemetryTests : IDisposable
         Assert.True(histogramMeasurements[0] >= 0.0, $"expected non-negative duration, got {histogramMeasurements[0]}");
     }
 
+    [Fact]
+    public async Task ResultMethod_TransportFailure_StillRecordsDurationAndErrorSpan()
+    {
+        // A Result method returns the transport failure instead of throwing, but the failure must
+        // still show up in metrics and traces exactly as a thrown one does.
+        var counterMeasurements = new List<long>();
+        var histogramMeasurements = new List<double>();
+        var stoppedActivities = new List<System.Diagnostics.Activity>();
+
+        using var meterListener = new MeterListener
+        {
+            InstrumentPublished = (instrument, l) =>
+            {
+                if (string.Equals(instrument.Meter.Name, "ZeroAlloc.Rest", StringComparison.Ordinal))
+                    l.EnableMeasurementEvents(instrument);
+            },
+        };
+        meterListener.SetMeasurementEventCallback<long>((instrument, value, tags, state) => counterMeasurements.Add(value));
+        meterListener.SetMeasurementEventCallback<double>((instrument, value, tags, state) => histogramMeasurements.Add(value));
+        meterListener.Start();
+
+        using var activityListener = new System.Diagnostics.ActivityListener
+        {
+            ShouldListenTo = source => string.Equals(source.Name, "ZeroAlloc.Rest", StringComparison.Ordinal),
+            Sample = (ref System.Diagnostics.ActivityCreationOptions<System.Diagnostics.ActivityContext> _)
+                => System.Diagnostics.ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = stoppedActivities.Add,
+        };
+        System.Diagnostics.ActivitySource.AddActivityListener(activityListener);
+
+        using var httpClient = new HttpClient(new ThrowingHandler()) { BaseAddress = new Uri("http://throwing.local/") };
+        IUserApi client = new UserApiClient(httpClient, new SystemTextJsonSerializer());
+
+        var result = await client.GetUserResultAsync(7, default);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(HttpErrorKind.Transport, result.Error.Kind);
+        Assert.Empty(counterMeasurements);
+        Assert.Single(histogramMeasurements);
+        var activity = Assert.Single(stoppedActivities);
+        Assert.Equal(System.Diagnostics.ActivityStatusCode.Error, activity.Status);
+        Assert.Equal("simulated transport failure", activity.StatusDescription);
+    }
+
     private sealed class ThrowingHandler : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, System.Threading.CancellationToken cancellationToken)

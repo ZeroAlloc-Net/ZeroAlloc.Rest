@@ -72,5 +72,18 @@ using (var provider = services.BuildServiceProvider())
     }
 }
 
+// A Result method returns a transport failure instead of throwing. No network is involved: the
+// handler throws as a refused connection would.
+using (var failingHttp = new System.Net.Http.HttpClient(new RefusingHandler()) { BaseAddress = new Uri("http://localhost/") })
+{
+    IUserApi failing = new UserApiClient(failingHttp, new SmokeSerializer());
+    var result = await failing.TryGetUserAsync(1).ConfigureAwait(false);
+    if (!result.IsFailure || result.Error.Kind != HttpErrorKind.Transport || result.Error.Exception is null)
+    {
+        Console.Error.WriteLine("AOT smoke: FAIL — a transport failure should return HttpErrorKind.Transport");
+        return 1;
+    }
+}
+
 Console.WriteLine("AOT smoke: PASS");
 return 0;

@@ -101,6 +101,14 @@ internal static class ClientEmitter
         foreach (var method in model.Methods)
             EmitMethod(ctx, sb, model.InterfaceName, method, serializerFieldMap);
 
+        EmitRecordFailure(sb);
+
+        var anyReturnsResult = false;
+        foreach (var m in model.Methods)
+            if (m.ReturnsResult) { anyReturnsResult = true; break; }
+        if (anyReturnsResult)
+            EmitCreateHttpError(sb);
+
         if (hasQueryParams)
         {
             sb.AppendLine("    private static void AppendToUrl(ZeroAlloc.Collections.HeapPooledList<char> list, System.ReadOnlySpan<char> value)");
@@ -209,7 +217,7 @@ internal static class ClientEmitter
 
         EmitUrlBuilding(sb, method.Route, pathParams, queryParams);
         EmitRequestCreation(sb, method, headerParams, bodyParam, formBodyParam, ctArg, serializerExpr);
-        EmitSendAndResponse(sb, method, ctArg, serializerExpr, interfaceName);
+        EmitSendAndResponse(sb, method, ctParam?.Name, serializerExpr);
 
         sb.AppendLine("    }");
         sb.AppendLine();
@@ -319,8 +327,10 @@ internal static class ClientEmitter
         }
     }
 
-    private static void EmitSendAndResponse(StringBuilder sb, MethodModel method, string ctArg, string serializerExpr, string interfaceName)
+    // callerToken is the name of the method's CancellationToken parameter, or null when it has none.
+    private static void EmitSendAndResponse(StringBuilder sb, MethodModel method, string? callerToken, string serializerExpr)
     {
+        var ctArg = callerToken ?? "default";
         sb.AppendLine("        try");
         sb.AppendLine("        {");
         sb.AppendLine($"            using var response = await _httpClient.SendAsync(request, {ctArg}).ConfigureAwait(false);");
@@ -342,40 +352,79 @@ internal static class ClientEmitter
         EmitResponseHandling(sb, method, ctArg, serializerExpr, indent: "            ");
         sb.AppendLine("        }");
         sb.AppendLine("#pragma warning disable EPC12");
+        if (method.ReturnsResult)
+            EmitResultCatches(sb, method, callerToken);
         sb.AppendLine("        catch (global::System.Exception __ex)");
         sb.AppendLine("        {");
-        sb.AppendLine("            __activity?.SetStatus(global::System.Diagnostics.ActivityStatusCode.Error, __ex.Message);");
-        sb.AppendLine("            var __elapsedMsErr = global::System.Diagnostics.Stopwatch.GetElapsedTime(__sw).TotalMilliseconds;");
-        sb.AppendLine("            _requestDurationMs.Record(__elapsedMsErr,");
-        sb.AppendLine("                new global::System.Collections.Generic.KeyValuePair<string, object?>(\"http.method\", __httpMethod),");
-        sb.AppendLine("                new global::System.Collections.Generic.KeyValuePair<string, object?>(\"rest.method\", __RestMethodTag));");
+        sb.AppendLine("            __RecordFailure(__activity, __ex, __sw, __httpMethod, __RestMethodTag);");
         sb.AppendLine("            throw;");
         sb.AppendLine("        }");
         sb.AppendLine("#pragma warning restore EPC12");
     }
 
+    // A Result-returning method returns a failure for a timeout or a transport error instead of
+    // throwing. Cancellation the caller asked for still throws: it is not an error. Anything else,
+    // such as a bug in a handler, reaches the rethrowing catch that follows these.
+    private static void EmitResultCatches(StringBuilder sb, MethodModel method, string? callerToken)
+    {
+        var resultType = ResultTypeName(method);
+        if (callerToken != null)
+        {
+            sb.AppendLine($"        catch (global::System.OperationCanceledException __ex) when ({callerToken}.IsCancellationRequested)");
+            sb.AppendLine("        {");
+            sb.AppendLine("            __RecordFailure(__activity, __ex, __sw, __httpMethod, __RestMethodTag);");
+            sb.AppendLine("            throw;");
+            sb.AppendLine("        }");
+        }
+        // Not requested by the caller, so it is HttpClient.Timeout or another timeout in the pipeline.
+        sb.AppendLine("        catch (global::System.OperationCanceledException __ex)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            __RecordFailure(__activity, __ex, __sw, __httpMethod, __RestMethodTag);");
+        sb.AppendLine($"            return {resultType}.Failure(");
+        sb.AppendLine("                __CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Timeout, null, __ex));");
+        sb.AppendLine("        }");
+        sb.AppendLine("        catch (global::System.Net.Http.HttpRequestException __ex)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            __RecordFailure(__activity, __ex, __sw, __httpMethod, __RestMethodTag);");
+        sb.AppendLine($"            return {resultType}.Failure(");
+        sb.AppendLine("                __CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Transport, null, __ex));");
+        sb.AppendLine("        }");
+    }
+
     private static void EmitResponseHandling(StringBuilder sb, MethodModel method, string ctArg, string serializerExpr, string indent = "        ")
     {
         var i1 = indent + "    ";
+        var i2 = i1 + "    ";
         if (method.ReturnsVoid)
         {
             sb.AppendLine($"{indent}response.EnsureSuccessStatusCode();");
         }
         else if (method.ReturnsResult)
         {
+            var resultType = ResultTypeName(method);
             sb.AppendLine($"{indent}if (response.IsSuccessStatusCode)");
             sb.AppendLine($"{indent}{{");
             sb.AppendLine($"{i1}var responseStream = await response.Content.ReadAsStreamAsync({ctArg}).ConfigureAwait(false);");
-            sb.AppendLine($"{i1}var content = await {serializerExpr}.DeserializeAsync<{method.InnerTypeName}>(responseStream, {ctArg}).ConfigureAwait(false);");
-            sb.AppendLine($"{i1}return ZeroAlloc.Results.Result<{method.InnerTypeName}, ZeroAlloc.Rest.HttpError>.Success(content!);");
+            // Only the deserialize call is guarded: whatever the serializer throws, a JsonException or
+            // a MemoryPack or MessagePack exception, means the body could not be read. Cancellation
+            // is left to the method's cancellation catches.
+            sb.AppendLine($"{i1}{method.InnerTypeName} content;");
+            sb.AppendLine($"{i1}try");
+            sb.AppendLine($"{i1}{{");
+            sb.AppendLine($"{i2}content = (await {serializerExpr}.DeserializeAsync<{method.InnerTypeName}>(responseStream, {ctArg}).ConfigureAwait(false))!;");
+            sb.AppendLine($"{i1}}}");
+            sb.AppendLine($"{i1}catch (global::System.Exception __ex) when (__ex is not global::System.OperationCanceledException)");
+            sb.AppendLine($"{i1}{{");
+            sb.AppendLine($"{i2}__RecordFailure(__activity, __ex, __sw, __httpMethod, __RestMethodTag);");
+            sb.AppendLine($"{i2}return {resultType}.Failure(");
+            sb.AppendLine($"{i2}    __CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Deserialization, response, __ex));");
+            sb.AppendLine($"{i1}}}");
+            sb.AppendLine($"{i1}return {resultType}.Success(content);");
             sb.AppendLine($"{indent}}}");
             sb.AppendLine($"{indent}else");
             sb.AppendLine($"{indent}{{");
-            sb.AppendLine($"{i1}var headers = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IReadOnlyList<string>>();");
-            sb.AppendLine($"{i1}foreach (var kvp in response.Headers)");
-            sb.AppendLine($"{i1}    headers[kvp.Key] = new System.Collections.Generic.List<string>(kvp.Value).AsReadOnly();");
-            sb.AppendLine($"{i1}return ZeroAlloc.Results.Result<{method.InnerTypeName}, ZeroAlloc.Rest.HttpError>.Failure(");
-            sb.AppendLine($"{i1}    new ZeroAlloc.Rest.HttpError(response.StatusCode, headers));");
+            sb.AppendLine($"{i1}return {resultType}.Failure(");
+            sb.AppendLine($"{i1}    __CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Status, response, null));");
             sb.AppendLine($"{indent}}}");
         }
         else
@@ -384,6 +433,65 @@ internal static class ClientEmitter
             sb.AppendLine($"{indent}var responseStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);");
             sb.AppendLine($"{indent}return (await {serializerExpr}.DeserializeAsync<{method.InnerTypeName}>(responseStream, {ctArg}).ConfigureAwait(false))!;");
         }
+    }
+
+    private static string ResultTypeName(MethodModel method)
+        => $"ZeroAlloc.Results.Result<{method.InnerTypeName}, ZeroAlloc.Rest.HttpError>";
+
+    // Marks the span as failed and records the request duration. Every failure goes through here,
+    // whether the method then rethrows or returns an HttpError, so failures still show in traces.
+    private static void EmitRecordFailure(StringBuilder sb)
+    {
+        sb.AppendLine("    private static void __RecordFailure(global::System.Diagnostics.Activity? activity, global::System.Exception exception, long startTimestamp, string httpMethod, string restMethod)");
+        sb.AppendLine("    {");
+        sb.AppendLine("        activity?.SetStatus(global::System.Diagnostics.ActivityStatusCode.Error, exception.Message);");
+        sb.AppendLine("        var elapsedMs = global::System.Diagnostics.Stopwatch.GetElapsedTime(startTimestamp).TotalMilliseconds;");
+        sb.AppendLine("        _requestDurationMs.Record(elapsedMs,");
+        sb.AppendLine("            new global::System.Collections.Generic.KeyValuePair<string, object?>(\"http.method\", httpMethod),");
+        sb.AppendLine("            new global::System.Collections.Generic.KeyValuePair<string, object?>(\"rest.method\", restMethod));");
+        sb.AppendLine("    }");
+        sb.AppendLine();
+    }
+
+    // The one place a generated client builds an HttpError. A response, when there is one, supplies
+    // the status code and headers; the exception, when there is one, supplies the message. Keeping it
+    // in one method leaves a single hook for reading the error body or mapping to a user error type.
+    private static void EmitCreateHttpError(StringBuilder sb)
+    {
+        const string Headers = "global::System.Collections.Generic.IReadOnlyDictionary<string, global::System.Collections.Generic.IReadOnlyList<string>>";
+        sb.AppendLine($"    private static readonly {Headers} __noHeaders =");
+        sb.AppendLine("        new global::System.Collections.ObjectModel.ReadOnlyDictionary<string, global::System.Collections.Generic.IReadOnlyList<string>>(");
+        sb.AppendLine("            new global::System.Collections.Generic.Dictionary<string, global::System.Collections.Generic.IReadOnlyList<string>>(0));");
+        sb.AppendLine();
+        sb.AppendLine("    private static global::ZeroAlloc.Rest.HttpError __CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind kind, global::System.Net.Http.HttpResponseMessage? response, global::System.Exception? exception)");
+        sb.AppendLine("    {");
+        sb.AppendLine("        global::System.Net.HttpStatusCode statusCode;");
+        sb.AppendLine($"        {Headers} headers;");
+        sb.AppendLine("        if (response is not null)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            statusCode = response.StatusCode;");
+        // Header names are case-insensitive, and HttpClient reports known headers in its own
+        // casing, such as X-Request-ID, so an ordinal lookup would miss them.
+        sb.AppendLine("            var copy = new global::System.Collections.Generic.Dictionary<string, global::System.Collections.Generic.IReadOnlyList<string>>(global::System.StringComparer.OrdinalIgnoreCase);");
+        sb.AppendLine("            foreach (var kvp in response.Headers)");
+        sb.AppendLine("                copy[kvp.Key] = new global::System.Collections.Generic.List<string>(kvp.Value).AsReadOnly();");
+        sb.AppendLine("            headers = copy;");
+        sb.AppendLine("        }");
+        sb.AppendLine("        else");
+        sb.AppendLine("        {");
+        sb.AppendLine("            // No response arrived. An HttpRequestException may still carry a status code.");
+        sb.AppendLine("            statusCode = exception is global::System.Net.Http.HttpRequestException { StatusCode: { } requestStatus }");
+        sb.AppendLine("                ? requestStatus");
+        sb.AppendLine("                : (global::System.Net.HttpStatusCode)0;");
+        sb.AppendLine("            headers = __noHeaders;");
+        sb.AppendLine("        }");
+        sb.AppendLine("        return new global::ZeroAlloc.Rest.HttpError(statusCode, headers, exception?.Message)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            Kind = kind,");
+        sb.AppendLine("            Exception = exception,");
+        sb.AppendLine("        };");
+        sb.AppendLine("    }");
+        sb.AppendLine();
     }
 
     private static string BuildParamList(IReadOnlyList<ParameterModel> parameters)
