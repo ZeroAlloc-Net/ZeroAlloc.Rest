@@ -224,7 +224,7 @@ public class GeneratorEmissionTests
             """;
         var output = GetGeneratedSource(source, "IUploadApi.g.cs");
         Assert.Contains("_overrideSerializer", output);
-        Assert.Contains("MyApp.OverrideSerializer overrideSerializer", output);
+        Assert.Contains("ZeroAlloc.Rest.IRestSerializer overrideSerializer", output);
     }
 
     private static readonly System.Reflection.Assembly ResultsAssembly =

@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using ZeroAlloc.Resilience;
@@ -22,7 +21,8 @@ public static class RestResilienceServiceCollectionExtensions
     ///   <item><typeparamref name="TInterface"/> — the [ZeroAllocRestClient] interface annotated with
     ///   [Retry] / [Timeout] / [CircuitBreaker].  Both generators target this interface.</item>
     ///   <item><typeparamref name="TRestClient"/> — the concrete class emitted by the Rest generator
-    ///   (e.g. <c>UserApiClient</c> for <c>IUserApi</c>).</item>
+    ///   (e.g. <c>UserApiClient</c> for <c>IUserApi</c>). It must be a generated client: the bridge
+    ///   builds it through <see cref="IGeneratedRestClient{TSelf}"/>.</item>
     ///   <item><typeparamref name="TResilienceProxy"/> — the proxy class emitted by the Resilience
     ///   generator (e.g. <c>IUserApiResilienceProxy</c>).</item>
     /// </list>
@@ -31,13 +31,12 @@ public static class RestResilienceServiceCollectionExtensions
     /// <para>
     /// The method registers:
     /// <list type="number">
-    ///   <item>The typed HTTP client pipeline for <typeparamref name="TInterface"/> /
-    ///   <typeparamref name="TRestClient"/> (via
-    ///   <see cref="HttpClientFactoryServiceCollectionExtensions.AddHttpClient{TClient,TImplementation}"/>),
-    ///   producing the same named-client pipeline as the Rest generator's <c>AddIXxx()</c>.</item>
-    ///   <item>A transient factory for <typeparamref name="TInterface"/> that resolves a fresh
-    ///   <typeparamref name="TRestClient"/> via <see cref="System.Net.Http.IHttpClientFactory"/>
-    ///   and wraps it in the <typeparamref name="TResilienceProxy"/>.</item>
+    ///   <item>The client's serializers, exactly as the generated <c>AddIXxx()</c> registers them.</item>
+    ///   <item>The named HTTP client pipeline for <typeparamref name="TInterface"/>, the same
+    ///   named-client pipeline as the Rest generator's <c>AddIXxx()</c>.</item>
+    ///   <item>A transient factory for <typeparamref name="TInterface"/> that builds a fresh
+    ///   <typeparamref name="TRestClient"/> from that pipeline and wraps it in the
+    ///   <typeparamref name="TResilienceProxy"/>.</item>
     /// </list>
     /// </para>
     ///
@@ -60,13 +59,13 @@ public static class RestResilienceServiceCollectionExtensions
     /// (base address, serializer).</param>
     public static IHttpClientBuilder AddRestResilience<
         TInterface,
-        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TRestClient,
+        TRestClient,
         TResilienceProxy>(
         this IServiceCollection services,
         Func<TRestClient, IServiceProvider, TResilienceProxy> resilienceFactory,
         Action<ZeroAllocClientOptions>? configure = null)
         where TInterface : class
-        where TRestClient : class, TInterface
+        where TRestClient : class, TInterface, IGeneratedRestClient<TRestClient>
         where TResilienceProxy : class, TInterface
     {
         ArgumentNullException.ThrowIfNull(services);
@@ -75,38 +74,29 @@ public static class RestResilienceServiceCollectionExtensions
         var options = new ZeroAllocClientOptions();
         configure?.Invoke(options);
 
-        if (options.SerializerType is not null)
-            services.TryAddSingleton(typeof(IRestSerializer), options.SerializerType);
+        // Registers the serializers exactly as the generated Add{I} does: the interface-level
+        // [Serializer] type, rejecting a conflicting UseSerializer, or the per-client serializer
+        // keyed by the interface.
+        TRestClient.AddSerializers(services, options);
 
-        // Register the typed HTTP client with both type parameters, mirroring exactly the pattern
-        // emitted by the Rest generator: AddHttpClient<TInterface, TRestClient>. This produces a
-        // named HTTP client pipeline with key typeof(TInterface).Name — the same key the generator
-        // uses — so ConfigurePrimaryHttpMessageHandler, AddHttpMessageHandler etc. on the returned
-        // builder all apply to the correct pipeline.
-        //
-        // AddHttpClient<TInterface, TRestClient> internally calls services.AddTransient<TInterface>
-        // (not TryAdd), registering TInterface → TRestClient. We immediately replace that with our
-        // resilience-proxy factory so that GetRequiredService<TInterface> returns the proxy.
-        //
-        // The proxy factory uses IHttpClientFactory.CreateClient(typeof(TInterface).Name) to obtain
-        // the HttpClient from the pipeline we just configured, then ActivatorUtilities to construct
-        // TRestClient, and finally resilienceFactory to wrap it in TResilienceProxy.
-        //
-        // Replace() removes the first existing TInterface registration and appends the new one,
-        // giving idempotent-ish semantics: a second AddRestResilience call replaces the proxy from
-        // the first call rather than silently stacking an unused extra registration.
-        var builder = services.AddHttpClient<TInterface, TRestClient>(client =>
+        // The same named HTTP client pipeline as the generated Add{I}, keyed by the interface name,
+        // so ConfigurePrimaryHttpMessageHandler, AddHttpMessageHandler etc. on the returned builder
+        // apply to it.
+        var builder = services.AddHttpClient(typeof(TInterface).Name, client =>
         {
             if (options.BaseAddress is not null)
                 client.BaseAddress = options.BaseAddress;
         });
 
+        // TRestClient.Create picks the serializer with the same precedence as the generated
+        // typed-client factory, with no reflection or ActivatorUtilities. Replace() removes an
+        // existing TInterface registration, for example from an earlier AddRestResilience or Add{I}
+        // call, rather than silently stacking an unused one.
         services.Replace(ServiceDescriptor.Transient<TInterface>(sp =>
         {
             var httpClientFactory = sp.GetRequiredService<System.Net.Http.IHttpClientFactory>();
             var httpClient = httpClientFactory.CreateClient(typeof(TInterface).Name);
-            var restClient = ActivatorUtilities.CreateInstance<TRestClient>(sp, httpClient);
-            return resilienceFactory(restClient, sp);
+            return resilienceFactory(TRestClient.Create(httpClient, sp), sp);
         }));
 
         return builder;

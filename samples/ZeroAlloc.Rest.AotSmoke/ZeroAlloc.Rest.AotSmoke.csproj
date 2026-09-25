@@ -13,6 +13,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\ZeroAlloc.Rest\ZeroAlloc.Rest.csproj" />
+    <!-- The Resilience bridge; its ZeroAlloc.Resilience reference brings the proxy generator. -->
+    <ProjectReference Include="..\..\src\ZeroAlloc.Rest.Resilience\ZeroAlloc.Rest.Resilience.csproj" />
     <ProjectReference Include="..\..\src\ZeroAlloc.Rest.Generator\ZeroAlloc.Rest.Generator.csproj"
                       OutputItemType="Analyzer"
                       ReferenceOutputAssembly="false"

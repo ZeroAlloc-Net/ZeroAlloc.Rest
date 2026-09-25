@@ -68,3 +68,16 @@ ZeroAlloc.Rest.ZeroAllocClientOptions.BaseAddress.set -> void
 ZeroAlloc.Rest.ZeroAllocClientOptions.SerializerType.get -> System.Type?
 ZeroAlloc.Rest.ZeroAllocClientOptions.UseSerializer<TSerializer>() -> void
 ZeroAlloc.Rest.ZeroAllocClientOptions.ZeroAllocClientOptions() -> void
+static ZeroAlloc.Rest.RestSerializerServiceProviderExtensions.GetRequiredRestSerializer<TClient>(this System.IServiceProvider! services) -> ZeroAlloc.Rest.IRestSerializer!
+static ZeroAlloc.Rest.ServiceCollectionExtensions.AddRestSerializer(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, ZeroAlloc.Rest.IRestSerializer! serializer) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static ZeroAlloc.Rest.ServiceCollectionExtensions.AddRestSerializer<TSerializer>(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+ZeroAlloc.Rest.RestSerializerServiceProviderExtensions
+ZeroAlloc.Rest.ZeroAllocClientOptions.SerializerInstance.get -> ZeroAlloc.Rest.IRestSerializer?
+ZeroAlloc.Rest.ZeroAllocClientOptions.UseSerializer(ZeroAlloc.Rest.IRestSerializer! serializer) -> void
+ZeroAlloc.Rest.IGeneratedRestClient<TSelf>
+ZeroAlloc.Rest.IGeneratedRestClient<TSelf>.AddSerializers(Microsoft.Extensions.DependencyInjection.IServiceCollection! services, ZeroAlloc.Rest.ZeroAllocClientOptions! options) -> void
+ZeroAlloc.Rest.IGeneratedRestClient<TSelf>.Create(System.Net.Http.HttpClient! httpClient, System.IServiceProvider! services) -> TSelf!
+ZeroAlloc.Rest.GeneratedRestClient
+static ZeroAlloc.Rest.GeneratedRestClient.AddSerializers<TClient>(Microsoft.Extensions.DependencyInjection.IServiceCollection! services, ZeroAlloc.Rest.ZeroAllocClientOptions! options) -> void
+static ZeroAlloc.Rest.GeneratedRestClient.Create<TClient>(System.Net.Http.HttpClient! httpClient, System.IServiceProvider! services) -> TClient!
+static ZeroAlloc.Rest.GeneratedRestClient.AddPerClientSerializer<TInterface>(Microsoft.Extensions.DependencyInjection.IServiceCollection! services, ZeroAlloc.Rest.ZeroAllocClientOptions! options) -> void

@@ -73,11 +73,24 @@ Call `AddPaymentApiResiliencePolicies()` even without a callback: the factory re
 
 ## How It Works
 
-`AddRestResilience<TInterface, TRestClient, TResilienceProxy>()` does three things:
+`AddRestResilience<TInterface, TRestClient, TResilienceProxy>()` does four things:
 
-1. Registers the `HttpClient` pipeline for `TInterface` / `TRestClient` via `AddHttpClient<TInterface, TRestClient>` — same named pipeline as the Rest generator's `AddI{Interface}()`, so `AddHttpMessageHandler`, `ConfigurePrimaryHttpMessageHandler`, etc. all apply normally.
-2. Replaces the `TInterface` registration with a factory that constructs a fresh `TRestClient` via `IHttpClientFactory` and wraps it in `TResilienceProxy`.
-3. Returns the `IHttpClientBuilder` so you can continue configuring the pipeline fluently.
+1. Registers the client's serializers exactly as the generated `AddI{Interface}()` does, through `TRestClient.AddSerializers`.
+2. Registers the `HttpClient` pipeline named after `TInterface`. This is the same named pipeline as the Rest generator's `AddI{Interface}()`, so `AddHttpMessageHandler`, `ConfigurePrimaryHttpMessageHandler` and similar calls apply normally.
+3. Replaces the `TInterface` registration with a factory that builds a fresh `TRestClient` with `TRestClient.Create`, from an `HttpClient` taken from `IHttpClientFactory`, and wraps it in `TResilienceProxy`.
+4. Returns the `IHttpClientBuilder` so you can continue configuring the pipeline fluently.
+
+`TRestClient` must be the client the Rest generator emits. Every generated client implements `IGeneratedRestClient<TSelf>`, whose static `Create` and `AddSerializers` members let the bridge build and register it with no reflection and no `ActivatorUtilities`, so the bridge is Native AOT-clean. A hand-written client does not satisfy that constraint; see [Migrating to 2.0](migrating-to-v2.md#addrestresilience-requires-a-generated-client).
+
+## Serializer selection
+
+`AddRestResilience` picks the client's serializer in the same order as the generated `Add{I}`:
+
+1. **Interface-level `[Serializer(typeof(T))]`.** The client resolves `T` from the container. `AddRestResilience` registers `T` as a singleton with `TryAddSingleton`, just as the generated `Add{I}` does, so no extra registration is needed. The app-wide default does not apply, and setting `UseSerializer` in `configure` throws an `InvalidOperationException` at registration, naming the interface and `T`.
+2. **`options.UseSerializer<T>()` or `options.UseSerializer(instance)`** in the `configure` callback. It applies to this client only, and needs a container with keyed-service support.
+3. **The app-wide `IRestSerializer`**, for example from `services.AddRestSerializer<T>()`.
+
+A client with none of these fails when it is resolved, with an `InvalidOperationException` that names the interface. See [Serialization](serialization.md#choosing-the-serializer-for-a-client).
 
 ## Available Attributes
 
