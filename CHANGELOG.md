@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.0.0](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v1.3.5...v2.0.0) (2026-09-25)
+
+
+### ⚠ BREAKING CHANGES
+
+* Result-returning methods now return failures for transport, timeout and deserialization errors instead of throwing them. Caller cancellation still throws. Because these failures are no longer thrown, ZeroAlloc.Resilience [Retry] no longer retries them on such methods. See docs/migrating-to-v2.md.
+* UseSerializer<T>() on a generated Add{I} or on AddRestResilience no longer registers the app-wide IRestSerializer. A client that relied on another client's UseSerializer for its serializer now throws InvalidOperationException when resolved. Register an app-wide default with services.AddRestSerializer<T>(), or call UseSerializer on that client. AddRestResilience now requires TRestClient to implement IGeneratedRestClient<TRestClient>, so a hand-written client no longer compiles with it; implement that interface or register the resilience proxy manually. Every generated client now implements IGeneratedRestClient<TSelf> explicitly, with static Create and AddSerializers members. An interface-level [Serializer] combined with UseSerializer now throws at registration; in 1.x the attribute was ignored. Per-client serializers are keyed services, so a client that calls UseSerializer needs a service provider implementing IKeyedServiceProvider. See docs/migrating-to-v2.md.
+
+### Features
+
+* return transport, timeout and deserialization failures from result methods ([#310](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/310)) ([296a012](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/296a0120706effc104e526c82fc9811d5da21b75)), closes [#299](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/299)
+* scope serializers per client and honour interface-level serializer attribute ([#306](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/306)) ([97d2a26](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/97d2a26ff3da775ea54136b5636d513ed4a25ca0))
+
 ## [1.3.5](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v1.3.4...v1.3.5) (2026-09-24)
 
 
