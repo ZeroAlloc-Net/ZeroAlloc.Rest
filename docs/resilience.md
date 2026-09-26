@@ -9,7 +9,7 @@ dotnet add package ZeroAlloc.Rest.Resilience
 dotnet add package ZeroAlloc.Resilience
 ```
 
-The Resilience source generator ships inside the `ZeroAlloc.Resilience` package; there is no separate generator package to add. This page describes ZeroAlloc.Resilience 2.0 and later.
+The Resilience source generator ships inside the `ZeroAlloc.Resilience` package; there is no separate generator package to add. This page describes ZeroAlloc.Resilience 2.0 and later; retrying a failed `Result` needs 3.2.0 or later.
 
 ## Quick Start
 
@@ -98,7 +98,7 @@ All attributes are from `ZeroAlloc.Resilience`. See the [ZeroAlloc.Resilience RE
 
 | Attribute | Key Properties | Description |
 |-----------|---------------|-------------|
-| `[Retry]` | `MaxAttempts`, `BackoffMs`, `Jitter` | Retries on transient failure with optional exponential back-off |
+| `[Retry]` | `MaxAttempts`, `BackoffMs`, `Jitter`, `RetryWhen`, `RetryOnException`, `DelayHint`, `MaxDelayMs` | Retries on transient failure with optional exponential back-off; since 3.2.0 also retries a failed `Result` that `RetryWhen` calls transient, and can take the delay from the failure |
 | `[Timeout]` | `Ms` (required) | Per-call deadline; cancels the token passed to the client, so the call ends with `OperationCanceledException` |
 | `[CircuitBreaker]` | `MaxFailures`, `ResetMs`, `HalfOpenProbes` | Opens circuit after consecutive failures; rejects calls while open |
 | `[RateLimit]` | `MaxPerSecond` (required), `BurstSize` | Token-bucket rate limiter; throws `ResilienceException` when exhausted |
@@ -121,13 +121,13 @@ builder.Services
 
 ## Result Returns and Error Handling
 
-Resilience policies act on exceptions. They do not inspect a returned `HttpError`.
+Resilience policies act on exceptions. `[Retry]` also acts on a returned failed `Result` when you name a `RetryWhen` predicate, since ZeroAlloc.Resilience 3.2.0; the other policies do not inspect a returned `HttpError`.
 
 For a method that returns `Result<T, HttpError>`:
 
 | Policy | Behaviour |
 |---|---|
-| `[Retry]` | A returned `Result`, failed or successful, is passed through unchanged and not retried. Only a thrown exception is retried. Transport failures and timeouts are returned, not thrown, so they are not retried. |
+| `[Retry]` | Without `RetryWhen`, a returned `Result`, failed or successful, is passed through unchanged and not retried; only a thrown exception is retried. With `RetryWhen`, a failed `Result` the predicate calls transient is retried, and the last failed `Result` is returned unchanged once attempts run out. See [Retrying a failed Result](#retrying-a-failed-result). |
 | `[Timeout]` | Cancels the token; whatever the client returns or throws is passed through. The client sees that cancellation as requested by its caller, so it throws `OperationCanceledException` rather than returning a `Timeout` failure. |
 | `[CircuitBreaker(Fallback = ...)]` | While open, the fallback's `Result` is returned. |
 | `[CircuitBreaker]` without `Fallback`, `[RateLimit]` | Compile error ZR0003: the generator cannot build an `HttpError`. |
@@ -135,7 +135,35 @@ For a method that returns `Result<T, HttpError>`:
 
 Since 2.0, a `Result<T, HttpError>` method also returns network failures, timeouts and bodies it cannot deserialize as a failed `Result`, with `HttpError.Kind` set to `Transport`, `Timeout` or `Deserialization`, instead of throwing them; see [Advanced](advanced.md). Those failures are no longer thrown, so `[Retry]` no longer retries them either.
 
-So neither a 429 or 503 returned as a failed `Result` nor a refused connection or a timeout on such a method is retried. Only what still throws is retried: caller cancellation, which is never retried, and exceptions that are not transport, timeout or deserialization failures. To retry on transport failures and timeouts, either declare the method with a plain return type so the client throws, or handle the failed `Result` in the caller. Retrying on selected failed Results is tracked in [ZeroAlloc.Resilience#142](https://github.com/ZeroAlloc-Net/ZeroAlloc.Resilience/issues/142), and taking the delay from `Retry-After` in [#143](https://github.com/ZeroAlloc-Net/ZeroAlloc.Resilience/issues/143).
+Transport failures and timeouts on such a method are returned as a failed `Result`, so without `RetryWhen` they are not retried.
+
+### Retrying a failed Result
+
+Name a static predicate with `RetryWhen`, and optionally a static delay hint with `DelayHint`, both declared on the interface. `HttpError.GetRetryAfter()` reads the `Retry-After` header in delta-seconds or HTTP-date form:
+
+```csharp
+[ZeroAllocRestClient]
+[Retry(MaxAttempts = 4, BackoffMs = 500, Jitter = true,
+       RetryWhen = nameof(IsTransient), DelayHint = nameof(RetryAfter), MaxDelayMs = 30_000)]
+public interface IPaymentApi
+{
+    [Post("/payments")]
+    Task<Result<PaymentResult, HttpError>> ChargeAsync([Body] ChargeRequest request, CancellationToken ct = default);
+
+    static bool IsTransient(HttpError e) =>
+        e.Kind is HttpErrorKind.Transport or HttpErrorKind.Timeout
+        || (int)e.StatusCode is 429 or 502 or 503 or 504;
+
+    static TimeSpan? RetryAfter(HttpError e) => e.GetRetryAfter();
+}
+```
+
+- A failed `Result` for which `IsTransient` returns `true` is retried, and counts as a failure for `[CircuitBreaker]`. Any other failed `Result`, such as a 422, is returned at once and counts as a success, because the server answered.
+- The delay is `RetryAfter`'s value when it returns one, and the computed back-off otherwise. **Always set `MaxDelayMs` when the delay comes from a server header**: it caps every delay, and without it a server can make the call wait as long as it likes.
+- When every attempt fails, the last failed `Result` is returned unchanged, so the caller sees the real final error.
+- The predicate and hint run outside the retried call: an exception they throw reaches the caller and is not retried.
+
+With a [mapped error type](#mapped-error-types), write the predicate and hint over `TError` instead of `HttpError`. The full rules, including the `Exception` overload of `DelayHint`, `RetryOnException` and diagnostics ZR0009 and ZR0010, are in the ZeroAlloc.Resilience [retry guide](https://github.com/ZeroAlloc-Net/ZeroAlloc.Resilience/blob/main/docs/core-concepts/retry.md).
 
 `[Timeout]` works by cancelling the token it passes to the client. To the client that is cancellation its caller asked for, so it still throws `OperationCanceledException`, and the policy handles it as before. Only a timeout inside the client, such as `HttpClient.Timeout`, becomes a failed `Result` with `Kind` set to `Timeout`.
 
@@ -143,6 +171,6 @@ So neither a 429 or 503 returned as a failed `Result` nor a refused connection o
 
 A method that returns `Result<T, TError>` through an [`[ErrorMapper]`](advanced.md#your-own-error-type-errormapper) works through the bridge exactly like the generated `Add{I}`. `AddRestResilience` registers the mapper through the client's `AddSerializers` and builds the client with the concrete mapper type, so a host registration of `IHttpErrorMapper<TError>` does not replace it.
 
-The policy rules in the table above apply with `TError` in place of `HttpError`. `[Retry]` passes the mapped failure through. `[CircuitBreaker]` without `Fallback`, and `[RateLimit]`, are compile error ZR0003, because the resilience generator cannot build a `TError`.
+The policy rules in the table above apply with `TError` in place of `HttpError`. `[Retry]` passes the mapped failure through unless `RetryWhen` names a predicate over `TError`. `[CircuitBreaker]` without `Fallback`, and `[RateLimit]`, are compile error ZR0003, because the resilience generator cannot build a `TError`.
 
 See the [ZeroAlloc.Resilience result-return-types guide](https://github.com/ZeroAlloc-Net/ZeroAlloc.Resilience/blob/main/docs/guides/result-return-types.md) for the full rules.
