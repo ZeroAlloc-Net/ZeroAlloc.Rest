@@ -85,5 +85,21 @@ using (var failingHttp = new System.Net.Http.HttpClient(new RefusingHandler()) {
     }
 }
 
+// A non-success status carries its body: the generated client reads it through
+// GeneratedRestClient.ReadErrorBodyAsync before disposing the response.
+using (var rejectingHttp = new System.Net.Http.HttpClient(new UnprocessableHandler()) { BaseAddress = new Uri("http://localhost/") })
+{
+    IUserApi rejecting = new UserApiClient(rejectingHttp, new SmokeSerializer());
+    var result = await rejecting.TryGetUserAsync(1).ConfigureAwait(false);
+    if (!result.IsFailure
+        || result.Error.Kind != HttpErrorKind.Status
+        || result.Error.Body.Length != UnprocessableHandler.Body.Length
+        || !string.Equals(result.Error.ContentType, "application/problem+json", StringComparison.Ordinal))
+    {
+        Console.Error.WriteLine("AOT smoke: FAIL — a 422 should carry its body and media type");
+        return 1;
+    }
+}
+
 Console.WriteLine("AOT smoke: PASS");
 return 0;

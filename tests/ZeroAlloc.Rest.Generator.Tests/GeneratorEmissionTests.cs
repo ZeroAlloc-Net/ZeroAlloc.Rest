@@ -275,6 +275,136 @@ public class GeneratorEmissionTests
     }
 
     [Fact]
+    public void Generator_Result_CreateHttpError_CopiesContentHeaders()
+    {
+        var source = """
+            using ZeroAlloc.Rest.Attributes;
+            namespace MyApp;
+            [ZeroAllocRestClient]
+            public interface IUserApi
+            {
+                [Get("/users/{id}")]
+                System.Threading.Tasks.Task<ZeroAlloc.Results.Result<string, ZeroAlloc.Rest.HttpError>> GetUserResultAsync(int id, System.Threading.CancellationToken ct = default);
+            }
+            """;
+        var output = GetGeneratedSourceWithResults(source, "IUserApi.g.cs");
+        Assert.Contains("foreach (var kvp in response.Headers)", output);
+        Assert.Contains("foreach (var kvp in response.Content.Headers)", output);
+    }
+
+    private const string ResultApiSource = """
+        using ZeroAlloc.Rest.Attributes;
+        namespace MyApp;
+        [ZeroAllocRestClient]
+        public interface IUserApi
+        {
+            [Get("/users/{id}")]
+            System.Threading.Tasks.Task<ZeroAlloc.Results.Result<string, ZeroAlloc.Rest.HttpError>> GetUserResultAsync(int id, System.Threading.CancellationToken ct = default);
+        }
+        """;
+
+    [Fact]
+    public void Generator_Result_ReadsTheErrorBodyOnlyOnTheStatusPath_WithTheDefaultCap()
+    {
+        var output = GetGeneratedSourceWithResults(ResultApiSource, "IUserApi.g.cs");
+
+        Assert.Equal(1, CountOccurrences(output, "ReadErrorBodyAsync("));
+        Assert.Contains(
+            "var __errorBody = await global::ZeroAlloc.Rest.GeneratedRestClient.ReadErrorBodyAsync(response.Content, 65536, ct).ConfigureAwait(false);",
+            output);
+        Assert.Contains(
+            "__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Status, response, null, __errorBody.Body, __errorBody.Truncated));",
+            output);
+        // Transport, Timeout and Deserialization carry no body.
+        Assert.Contains("__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Timeout, null, __ex));", output);
+        Assert.Contains("__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Transport, null, __ex));", output);
+        Assert.Contains("__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Deserialization, response, __ex));", output);
+    }
+
+    [Fact]
+    public void Generator_Result_SetsBodyContentTypeAndTruncatedOnTheError()
+    {
+        var output = GetGeneratedSourceWithResults(ResultApiSource, "IUserApi.g.cs");
+
+        Assert.Contains("global::System.ReadOnlyMemory<byte> body = default, bool bodyTruncated = false)", output);
+        Assert.Contains("contentType = response.Content.Headers.ContentType?.MediaType;", output);
+        Assert.Contains("Body = body,", output);
+        Assert.Contains("ContentType = contentType,", output);
+        Assert.Contains("BodyTruncated = bodyTruncated,", output);
+    }
+
+    [Fact]
+    public void Generator_Result_CustomCap_IsEmitted()
+    {
+        var source = ResultApiSource.Replace("[ZeroAllocRestClient]", "[ZeroAllocRestClient(MaxErrorBodyBytes = 1024)]");
+
+        var output = GetGeneratedSourceWithResults(source, "IUserApi.g.cs");
+
+        Assert.Contains("ReadErrorBodyAsync(response.Content, 1024, ct)", output);
+    }
+
+    [Fact]
+    public void Generator_Result_ConstantExpressionCap_IsEmittedAsItsValue()
+    {
+        var source = ResultApiSource.Replace("[ZeroAllocRestClient]", "[ZeroAllocRestClient(MaxErrorBodyBytes = 4 * 1024)]");
+
+        var output = GetGeneratedSourceWithResults(source, "IUserApi.g.cs");
+
+        Assert.Contains("ReadErrorBodyAsync(response.Content, 4096,", output);
+    }
+
+    [Fact]
+    public void Generator_Result_CallerCancellationCatch_PrecedesTheTimeoutCatch()
+    {
+        // The body read runs inside the method's try. Caller cancellation during that read must
+        // reach the rethrowing catch, not the unfiltered one that turns cancellation into Timeout.
+        const string OceCatch = "catch (global::System.OperationCanceledException __ex)";
+        var output = GetGeneratedSourceWithResults(ResultApiSource, "IUserApi.g.cs");
+
+        var callerCatch = output.IndexOf(OceCatch + " when (ct.IsCancellationRequested)", StringComparison.Ordinal);
+        var timeoutCatch = -1;
+        for (var i = output.IndexOf(OceCatch, StringComparison.Ordinal); i >= 0;
+            i = output.IndexOf(OceCatch, i + 1, StringComparison.Ordinal))
+        {
+            var next = i + OceCatch.Length;
+            if (next < output.Length && (output[next] == '\r' || output[next] == '\n'))
+            {
+                timeoutCatch = i;
+                break;
+            }
+        }
+
+        Assert.True(callerCatch >= 0, "The caller-cancellation catch is missing.");
+        Assert.True(timeoutCatch >= 0, "The unfiltered Timeout catch is missing.");
+        Assert.True(callerCatch < timeoutCatch, "The caller-cancellation catch must come before the Timeout catch.");
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void Generator_Result_CapZeroOrLess_EmitsNoBodyRead(int cap)
+    {
+        var source = ResultApiSource.Replace(
+            "[ZeroAllocRestClient]", $"[ZeroAllocRestClient(MaxErrorBodyBytes = {cap})]");
+
+        var output = GetGeneratedSourceWithResults(source, "IUserApi.g.cs");
+
+        Assert.DoesNotContain("ReadErrorBodyAsync", output);
+        Assert.DoesNotContain("__errorBody", output);
+        Assert.Contains("__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Status, response, null));", output);
+    }
+
+    [Fact]
+    public void Generator_Result_WithoutToken_PassesDefaultToTheBodyRead()
+    {
+        var source = ResultApiSource.Replace(", System.Threading.CancellationToken ct = default", "");
+
+        var output = GetGeneratedSourceWithResults(source, "IUserApi.g.cs");
+
+        Assert.Contains("ReadErrorBodyAsync(response.Content, 65536, default)", output);
+    }
+
+    [Fact]
     public void Generator_NonResult_ReturnType_KeepsRethrowingOnly()
     {
         var source = """
@@ -290,6 +420,7 @@ public class GeneratorEmissionTests
         var output = GetGeneratedSource(source, "IUserApi.g.cs");
         Assert.DoesNotContain("HttpErrorKind", output);
         Assert.DoesNotContain("__CreateHttpError", output);
+        Assert.DoesNotContain("ReadErrorBodyAsync", output);
         Assert.DoesNotContain("HttpRequestException", output);
         Assert.Contains("throw;", output);
     }
