@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.1](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v2.1.0...v2.1.1) (2026-09-26)
+
+
+### Documentation
+
+* document retrying a failed Result with RetryWhen and DelayHint ([#327](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/327)) ([a6b1ff9](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/a6b1ff9509104c817dc02549336160697258e4f1)), closes [#325](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/325)
+
 ## [2.1.0](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v2.0.1...v2.1.0) (2026-09-26)
 
 
