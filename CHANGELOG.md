@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.1.0](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v2.0.1...v2.1.0) (2026-09-26)
+
+
+### Features
+
+* expose the error response body on HttpError ([b998124](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/b998124508ba60387e00259f3b745fb6f46b90ab))
+* map Result failures to a user-defined error type ([4cca929](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/4cca929e2af7661fdf461d8fb49ecaec91c033fd))
+
+
+### Bug Fixes
+
+* generate valid, distinct field names for injected serializers ([4cca929](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/4cca929e2af7661fdf461d8fb49ecaec91c033fd))
+* include content headers such as Content-Type in HttpError.Headers ([b998124](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/b998124508ba60387e00259f3b745fb6f46b90ab))
+* report ZRA001 at the offending method ([4cca929](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/4cca929e2af7661fdf461d8fb49ecaec91c033fd))
+
 ## [2.0.1](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v2.0.0...v2.0.1) (2026-09-25)
 
 
