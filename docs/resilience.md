@@ -139,4 +139,10 @@ So neither a 429 or 503 returned as a failed `Result` nor a refused connection o
 
 `[Timeout]` works by cancelling the token it passes to the client. To the client that is cancellation its caller asked for, so it still throws `OperationCanceledException`, and the policy handles it as before. Only a timeout inside the client, such as `HttpClient.Timeout`, becomes a failed `Result` with `Kind` set to `Timeout`.
 
+### Mapped error types
+
+A method that returns `Result<T, TError>` through an [`[ErrorMapper]`](advanced.md#your-own-error-type-errormapper) works through the bridge exactly like the generated `Add{I}`. `AddRestResilience` registers the mapper through the client's `AddSerializers` and builds the client with the concrete mapper type, so a host registration of `IHttpErrorMapper<TError>` does not replace it.
+
+The policy rules in the table above apply with `TError` in place of `HttpError`. `[Retry]` passes the mapped failure through. `[CircuitBreaker]` without `Fallback`, and `[RateLimit]`, are compile error ZR0003, because the resilience generator cannot build a `TError`.
+
 See the [ZeroAlloc.Resilience result-return-types guide](https://github.com/ZeroAlloc-Net/ZeroAlloc.Resilience/blob/main/docs/guides/result-return-types.md) for the full rules.

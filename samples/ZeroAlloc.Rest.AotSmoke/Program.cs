@@ -43,6 +43,11 @@ services.AddIUserApi(o =>
     o.BaseAddress = new Uri("http://localhost/");
     o.UseSerializer(new SmokeSerializer());
 });
+services.AddIQuoteApi(o =>
+{
+    o.BaseAddress = new Uri("http://localhost/");
+    o.UseSerializer(new SmokeSerializer());
+});
 services.AddOrderApiResiliencePolicies();
 services.AddRestResilience<IOrderApi, OrderApiClient, IOrderApiResilienceProxy>(
     (inner, sp) => new IOrderApiResilienceProxy(inner, sp.GetRequiredService<OrderApiResiliencePolicies>()),
@@ -68,6 +73,12 @@ using (var provider = services.BuildServiceProvider())
     if (provider.GetRequiredService<IStatusApi>() is not IStatusApiResilienceProxy)
     {
         Console.Error.WriteLine("AOT smoke: FAIL — IStatusApi should resolve to its resilience proxy");
+        return 1;
+    }
+
+    if (provider.GetRequiredService<IQuoteApi>() is not QuoteApiClient)
+    {
+        Console.Error.WriteLine("AOT smoke: FAIL — IQuoteApi should resolve to QuoteApiClient");
         return 1;
     }
 }
@@ -97,6 +108,30 @@ using (var rejectingHttp = new System.Net.Http.HttpClient(new UnprocessableHandl
         || !string.Equals(result.Error.ContentType, "application/problem+json", StringComparison.Ordinal))
     {
         Console.Error.WriteLine("AOT smoke: FAIL — a 422 should carry its body and media type");
+        return 1;
+    }
+}
+
+// A mapped error type: the 422 body and a refused connection both reach the mapper.
+using (var rejectingHttp = new System.Net.Http.HttpClient(new UnprocessableHandler()) { BaseAddress = new Uri("http://localhost/") })
+using (var refusingHttp = new System.Net.Http.HttpClient(new RefusingHandler()) { BaseAddress = new Uri("http://localhost/") })
+{
+    IQuoteApi rejecting = new QuoteApiClient(rejectingHttp, new SmokeSerializer(), new QuoteErrorMapper());
+    var status = await rejecting.TryGetQuoteAsync(1).ConfigureAwait(false);
+    if (!status.IsFailure
+        || status.Error.Kind != HttpErrorKind.Status
+        || status.Error.Status != 422
+        || status.Error.BodyLength != UnprocessableHandler.Body.Length)
+    {
+        Console.Error.WriteLine("AOT smoke: FAIL — a 422 should map to QuoteError with its body");
+        return 1;
+    }
+
+    IQuoteApi refusing = new QuoteApiClient(refusingHttp, new SmokeSerializer(), new QuoteErrorMapper());
+    var transport = await refusing.TryGetQuoteAsync(1).ConfigureAwait(false);
+    if (!transport.IsFailure || transport.Error.Kind != HttpErrorKind.Transport)
+    {
+        Console.Error.WriteLine("AOT smoke: FAIL — a transport failure should map to QuoteError");
         return 1;
     }
 }

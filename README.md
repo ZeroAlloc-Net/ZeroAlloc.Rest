@@ -105,7 +105,7 @@ ZA is **1.7–3.6× faster than Refit** across every call shape with **1.3–1.5
 - **Native AOT compatible** — no `DynamicMethod`, no IL emit, no `Type.GetType`
 - **Per-method serializer override** — `[Serializer(typeof(MySerializer))]` for mixed protocols
 - **Path, query, body, and header parameters** — `{id}`, `[Query]`, `[Body]`, `[Header("X-Api-Key")]`
-- **`Result<T, HttpError>`** — typed success/error returns via `ZeroAlloc.Results`; no exception on 4xx/5xx, network failures, timeouts or unreadable response bodies
+- **`Result<T, HttpError>`** — typed success/error returns via `ZeroAlloc.Results`; no exception on 4xx/5xx, network failures, timeouts or unreadable response bodies — or your own error type via `[ErrorMapper]`
 - **OpenAPI code generation** — `OpenApiInterfaceGenerator` API + MSBuild `<ZeroAllocApiSpec>` task
 - **Pluggable serializers** — System.Text.Json, MemoryPack, MessagePack, or bring your own
 - **IHttpClientFactory integration** — `AddI{Interface}` generated extension method
@@ -141,7 +141,7 @@ services.AddOpenTelemetry()
 | [OpenAPI Code Generation](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/blob/main/docs/openapi-codegen.md) | Generate interfaces from OpenAPI specs |
 | [Benchmarks](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/blob/main/docs/benchmarks.md) | Performance comparison vs Refit and raw HttpClient |
 | [Testing](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/blob/main/docs/testing.md) | Testing patterns with WireMock.Net |
-| [Advanced](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/blob/main/docs/advanced.md) | `Result<T, HttpError>`, multiple serializers, edge cases |
+| [Advanced](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/blob/main/docs/advanced.md) | `Result<T, HttpError>`, or your own error type via `[ErrorMapper]`, multiple serializers, edge cases |
 | [Resilience](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/blob/main/docs/resilience.md) | Retry, timeout, circuit-breaker, and rate-limit via `ZeroAlloc.Rest.Resilience` |
 | [Cookbook](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/tree/main/docs/cookbook/) | End-to-end recipes |
 

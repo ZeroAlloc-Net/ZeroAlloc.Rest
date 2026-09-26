@@ -8,27 +8,36 @@ namespace ZeroAlloc.Rest.Generator;
 
 internal static class ClientEmitter
 {
-    private static readonly DiagnosticDescriptor s_conflictingBodyDescriptor = new DiagnosticDescriptor(
-        id: "ZRA001",
-        title: "Conflicting body attributes",
-        messageFormat: "Method '{0}' has both [Body] and [FormBody] parameters; only one is allowed",
-        category: "ZeroAlloc.Rest.Generator",
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
+    // Every field a generated client declares before its injected dependencies.
+    private static readonly string[] ReservedFieldNames =
+        { "_activitySource", "_meter", "_requestsTotal", "_requestDurationMs", "_httpClient", "_serializer" };
 
     internal static void Emit(SourceProductionContext ctx, ClientModel model)
     {
+        foreach (var diagnostic in model.Diagnostics)
+            ctx.ReportDiagnostic(diagnostic.ToDiagnostic());
+
         // Collect unique method-level serializer types (ordered, deduped)
         var overrideSerializers = model.GetOverrideSerializerTypes();
 
-        // Build a collision-free FQN → field name map
+        // Field names are unique across every fixed field the class declares and every injected
+        // dependency.
+        var usedFieldNames = new List<string>(ReservedFieldNames);
         var serializerFieldMap = new Dictionary<string, string>();
-        var usedFieldNames = new List<string>();
         foreach (var st in overrideSerializers)
         {
-            var fieldName = GetSerializerFieldName(st, usedFieldNames);
+            var fieldName = GetFieldName(st, string.Empty, usedFieldNames);
             usedFieldNames.Add(fieldName);
             serializerFieldMap[st] = fieldName;
+        }
+
+        var errorMappings = model.GetUsedErrorMappings();
+        var errorMapperFieldMap = new Dictionary<string, string>();
+        foreach (var (errorType, _, _) in errorMappings)
+        {
+            var fieldName = GetFieldName(errorType, "Mapper", usedFieldNames);
+            usedFieldNames.Add(fieldName);
+            errorMapperFieldMap[errorType] = fieldName;
         }
 
         var hasQueryParams = false;
@@ -69,6 +78,12 @@ internal static class ClientEmitter
         // concrete types.
         foreach (var st in overrideSerializers)
             sb.AppendLine($"    private readonly ZeroAlloc.Rest.IRestSerializer {serializerFieldMap[st]};");
+        // A mapper is taken as IHttpErrorMapper<E>, so an internal mapper type never appears in the
+        // constructor. E is as accessible as the method that returns it. Create resolves the concrete
+        // mapper type. E is spelled as the mapper declares it, nullable annotation included, because
+        // IHttpErrorMapper<E> is invariant.
+        foreach (var (errorType, _, mapperErrorType) in errorMappings)
+            sb.AppendLine($"    private readonly global::ZeroAlloc.Rest.IHttpErrorMapper<{mapperErrorType}> {errorMapperFieldMap[errorType]};");
         sb.AppendLine();
 
         // Build constructor parameter list
@@ -82,7 +97,12 @@ internal static class ClientEmitter
         foreach (var st in overrideSerializers)
         {
             var fieldName = serializerFieldMap[st];
-            ctorParams.Add($"ZeroAlloc.Rest.IRestSerializer {fieldName.Substring(1)}"); // strip leading '_' for param name
+            ctorParams.Add($"ZeroAlloc.Rest.IRestSerializer {ParameterName(fieldName)}");
+        }
+        foreach (var (errorType, _, mapperErrorType) in errorMappings)
+        {
+            var fieldName = errorMapperFieldMap[errorType];
+            ctorParams.Add($"global::ZeroAlloc.Rest.IHttpErrorMapper<{mapperErrorType}> {ParameterName(fieldName)}");
         }
 
         sb.AppendLine($"    public {model.ClassName}({string.Join(", ", ctorParams)})");
@@ -92,15 +112,20 @@ internal static class ClientEmitter
         foreach (var st in overrideSerializers)
         {
             var fieldName = serializerFieldMap[st];
-            sb.AppendLine($"        {fieldName} = {fieldName.Substring(1)};");
+            sb.AppendLine($"        {fieldName} = {ParameterName(fieldName)};");
+        }
+        foreach (var (errorType, _, _) in errorMappings)
+        {
+            var fieldName = errorMapperFieldMap[errorType];
+            sb.AppendLine($"        {fieldName} = {ParameterName(fieldName)};");
         }
         sb.AppendLine("    }");
         sb.AppendLine();
 
-        EmitGeneratedClientMembers(sb, model, overrideSerializers);
+        EmitGeneratedClientMembers(sb, model, overrideSerializers, errorMappings);
 
         foreach (var method in model.Methods)
-            EmitMethod(ctx, sb, model.InterfaceName, method, serializerFieldMap, model.MaxErrorBodyBytes);
+            EmitMethod(ctx, sb, model.InterfaceName, method, serializerFieldMap, errorMapperFieldMap, model.MaxErrorBodyBytes);
 
         EmitRecordFailure(sb);
 
@@ -109,6 +134,8 @@ internal static class ClientEmitter
             if (m.ReturnsResult) { anyReturnsResult = true; break; }
         if (anyReturnsResult)
             EmitCreateHttpError(sb);
+        if (errorMappings.Count > 0)
+            EmitRecordMapperFailure(sb);
 
         if (hasQueryParams)
         {
@@ -128,7 +155,7 @@ internal static class ClientEmitter
     // IGeneratedRestClient<TSelf>: how Add{I} and the Resilience bridge build the client and register
     // its serializers, with no reflection or ActivatorUtilities. Implemented explicitly, so the client
     // gains no public Create or AddSerializers that could clash with the interface's own methods.
-    private static void EmitGeneratedClientMembers(StringBuilder sb, ClientModel model, IReadOnlyList<string> overrideSerializers)
+    private static void EmitGeneratedClientMembers(StringBuilder sb, ClientModel model, IReadOnlyList<string> overrideSerializers, IReadOnlyList<(string ErrorTypeName, string MapperTypeName, string MapperErrorTypeName)> errorMappings)
     {
         var self = $"global::ZeroAlloc.Rest.IGeneratedRestClient<{model.ClassName}>";
         const string GetRequired = "global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService";
@@ -141,11 +168,39 @@ internal static class ClientEmitter
         foreach (var st in overrideSerializers)
             ctorArgs.Add($"{GetRequired}<{st}>(services)");
 
-        sb.AppendLine($"    static {model.ClassName} {self}.Create(global::System.Net.Http.HttpClient httpClient, global::System.IServiceProvider services)");
-        sb.AppendLine($"        => new {model.ClassName}(");
-        for (var i = 0; i < ctorArgs.Count; i++)
-            sb.AppendLine($"            {ctorArgs[i]}{(i < ctorArgs.Count - 1 ? "," : ");")}");
-        sb.AppendLine();
+        var createSignature = $"    static {model.ClassName} {self}.Create(global::System.Net.Http.HttpClient httpClient, global::System.IServiceProvider services)";
+        if (errorMappings.Count == 0)
+        {
+            sb.AppendLine(createSignature);
+            sb.AppendLine($"        => new {model.ClassName}(");
+            for (var i = 0; i < ctorArgs.Count; i++)
+                sb.AppendLine($"            {ctorArgs[i]}{(i < ctorArgs.Count - 1 ? "," : ");")}");
+            sb.AppendLine();
+        }
+        else
+        {
+            // The concrete mapper type, never IHttpErrorMapper<E>: a host registration of the
+            // interface can never replace a library's mapper. A mapper serving several error types
+            // is resolved once and passed for each.
+            sb.AppendLine(createSignature);
+            sb.AppendLine("    {");
+            var mapperLocals = new Dictionary<string, string>(System.StringComparer.Ordinal);
+            foreach (var mapping in errorMappings)
+            {
+                if (!mapperLocals.TryGetValue(mapping.MapperTypeName, out var local))
+                {
+                    local = "__errorMapper" + mapperLocals.Count.ToString(CultureInfo.InvariantCulture);
+                    mapperLocals[mapping.MapperTypeName] = local;
+                    sb.AppendLine($"        var {local} = {GetRequired}<{mapping.MapperTypeName}>(services);");
+                }
+                ctorArgs.Add(local);
+            }
+            sb.AppendLine($"        return new {model.ClassName}(");
+            for (var i = 0; i < ctorArgs.Count; i++)
+                sb.AppendLine($"            {ctorArgs[i]}{(i < ctorArgs.Count - 1 ? "," : ");")}");
+            sb.AppendLine("    }");
+            sb.AppendLine();
+        }
 
         sb.AppendLine($"    static void {self}.AddSerializers(global::Microsoft.Extensions.DependencyInjection.IServiceCollection services, global::ZeroAlloc.Rest.ZeroAllocClientOptions options)");
         sb.AppendLine("    {");
@@ -171,11 +226,21 @@ internal static class ClientEmitter
         }
         foreach (var st in overrideSerializers)
             sb.AppendLine($"        {TryAddSingleton}<{st}>(services);");
+        // Every usable [ErrorMapper], used or not, by its concrete type. Create resolves that type, so
+        // a host registration of IHttpErrorMapper<E> is never consulted.
+        var registeredMappers = new List<string>();
+        foreach (var mapper in model.ErrorMappers)
+        {
+            if (registeredMappers.Contains(mapper.MapperTypeName))
+                continue;
+            registeredMappers.Add(mapper.MapperTypeName);
+            sb.AppendLine($"        {TryAddSingleton}<{mapper.MapperTypeName}>(services);");
+        }
         sb.AppendLine("    }");
         sb.AppendLine();
     }
 
-    private static void EmitMethod(SourceProductionContext ctx, StringBuilder sb, string interfaceName, MethodModel method, IReadOnlyDictionary<string, string> serializerFieldMap, int maxErrorBodyBytes)
+    private static void EmitMethod(SourceProductionContext ctx, StringBuilder sb, string interfaceName, MethodModel method, IReadOnlyDictionary<string, string> serializerFieldMap, IReadOnlyDictionary<string, string> errorMapperFieldMap, int maxErrorBodyBytes)
     {
         var ctParam = FindCancellationToken(method.Parameters);
         var ctArg = ctParam != null ? ctParam.Name : "default";
@@ -187,7 +252,7 @@ internal static class ClientEmitter
 
         if (bodyParam != null && formBodyParam != null)
         {
-            ctx.ReportDiagnostic(Diagnostic.Create(s_conflictingBodyDescriptor, Location.None, method.Name));
+            ctx.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.ConflictingBody, method.Location.ToLocation(), method.Name));
             // Still emit valid (if incomplete) code so compilation continues
             formBodyParam = null; // suppress the FormBody branch
         }
@@ -196,6 +261,13 @@ internal static class ClientEmitter
         var serializerExpr = method.SerializerTypeName != null && serializerFieldMap.TryGetValue(method.SerializerTypeName, out var fieldName)
             ? fieldName
             : "_serializer";
+
+        string? errorMapperField = null;
+        if (method.MapsError && !errorMapperFieldMap.TryGetValue(method.ErrorTypeName!, out errorMapperField))
+        {
+            EmitUnmappedStub(sb, method);
+            return;
+        }
 
         // IL3051/IL2046: Previously we emitted [RequiresDynamicCode] / [RequiresUnreferencedCode]
         // here, but the user-authored interface doesn't carry those annotations — ILC rejects
@@ -218,7 +290,7 @@ internal static class ClientEmitter
 
         EmitUrlBuilding(sb, method.Route, pathParams, queryParams);
         EmitRequestCreation(sb, method, headerParams, bodyParam, formBodyParam, ctArg, serializerExpr);
-        EmitSendAndResponse(sb, method, ctParam?.Name, serializerExpr, maxErrorBodyBytes);
+        EmitSendAndResponse(sb, method, ctParam?.Name, serializerExpr, maxErrorBodyBytes, errorMapperField);
 
         sb.AppendLine("    }");
         sb.AppendLine();
@@ -329,9 +401,11 @@ internal static class ClientEmitter
     }
 
     // callerToken is the name of the method's CancellationToken parameter, or null when it has none.
-    private static void EmitSendAndResponse(StringBuilder sb, MethodModel method, string? callerToken, string serializerExpr, int maxErrorBodyBytes)
+    private static void EmitSendAndResponse(StringBuilder sb, MethodModel method, string? callerToken, string serializerExpr, int maxErrorBodyBytes, string? errorMapperField)
     {
         var ctArg = callerToken ?? "default";
+        if (errorMapperField != null)
+            sb.AppendLine("        global::ZeroAlloc.Rest.HttpError __httpError;");
         sb.AppendLine("        try");
         sb.AppendLine("        {");
         sb.AppendLine($"            using var response = await _httpClient.SendAsync(request, {ctArg}).ConfigureAwait(false);");
@@ -361,6 +435,8 @@ internal static class ClientEmitter
         sb.AppendLine("            throw;");
         sb.AppendLine("        }");
         sb.AppendLine("#pragma warning restore EPC12");
+        if (errorMapperField != null)
+            EmitMapping(sb, method, errorMapperField);
     }
 
     // A Result-returning method returns a failure for a timeout or a transport error instead of
@@ -368,7 +444,6 @@ internal static class ClientEmitter
     // such as a bug in a handler, reaches the rethrowing catch that follows these.
     private static void EmitResultCatches(StringBuilder sb, MethodModel method, string? callerToken)
     {
-        var resultType = ResultTypeName(method);
         if (callerToken != null)
         {
             sb.AppendLine($"        catch (global::System.OperationCanceledException __ex) when ({callerToken}.IsCancellationRequested)");
@@ -381,14 +456,12 @@ internal static class ClientEmitter
         sb.AppendLine("        catch (global::System.OperationCanceledException __ex)");
         sb.AppendLine("        {");
         sb.AppendLine("            __RecordFailure(__activity, __ex, __sw, __httpMethod, __RestMethodTag);");
-        sb.AppendLine($"            return {resultType}.Failure(");
-        sb.AppendLine("                __CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Timeout, null, __ex));");
+        EmitFailure(sb, "            ", method, "__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Timeout, null, __ex)");
         sb.AppendLine("        }");
         sb.AppendLine("        catch (global::System.Net.Http.HttpRequestException __ex)");
         sb.AppendLine("        {");
         sb.AppendLine("            __RecordFailure(__activity, __ex, __sw, __httpMethod, __RestMethodTag);");
-        sb.AppendLine($"            return {resultType}.Failure(");
-        sb.AppendLine("                __CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Transport, null, __ex));");
+        EmitFailure(sb, "            ", method, "__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Transport, null, __ex)");
         sb.AppendLine("        }");
     }
 
@@ -409,18 +482,31 @@ internal static class ClientEmitter
             // Only the deserialize call is guarded: whatever the serializer throws, a JsonException or
             // a MemoryPack or MessagePack exception, means the body could not be read. Cancellation
             // is left to the method's cancellation catches.
-            sb.AppendLine($"{i1}{method.InnerTypeName} content;");
-            sb.AppendLine($"{i1}try");
-            sb.AppendLine($"{i1}{{");
-            sb.AppendLine($"{i2}content = (await {serializerExpr}.DeserializeAsync<{method.InnerTypeName}>(responseStream, {ctArg}).ConfigureAwait(false))!;");
-            sb.AppendLine($"{i1}}}");
+            if (method.MapsError)
+            {
+                // The success return stays inside the try, so the catch can store the error and fall
+                // through to the single mapping site after the method's try.
+                sb.AppendLine($"{i1}try");
+                sb.AppendLine($"{i1}{{");
+                sb.AppendLine($"{i2}{method.InnerTypeName} content = (await {serializerExpr}.DeserializeAsync<{method.InnerTypeName}>(responseStream, {ctArg}).ConfigureAwait(false))!;");
+                sb.AppendLine($"{i2}return {resultType}.Success(content);");
+                sb.AppendLine($"{i1}}}");
+            }
+            else
+            {
+                sb.AppendLine($"{i1}{method.InnerTypeName} content;");
+                sb.AppendLine($"{i1}try");
+                sb.AppendLine($"{i1}{{");
+                sb.AppendLine($"{i2}content = (await {serializerExpr}.DeserializeAsync<{method.InnerTypeName}>(responseStream, {ctArg}).ConfigureAwait(false))!;");
+                sb.AppendLine($"{i1}}}");
+            }
             sb.AppendLine($"{i1}catch (global::System.Exception __ex) when (__ex is not global::System.OperationCanceledException)");
             sb.AppendLine($"{i1}{{");
             sb.AppendLine($"{i2}__RecordFailure(__activity, __ex, __sw, __httpMethod, __RestMethodTag);");
-            sb.AppendLine($"{i2}return {resultType}.Failure(");
-            sb.AppendLine($"{i2}    __CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Deserialization, response, __ex));");
+            EmitFailure(sb, i2, method, "__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Deserialization, response, __ex)");
             sb.AppendLine($"{i1}}}");
-            sb.AppendLine($"{i1}return {resultType}.Success(content);");
+            if (!method.MapsError)
+                sb.AppendLine($"{i1}return {resultType}.Success(content);");
             sb.AppendLine($"{indent}}}");
             sb.AppendLine($"{indent}else");
             sb.AppendLine($"{indent}{{");
@@ -430,13 +516,11 @@ internal static class ClientEmitter
                 // into an empty body, and still throws on caller cancellation.
                 var cap = maxErrorBodyBytes.ToString(CultureInfo.InvariantCulture);
                 sb.AppendLine($"{i1}var __errorBody = await global::ZeroAlloc.Rest.GeneratedRestClient.ReadErrorBodyAsync(response.Content, {cap}, {ctArg}).ConfigureAwait(false);");
-                sb.AppendLine($"{i1}return {resultType}.Failure(");
-                sb.AppendLine($"{i1}    __CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Status, response, null, __errorBody.Body, __errorBody.Truncated));");
+                EmitFailure(sb, i1, method, "__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Status, response, null, __errorBody.Body, __errorBody.Truncated)");
             }
             else
             {
-                sb.AppendLine($"{i1}return {resultType}.Failure(");
-                sb.AppendLine($"{i1}    __CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Status, response, null));");
+                EmitFailure(sb, i1, method, "__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Status, response, null)");
             }
             sb.AppendLine($"{indent}}}");
         }
@@ -448,8 +532,71 @@ internal static class ClientEmitter
         }
     }
 
+    // A mapped method repeats its E as declared, nullable annotation included: Result<T, E> is a
+    // struct, so Result<T, JevError> does not convert to Result<T, JevError?> without a warning.
     private static string ResultTypeName(MethodModel method)
-        => $"ZeroAlloc.Results.Result<{method.InnerTypeName}, ZeroAlloc.Rest.HttpError>";
+        => method.MapsError
+            ? $"ZeroAlloc.Results.Result<{method.InnerTypeName}, {method.DeclaredErrorTypeName}>"
+            : $"ZeroAlloc.Results.Result<{method.InnerTypeName}, ZeroAlloc.Rest.HttpError>";
+
+    // How a failure site ends. An HttpError method returns the error from the site, exactly as
+    // before. A mapped method stores it in __httpError and maps it once, after the method's try.
+    private static void EmitFailure(StringBuilder sb, string indent, MethodModel method, string createCall)
+    {
+        if (method.MapsError)
+        {
+            sb.AppendLine($"{indent}__httpError = {createCall};");
+        }
+        else
+        {
+            sb.AppendLine($"{indent}return {ResultTypeName(method)}.Failure(");
+            sb.AppendLine($"{indent}    {createCall});");
+        }
+    }
+
+    // The one mapping site. It sits outside the method's try, so a mapper's exception never reaches
+    // the Result catches and is never mapped again. The exception reaches the caller unchanged,
+    // and the span is marked failed.
+    private static void EmitMapping(StringBuilder sb, MethodModel method, string errorMapperField)
+    {
+        var mapped = $"{errorMapperField}.Map(__httpError)";
+        if (method.MappedErrorNeedsNullCheck)
+        {
+            // The mapper is declared over E? but the method returns a non-nullable E. A null would
+            // break the method's contract, so it fails loudly here instead of reaching the caller.
+            var mapperError = StripGlobal(method.MapperErrorTypeName!);
+            var methodError = StripGlobal(method.DeclaredErrorTypeName!);
+            mapped += $" ?? throw new global::System.InvalidOperationException(\"The IHttpErrorMapper<{mapperError}> returned null, but {method.Name} returns a Result whose error type {methodError} is not nullable.\")";
+        }
+        sb.AppendLine("        try");
+        sb.AppendLine("        {");
+        sb.AppendLine($"            return {ResultTypeName(method)}.Failure({mapped});");
+        sb.AppendLine("        }");
+        sb.AppendLine("        catch (global::System.Exception __ex)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            __RecordMapperFailure(__activity, __ex);");
+        sb.AppendLine("            throw;");
+        sb.AppendLine("        }");
+    }
+
+    // The request's duration is already recorded when a mapper runs, so a mapper failure only marks
+    // the span.
+    private static void EmitRecordMapperFailure(StringBuilder sb)
+    {
+        sb.AppendLine("    private static void __RecordMapperFailure(global::System.Diagnostics.Activity? activity, global::System.Exception exception)");
+        sb.AppendLine("        => activity?.SetStatus(global::System.Diagnostics.ActivityStatusCode.Error, exception.Message);");
+        sb.AppendLine();
+    }
+
+    // ZRA002 or ZRA003 is already reported for this method. A throwing body keeps the rest of the
+    // client compiling, so that diagnostic is the only error the user sees.
+    private static void EmitUnmappedStub(StringBuilder sb, MethodModel method)
+    {
+        var errorType = StripGlobal(method.ErrorTypeName!);
+        sb.AppendLine($"    public {method.ReturnTypeName} {method.Name}({BuildParamList(method.Parameters)})");
+        sb.AppendLine($"        => throw new global::System.NotSupportedException(\"No usable [ErrorMapper] maps {errorType}; see the ZeroAlloc.Rest diagnostic reported for this method.\");");
+        sb.AppendLine();
+    }
 
     // Marks the span as failed and records the request duration. Every failure goes through here,
     // whether the method then rethrows or returns an HttpError, so failures still show in traces.
@@ -533,27 +680,51 @@ internal static class ClientEmitter
         return char.ToUpper(s[0]) + s.Substring(1).ToLower();
     }
 
-    /// <summary>
-    /// Derives a collision-free private field name for an override serializer from its fully-qualified
-    /// type name, deduplicating against already-assigned field names.
-    /// "MyApp.OverrideSerializer" → "_overrideSerializer"; collisions get a numeric suffix (_overrideSerializer2, etc.)
-    /// </summary>
     private static string StripGlobal(string typeName)
         => typeName.StartsWith("global::", System.StringComparison.Ordinal) ? typeName.Substring("global::".Length) : typeName;
 
-    private static string GetSerializerFieldName(string fullTypeName, List<string> existingFieldNames)
+    /// <summary>
+    /// Derives a collision-free private field name from a type's name plus a suffix, deduplicating
+    /// against already-assigned field names. Generic arguments are dropped, and any character that
+    /// cannot appear in an identifier, such as the brackets of an array type, is removed.
+    /// "global::MyApp.OverrideSerializer" gives "_overrideSerializer";
+    /// "global::MyApp.JevError" with suffix "Mapper" gives "_jevErrorMapper";
+    /// "global::MyApp.Wrapper&lt;global::MyApp.Foo&gt;" gives "_wrapper";
+    /// "global::System.ValueTuple&lt;int, string&gt;" with suffix "Mapper" gives "_valueTupleMapper".
+    /// Collisions get a numeric suffix: _overrideSerializer2, and so on.
+    /// </summary>
+    private static string GetFieldName(string fullTypeName, string suffix, List<string> existingFieldNames)
     {
-        fullTypeName = StripGlobal(fullTypeName);
-        var simpleName = fullTypeName.Contains('.')
-            ? fullTypeName.Substring(fullTypeName.LastIndexOf('.') + 1)
-            : fullTypeName;
-        if (simpleName.Length == 0) simpleName = "Serializer"; // defensive fallback
-        var candidate = "_" + char.ToLower(simpleName[0]) + simpleName.Substring(1);
+        var name = StripGlobal(fullTypeName);
+        var genericStart = name.IndexOf('<');
+        if (genericStart >= 0)
+            name = name.Substring(0, genericStart);
+        name = name.Substring(name.LastIndexOf('.') + 1);
+        var simple = new StringBuilder(name.Length + suffix.Length);
+        foreach (var c in name)
+        {
+            if (char.IsLetterOrDigit(c) || c == '_')
+                simple.Append(c);
+        }
+        simple.Append(suffix);
+        if (simple.Length == 0) simple.Append("Serializer"); // defensive fallback
+        var simpleName = simple.ToString();
+        var candidate = "_" + char.ToLowerInvariant(simpleName[0]) + simpleName.Substring(1);
         if (!existingFieldNames.Contains(candidate)) return candidate;
         // Collision — append index
         var i = 2;
         while (existingFieldNames.Contains(candidate + i)) i++;
         return candidate + i;
+    }
+
+    // The constructor parameter for a field: the field name without its leading underscore,
+    // escaped when that leaves a C# keyword, as a serializer type named @class would.
+    private static string ParameterName(string fieldName)
+    {
+        var name = fieldName.Substring(1);
+        return Microsoft.CodeAnalysis.CSharp.SyntaxFacts.GetKeywordKind(name) != Microsoft.CodeAnalysis.CSharp.SyntaxKind.None
+            ? "@" + name
+            : name;
     }
 
     private static ParameterModel? FindCancellationToken(IReadOnlyList<ParameterModel> parameters)
