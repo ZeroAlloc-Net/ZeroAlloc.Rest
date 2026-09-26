@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using Microsoft.CodeAnalysis;
 using ZeroAlloc.Rest.Generator.Models;
@@ -17,6 +18,10 @@ internal static class ModelExtractor
     private const string QueryAttr  = "ZeroAlloc.Rest.Attributes.QueryAttribute";
     private const string HeaderAttr = "ZeroAlloc.Rest.Attributes.HeaderAttribute";
     private const string SerializerAttr = "ZeroAlloc.Rest.Attributes.SerializerAttribute";
+    private const string ErrorMapperAttr = "ZeroAlloc.Rest.Attributes.ErrorMapperAttribute";
+    private const string ErrorMapperOpenType = "ZeroAlloc.Rest.IHttpErrorMapper<TError>";
+    private const string NotConstructibleReason = "it must be a closed, non-abstract class with a public constructor";
+    private const string NoMapperInterfaceReason = "it implements no IHttpErrorMapper<TError> interface";
     private const string ResultOpenType = "ZeroAlloc.Results.Result<T, E>";
     private const int DefaultMaxErrorBodyBytes = 65536;
 
@@ -38,18 +43,186 @@ internal static class ModelExtractor
             : interfaceName + "Client";
 
         var clientSerializer = GetSerializerType(interfaceSymbol);
+        var diagnostics = new List<DiagnosticInfo>();
+        var mappers = ResolveErrorMappers(interfaceSymbol, diagnostics, ct);
 
         var methods = new List<MethodModel>();
         foreach (var member in interfaceSymbol.GetMembers())
         {
             ct.ThrowIfCancellationRequested();
             if (member is not IMethodSymbol method) continue;
-            var methodModel = ExtractMethod(method);
+            var methodModel = ExtractMethod(method, mappers, diagnostics);
             if (methodModel is not null) methods.Add(methodModel);
         }
 
         return new ClientModel(ns, interfaceName, className, methods.AsReadOnly(), clientSerializer,
-            IsEffectivelyPublic(interfaceSymbol), GetMaxErrorBodyBytes(ctx));
+            IsEffectivelyPublic(interfaceSymbol), GetMaxErrorBodyBytes(ctx),
+            mappers.Valid.AsReadOnly(), diagnostics.AsReadOnly());
+    }
+
+    private sealed class ErrorMapperResolution
+    {
+        internal List<ErrorMapperModel> Valid { get; } = new();
+
+        // Error type key -> the usable mapper type that maps it, global::-qualified, and the error
+        // type exactly as that mapper declares it, nullable annotation included.
+        internal Dictionary<string, (string MapperTypeName, ITypeSymbol ErrorType)> MapperByError { get; } = new(System.StringComparer.Ordinal);
+
+        // Error types claimed by a mapper that ZRA003 rejected. A method using one is not also ZRA002.
+        internal HashSet<string> ClaimedByInvalidMapper { get; } = new(System.StringComparer.Ordinal);
+
+        // An [ErrorMapper] whose argument has a compiler error. Its error types are unknown, so no
+        // method on the interface gets ZRA002.
+        internal bool HasUnresolvedMapper { get; set; }
+    }
+
+    private static ErrorMapperResolution ResolveErrorMappers(
+        INamedTypeSymbol interfaceSymbol, List<DiagnosticInfo> diagnostics, CancellationToken ct)
+    {
+        var resolution = new ErrorMapperResolution();
+        // Error type -> display name of the mapper that claimed it first, valid or not, for ZRA004.
+        var ownerByError = new Dictionary<string, string>(System.StringComparer.Ordinal);
+
+        foreach (var attr in interfaceSymbol.GetAttributes())
+        {
+            if (attr.AttributeClass?.ToDisplayString() != ErrorMapperAttr) continue;
+
+            // No argument, or a type that does not resolve, already has its own compiler error.
+            // Which error types such a mapper was meant to map cannot be known, so ZRA002 is
+            // suppressed for the whole interface instead of piling on guesses.
+            if (attr.ConstructorArguments.Length == 0
+                || attr.ConstructorArguments[0].Kind == TypedConstantKind.Error
+                || attr.ConstructorArguments[0].Value is ITypeSymbol { TypeKind: TypeKind.Error })
+            {
+                resolution.HasUnresolvedMapper = true;
+                continue;
+            }
+
+            var location = LocationInfo.From(
+                attr.ApplicationSyntaxReference?.GetSyntax(ct).GetLocation() ?? interfaceSymbol.Locations[0]);
+
+            // An array type or a null argument can never be a mapper, and names no error type.
+            if (attr.ConstructorArguments[0].Value is not INamedTypeSymbol mapperType)
+            {
+                var argumentDisplay = attr.ConstructorArguments[0].Value is ITypeSymbol other
+                    ? other.ToDisplayString()
+                    : "null";
+                diagnostics.Add(new DiagnosticInfo(DiagnosticDescriptors.InvalidErrorMapper, location,
+                    new object[] { argumentDisplay, NotConstructibleReason }));
+                continue;
+            }
+
+            var mapperDisplay = mapperType.ToDisplayString();
+
+            // An open generic cannot be constructed, but still claims each error type that does not
+            // depend on its type parameters, so a method using one gets only this ZRA003.
+            var definition = mapperType.IsUnboundGenericType ? mapperType.OriginalDefinition : mapperType;
+            var implementsMapper = false;
+            var errorTypes = new List<ITypeSymbol>();
+            foreach (var iface in GetMapperInterfaces(definition))
+            {
+                implementsMapper = true;
+                if (!ContainsTypeParameter(iface.TypeArguments[0]))
+                    errorTypes.Add(iface.TypeArguments[0]);
+            }
+
+            if (!implementsMapper)
+            {
+                diagnostics.Add(new DiagnosticInfo(DiagnosticDescriptors.InvalidErrorMapper, location,
+                    new object[] { mapperDisplay, NoMapperInterfaceReason }));
+                continue;
+            }
+
+            var constructible = !mapperType.IsUnboundGenericType && IsConstructible(mapperType);
+            if (!constructible)
+            {
+                diagnostics.Add(new DiagnosticInfo(DiagnosticDescriptors.InvalidErrorMapper, location,
+                    new object[] { mapperDisplay, NotConstructibleReason }));
+            }
+
+            var mapperName = mapperType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            var mapped = new List<string>();
+            foreach (var errorType in errorTypes)
+            {
+                var errorName = ErrorTypeKey(errorType);
+                if (ownerByError.TryGetValue(errorName, out var owner))
+                {
+                    diagnostics.Add(new DiagnosticInfo(DiagnosticDescriptors.DuplicateErrorMapper, location,
+                        new object[] { owner, mapperDisplay, errorType.ToDisplayString() }));
+                    continue;
+                }
+
+                ownerByError[errorName] = mapperDisplay;
+                if (constructible)
+                {
+                    resolution.MapperByError[errorName] = (mapperName, errorType);
+                    mapped.Add(errorName);
+                }
+                else
+                {
+                    resolution.ClaimedByInvalidMapper.Add(errorName);
+                }
+            }
+
+            if (mapped.Count > 0)
+                resolution.Valid.Add(new ErrorMapperModel(mapperName, mapped.AsReadOnly()));
+        }
+
+        return resolution;
+    }
+
+    // The global::-qualified name, without tuple element names but with nullable reference
+    // annotations, for generated code that must match a declaration exactly: IHttpErrorMapper<T> is
+    // invariant, and so is Result<T, E>.
+    private static readonly SymbolDisplayFormat AnnotatedErrorTypeFormat =
+        SymbolDisplayFormat.FullyQualifiedFormat.AddMiscellaneousOptions(
+            SymbolDisplayMiscellaneousOptions.ExpandValueTuple | SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier);
+
+    private static string AnnotatedErrorTypeName(ITypeSymbol errorType) => errorType.ToDisplayString(AnnotatedErrorTypeFormat);
+
+    // Error types are keyed without tuple element names, so IHttpErrorMapper<(int A, string B)> maps
+    // Result<T, (int X, string Y)>, and without the top-level nullable annotation, so a mapper over
+    // JevError? maps Result<T, JevError>; the generated code checks such a mapper's result for null.
+    // Nested annotations are kept: List<string?> does not convert to List<string> without a warning,
+    // so a mapper over one does not map the other.
+    private static string ErrorTypeKey(ITypeSymbol errorType)
+        => AnnotatedErrorTypeName(errorType.IsValueType ? errorType : errorType.WithNullableAnnotation(NullableAnnotation.NotAnnotated));
+
+    // AllInterfaces leaves out the type itself, so typeof(IHttpErrorMapper<E>) is checked directly.
+    private static IEnumerable<INamedTypeSymbol> GetMapperInterfaces(INamedTypeSymbol type)
+    {
+        if (type.TypeKind == TypeKind.Interface && IsMapperInterface(type))
+            yield return type;
+        foreach (var iface in type.AllInterfaces)
+        {
+            if (IsMapperInterface(iface))
+                yield return iface;
+        }
+    }
+
+    private static bool IsMapperInterface(INamedTypeSymbol type)
+        => type.TypeArguments.Length == 1 && type.OriginalDefinition.ToDisplayString() == ErrorMapperOpenType;
+
+    private static bool ContainsTypeParameter(ITypeSymbol type) => type switch
+    {
+        ITypeParameterSymbol => true,
+        IArrayTypeSymbol array => ContainsTypeParameter(array.ElementType),
+        IPointerTypeSymbol pointer => ContainsTypeParameter(pointer.PointedAtType),
+        INamedTypeSymbol named => named.TypeArguments.Any(ContainsTypeParameter),
+        _ => false,
+    };
+
+    // TryAddSingleton<TMapper> needs a class, and the container needs a public constructor.
+    private static bool IsConstructible(INamedTypeSymbol type)
+    {
+        if (type.TypeKind != TypeKind.Class || type.IsAbstract || type.IsStatic)
+            return false;
+        foreach (var ctor in type.InstanceConstructors)
+        {
+            if (ctor.DeclaredAccessibility == Accessibility.Public)
+                return true;
+        }
+        return false;
     }
 
     private static bool IsEffectivelyPublic(INamedTypeSymbol type)
@@ -76,7 +249,7 @@ internal static class ModelExtractor
         return DefaultMaxErrorBodyBytes;
     }
 
-    private static MethodModel? ExtractMethod(IMethodSymbol method)
+    private static MethodModel? ExtractMethod(IMethodSymbol method, ErrorMapperResolution mappers, List<DiagnosticInfo> diagnostics)
     {
         string? httpMethod = null;
         string? route = null;
@@ -110,7 +283,6 @@ internal static class ModelExtractor
             }
             // A method-level [Header] without a Value is intentionally ignored — there is nothing
             // to emit at compile time. Users who omit Value get no output and no diagnostic.
-            // Consider adding ZRA002 here in future to warn about this silent no-op.
             if (headerValue != null)
                 staticHeaders.Add((headerName, headerValue));
         }
@@ -123,15 +295,45 @@ internal static class ModelExtractor
         bool returnsVoid = false;
         bool returnsResult = false;
         string? innerTypeName = null;
+        string? errorTypeName = null;
+        string? declaredErrorTypeName = null;
+        string? errorMapperTypeName = null;
+        string? mapperErrorTypeName = null;
+        var mappedErrorNeedsNullCheck = false;
         string returnTypeName = returnType.ToDisplayString();
+        var location = LocationInfo.From(method.Locations[0]);
 
         if (returnType.TypeArguments.Length == 1)
         {
             var inner = returnType.TypeArguments[0] as INamedTypeSymbol;
             innerTypeName = inner?.ToDisplayString();
             returnsResult = inner?.OriginalDefinition.ToDisplayString() == ResultOpenType;
-            if (returnsResult && inner?.TypeArguments.Length >= 1)
+            if (returnsResult && inner?.TypeArguments.Length == 2)
+            {
                 innerTypeName = inner.TypeArguments[0].ToDisplayString();
+                var errorType = inner.TypeArguments[1];
+                errorTypeName = ErrorTypeKey(errorType);
+                declaredErrorTypeName = AnnotatedErrorTypeName(errorType);
+
+                // An unresolved error type already has its own compiler error.
+                if (errorTypeName != MethodModel.HttpErrorTypeName && errorType.TypeKind != TypeKind.Error)
+                {
+                    if (mappers.MapperByError.TryGetValue(errorTypeName, out var mapper))
+                    {
+                        errorMapperTypeName = mapper.MapperTypeName;
+                        mapperErrorTypeName = AnnotatedErrorTypeName(mapper.ErrorType);
+                        // A mapper declared over JevError? may return null, which a method returning
+                        // Result<T, JevError> must not pass on as its error. An oblivious E counts as
+                        // not nullable: the generated code is compiled with nullable enabled.
+                        mappedErrorNeedsNullCheck = !mapper.ErrorType.IsValueType
+                            && mapper.ErrorType.NullableAnnotation == NullableAnnotation.Annotated
+                            && errorType.NullableAnnotation != NullableAnnotation.Annotated;
+                    }
+                    else if (!mappers.HasUnresolvedMapper && !mappers.ClaimedByInvalidMapper.Contains(errorTypeName))
+                        diagnostics.Add(new DiagnosticInfo(DiagnosticDescriptors.MissingErrorMapper, location,
+                            new object[] { method.Name, errorType.ToDisplayString() }));
+                }
+            }
         }
         else
         {
@@ -144,7 +346,9 @@ internal static class ModelExtractor
         return new MethodModel(
             method.Name, httpMethod, route, returnTypeName,
             innerTypeName, returnsResult, returnsVoid,
-            parameters, methodSerializer, staticHeaders.AsReadOnly());
+            parameters, methodSerializer, staticHeaders.AsReadOnly(),
+            location, errorTypeName, errorMapperTypeName,
+            declaredErrorTypeName, mapperErrorTypeName, mappedErrorNeedsNullCheck);
     }
 
     private static IReadOnlyList<ParameterModel> ExtractParameters(IMethodSymbol method)

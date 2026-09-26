@@ -227,6 +227,131 @@ public class GeneratorEmissionTests
         Assert.Contains("ZeroAlloc.Rest.IRestSerializer overrideSerializer", output);
     }
 
+    private const string SerializerStub = """
+        public sealed class {0} : ZeroAlloc.Rest.IRestSerializer
+        {{
+            public string ContentType => "application/x-test";
+            [System.Diagnostics.CodeAnalysis.RequiresDynamicCode("")]
+            [System.Diagnostics.CodeAnalysis.RequiresUnreferencedCode("")]
+            public System.Threading.Tasks.ValueTask<T?> DeserializeAsync<T>(System.IO.Stream stream, System.Threading.CancellationToken ct = default)
+                => System.Threading.Tasks.ValueTask.FromResult<T?>(default);
+            [System.Diagnostics.CodeAnalysis.RequiresDynamicCode("")]
+            [System.Diagnostics.CodeAnalysis.RequiresUnreferencedCode("")]
+            public System.Threading.Tasks.ValueTask SerializeAsync<T>(System.IO.Stream stream, T value, System.Threading.CancellationToken ct = default)
+                => System.Threading.Tasks.ValueTask.CompletedTask;
+        }}
+        """;
+
+    [Fact]
+    public void GenericMethodSerializer_GetsAValidFieldName_AndCompiles()
+    {
+        var source = "#nullable enable\nusing ZeroAlloc.Rest.Attributes;\nnamespace MyApp;\n"
+            + string.Format(System.Globalization.CultureInfo.InvariantCulture, SerializerStub, "Wrapper<TPayload>")
+            + """
+
+            public sealed class Payload { }
+            [ZeroAllocRestClient]
+            public interface IUploadApi
+            {
+                [Post("/upload")]
+                [Serializer(typeof(Wrapper<Payload>))]
+                System.Threading.Tasks.Task UploadAsync([Body] string data, System.Threading.CancellationToken ct = default);
+            }
+            """;
+
+        var (output, errors) = CompileGenerated(source, "IUploadApi.g.cs");
+
+        Assert.Empty(errors);
+        Assert.Contains("private readonly ZeroAlloc.Rest.IRestSerializer _wrapper;", output);
+    }
+
+    [Fact]
+    public void MethodSerializerNamedLikeAFixedField_GetsADistinctName_AndCompiles()
+    {
+        var source = "#nullable enable\nusing ZeroAlloc.Rest.Attributes;\nnamespace MyApp;\n"
+            + string.Format(System.Globalization.CultureInfo.InvariantCulture, SerializerStub, "Serializer")
+            + """
+
+            [ZeroAllocRestClient]
+            public interface IUploadApi
+            {
+                [Post("/upload")]
+                [Serializer(typeof(Serializer))]
+                System.Threading.Tasks.Task UploadAsync([Body] string data, System.Threading.CancellationToken ct = default);
+            }
+            """;
+
+        var (output, errors) = CompileGenerated(source, "IUploadApi.g.cs");
+
+        Assert.Empty(errors);
+        Assert.Contains("private readonly ZeroAlloc.Rest.IRestSerializer _serializer2;", output);
+    }
+
+    [Fact]
+    public void MethodSerializerNamedLikeAStaticField_GetsADistinctName_AndCompiles()
+    {
+        var source = "#nullable enable\nusing ZeroAlloc.Rest.Attributes;\nnamespace MyApp;\n"
+            + string.Format(System.Globalization.CultureInfo.InvariantCulture, SerializerStub, "Meter")
+            + """
+
+            [ZeroAllocRestClient]
+            public interface IUploadApi
+            {
+                [Post("/upload")]
+                [Serializer(typeof(Meter))]
+                System.Threading.Tasks.Task UploadAsync([Body] string data, System.Threading.CancellationToken ct = default);
+            }
+            """;
+
+        var (output, errors) = CompileGenerated(source, "IUploadApi.g.cs");
+
+        Assert.Empty(errors);
+        Assert.Contains("private readonly ZeroAlloc.Rest.IRestSerializer _meter2;", output);
+    }
+
+    [Fact]
+    public void MethodSerializerWhoseNameLowerCasesToAKeyword_GetsAnEscapedParameter_AndCompiles()
+    {
+        var source = "#nullable enable\nusing ZeroAlloc.Rest.Attributes;\nnamespace MyApp;\n"
+            + string.Format(System.Globalization.CultureInfo.InvariantCulture, SerializerStub, "Class")
+            + """
+
+            [ZeroAllocRestClient]
+            public interface IUploadApi
+            {
+                [Post("/upload")]
+                [Serializer(typeof(Class))]
+                System.Threading.Tasks.Task UploadAsync([Body] string data, System.Threading.CancellationToken ct = default);
+            }
+            """;
+
+        var (output, errors) = CompileGenerated(source, "IUploadApi.g.cs");
+
+        Assert.Empty(errors);
+        Assert.Contains("ZeroAlloc.Rest.IRestSerializer @class)", output);
+        Assert.Contains("_class = @class;", output);
+    }
+
+    private static (string Output, List<Diagnostic> Errors) CompileGenerated(string source, string hintName)
+    {
+        var compilation = CSharpCompilation.Create(
+            "TestAssembly",
+            new[] { CSharpSyntaxTree.ParseText(source) },
+            Basic.Reference.Assemblies.Net100.References.All
+                .Append(MetadataReference.CreateFromFile(AttributesAssembly.Location))
+                .Append(MetadataReference.CreateFromFile(typeof(Microsoft.Extensions.DependencyInjection.IServiceCollection).Assembly.Location))
+                .Append(MetadataReference.CreateFromFile(typeof(Microsoft.Extensions.DependencyInjection.HttpClientFactoryServiceCollectionExtensions).Assembly.Location)),
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var driver = CSharpGeneratorDriver
+            .Create(new RestClientGenerator())
+            .RunGeneratorsAndUpdateCompilation(compilation, out var output, out _);
+
+        var file = driver.GetRunResult().Results[0].GeneratedSources.First(f => f.HintName == hintName);
+        var errors = output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
+        return (file.SourceText.ToString(), errors);
+    }
+
     private static readonly System.Reflection.Assembly ResultsAssembly =
         typeof(ZeroAlloc.Results.Result<,>).Assembly;
 
@@ -590,8 +715,13 @@ public class GeneratorEmissionTests
             .RunGenerators(compilation);
 
         var result = driver.GetRunResult();
-        var diagnostics = result.Results[0].Diagnostics;
-        Assert.Contains(diagnostics, d => d.Id == "ZRA001");
+        var diagnostic = Assert.Single(result.Results[0].Diagnostics, d => d.Id == "ZRA001");
+        Assert.NotEqual(Location.None, diagnostic.Location);
+        Assert.Equal("BadAsync", source.Substring(diagnostic.Location.SourceSpan.Start, diagnostic.Location.SourceSpan.Length));
+        Assert.Equal(7, diagnostic.Location.GetLineSpan().StartLinePosition.Line);
+        Assert.Equal(
+            "Method 'BadAsync' has both [Body] and [FormBody] parameters; only one is allowed",
+            diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture));
     }
 
     private static string GetGeneratedSource(string source, string hintName)

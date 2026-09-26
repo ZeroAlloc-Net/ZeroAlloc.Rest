@@ -10,3 +10,8 @@ ZeroAlloc.Rest.Attributes.ZeroAllocRestClientAttribute.MaxErrorBodyBytes.get -> 
 ZeroAlloc.Rest.Attributes.ZeroAllocRestClientAttribute.MaxErrorBodyBytes.set -> void
 static ZeroAlloc.Rest.HttpErrorExtensions.GetRetryAfter(this ZeroAlloc.Rest.HttpError! error, System.TimeProvider? timeProvider = null) -> System.TimeSpan?
 ZeroAlloc.Rest.HttpErrorExtensions
+ZeroAlloc.Rest.Attributes.ErrorMapperAttribute
+ZeroAlloc.Rest.Attributes.ErrorMapperAttribute.ErrorMapperAttribute(System.Type! mapperType) -> void
+ZeroAlloc.Rest.Attributes.ErrorMapperAttribute.MapperType.get -> System.Type!
+ZeroAlloc.Rest.IHttpErrorMapper<TError>
+ZeroAlloc.Rest.IHttpErrorMapper<TError>.Map(ZeroAlloc.Rest.HttpError! error) -> TError

@@ -3,7 +3,7 @@ id: advanced
 title: Advanced
 slug: /advanced
 sidebar_position: 10
-description: Result<T, HttpError> with the error body, multiple serializers, CancellationToken, and edge cases.
+description: Result<T, HttpError>, the error body, your own error type with [ErrorMapper], diagnostics, multiple serializers, and edge cases.
 ---
 
 # Advanced
@@ -123,6 +123,144 @@ else
 }
 ```
 
+## Your own error type: `[ErrorMapper]`
+
+A client SDK often wants to return its own error type rather than `HttpError`. Declare the method with `Result<T, TError>`, and name a mapper for `TError` on the interface:
+
+```csharp
+using System.Text.Json;
+using ZeroAlloc.Rest;
+using ZeroAlloc.Rest.Attributes;
+using ZeroAlloc.Results;
+
+public sealed record JevError(string Code, string Message, bool Retryable);
+
+public sealed class JevErrorMapper : IHttpErrorMapper<JevError>
+{
+    public JevError Map(HttpError error) => error.Kind switch
+    {
+        HttpErrorKind.Status when string.Equals(error.ContentType, "application/problem+json", StringComparison.OrdinalIgnoreCase) && !error.BodyTruncated
+            => FromProblem(error),
+        HttpErrorKind.Status => new($"http_{(int)error.StatusCode}", $"Status {(int)error.StatusCode}", (int)error.StatusCode >= 500),
+        HttpErrorKind.Timeout => new("timeout", error.Message ?? "Timed out", true),
+        HttpErrorKind.Transport => new("transport", error.Message ?? "Transport failure", true),
+        _ => new("unreadable_response", error.Message ?? "Unreadable response", false),
+    };
+
+    private static JevError FromProblem(HttpError error)
+    {
+        try
+        {
+            using var problem = JsonDocument.Parse(error.Body);
+            var root = problem.RootElement;
+            if (root.ValueKind != JsonValueKind.Object)
+                return new($"http_{(int)error.StatusCode}", "Unparsable problem details", false);
+
+            var code = root.TryGetProperty("code", out var c) && c.ValueKind == JsonValueKind.String
+                ? c.GetString() : null;
+            var detail = root.TryGetProperty("detail", out var d) && d.ValueKind == JsonValueKind.String
+                ? d.GetString() : null;
+            return new(code ?? $"http_{(int)error.StatusCode}", detail ?? "", (int)error.StatusCode >= 500);
+        }
+        catch (JsonException)
+        {
+            return new($"http_{(int)error.StatusCode}", "Unparsable problem details", false);
+        }
+    }
+}
+
+[ZeroAllocRestClient]
+[ErrorMapper(typeof(JevErrorMapper))]
+internal interface IJevApi
+{
+    [Post("v1/systemone")]
+    ValueTask<Result<SystemOneResponse, JevError>> AskAsync([Body] SystemOneRequest body, CancellationToken ct);
+}
+```
+
+- **Every failure kind** goes through `Map` once: `Status`, `Timeout`, `Transport` and `Deserialization`. The mapper receives the built `HttpError`, with the body already read. It never sees the response, which is already disposed.
+- **Make the mapper total.** Return a `TError` for every input. An exception it throws reaches the caller unchanged, marks the request's span as failed, and is never passed to a mapper again.
+- **Matching ignores a top-level `?`.** A mapper declared as `IHttpErrorMapper<JevError?>` still serves `Result<T, JevError>`. If that mapper then returns `null`, the generated client throws `InvalidOperationException` rather than handing the caller a null `TError`. A nested annotation still has to match exactly: `IHttpErrorMapper<List<string?>>` does not serve `Result<T, List<string>>`, and the method gets ZRA002 instead.
+- **Tuple element names are ignored.** `IHttpErrorMapper<(int Code, string Detail)>` serves `Result<T, (int A, string B)>`; only the tuple's shape and element types have to match.
+- **Registration is automatic.** `Add{I}`, and `AddRestResilience`, register every declared mapper as a singleton by its concrete type. `Create` resolves each distinct mapper once, by its concrete type, so a host registration of `IHttpErrorMapper<JevError>` can never replace it. The mapper's constructor dependencies come from the container.
+- **One mapper per error type.** Declare several `[ErrorMapper]` attributes for several error types. A mapper whose error type no method uses is still registered, but the generated client's constructor takes an `IHttpErrorMapper<E>` parameter, and `Create` resolves it, only for an `E` some method actually maps; an unused mapper is never called.
+- `Result<T, HttpError>` methods on the same interface are unaffected.
+- Caller cancellation still throws, as for `HttpError` methods.
+
+## Diagnostics
+
+The generator reports these errors. Each points at the method or attribute at fault.
+`#pragma warning disable` does not suppress them; fix the declaration.
+
+### ZRA001: Conflicting body attributes
+
+Severity: Error.
+
+A method has both a `[Body]` and a `[FormBody]` parameter. Keep one.
+
+```csharp
+[Post("/tokens")]
+Task<TokenResponse> GetTokenAsync([Body] TokenRequest body, [FormBody] Dictionary<string, string> form, CancellationToken ct);
+```
+
+Message: `Method 'GetTokenAsync' has both [Body] and [FormBody] parameters; only one is allowed`
+
+### ZRA002: No error mapper for a Result error type
+
+Severity: Error.
+
+A method returns `Result<T, TError>` with a `TError` other than `HttpError`, and no `[ErrorMapper]` on the interface implements `IHttpErrorMapper<TError>`. Add an `[ErrorMapper]` naming a mapper for that type, or return `Result<T, HttpError>`. An `[ErrorMapper]` whose type does not resolve, such as a typo, already has its own compiler error, so ZRA002 is suppressed for the whole interface rather than piling on guesses.
+
+```csharp
+[ZeroAllocRestClient]
+internal interface IJevApi
+{
+    [Post("v1/systemone")]
+    ValueTask<Result<SystemOneResponse, JevError>> AskAsync([Body] SystemOneRequest body, CancellationToken ct);
+}
+```
+
+Message (the error type is fully qualified in the real message): `Method 'AskAsync' returns a Result with error type 'JevError', but no [ErrorMapper] on the interface implements IHttpErrorMapper<JevError>`
+
+### ZRA003: Invalid error mapper type
+
+Severity: Error.
+
+An `[ErrorMapper]` names a type that implements no `IHttpErrorMapper<TError>`, or that is not a closed, non-abstract class with a public constructor. The container must be able to construct it. An invalid mapper still claims the error types it can name, so a method using one of them gets only ZRA003, not also ZRA002.
+
+```csharp
+internal sealed class NotAMapper { }
+
+[ZeroAllocRestClient]
+[ErrorMapper(typeof(NotAMapper))]
+internal interface IJevApi
+{
+    [Post("v1/systemone")]
+    ValueTask<Result<SystemOneResponse, JevError>> AskAsync([Body] SystemOneRequest body, CancellationToken ct);
+}
+```
+
+Message: `'NotAMapper' cannot be an error mapper: it implements no IHttpErrorMapper<TError> interface`
+
+### ZRA004: Duplicate error mapper
+
+Severity: Error.
+
+Two `[ErrorMapper]` attributes on one interface map the same error type. Keep one. The error points at the second attribute and names the first.
+
+```csharp
+[ZeroAllocRestClient]
+[ErrorMapper(typeof(JevErrorMapper))]
+[ErrorMapper(typeof(AnotherJevErrorMapper))]
+internal interface IJevApi
+{
+    [Post("v1/systemone")]
+    ValueTask<Result<SystemOneResponse, JevError>> AskAsync([Body] SystemOneRequest body, CancellationToken ct);
+}
+```
+
+Message: `'AnotherJevErrorMapper' maps 'JevError', which 'JevErrorMapper' already maps; declare one [ErrorMapper] per error type`
+
 ## CancellationToken
 
 Always add `CancellationToken ct = default` as the last parameter. The generator recognises the type by its well-known fully qualified name `System.Threading.CancellationToken` and passes it to `HttpClient.SendAsync`. No attribute is required.
@@ -172,6 +310,6 @@ var client = new UserApiClient(httpClient, serializer);
 var user = await client.GetUserAsync(1);
 ```
 
-The generated `UserApiClient` constructor takes `HttpClient` and `IRestSerializer` directly, plus one `IRestSerializer` parameter per method-level override type, so it works without a DI container. When the interface carries `[Serializer(typeof(T))]`, pass a `T` as the main `IRestSerializer`. Pass each override parameter an instance of the type the method's `[Serializer]` names.
+The generated `UserApiClient` constructor takes `HttpClient` and `IRestSerializer` directly, plus one `IRestSerializer` parameter per method-level override type, plus one [`IHttpErrorMapper<E>`](advanced.md#your-own-error-type-errormapper) parameter for each error type its methods use, in that order, so it works without a DI container. When the interface carries `[Serializer(typeof(T))]`, pass a `T` as the main `IRestSerializer`. Pass each override parameter an instance of the type the method's `[Serializer]` names, and each mapper parameter an instance of that mapper.
 
-Every generated client also implements `IGeneratedRestClient<TSelf>`, explicitly, so the client's own surface is unchanged. Its static `Create(HttpClient, IServiceProvider)` builds the client with the serializer chosen by the rules in [Serialization](serialization.md#choosing-the-serializer-for-a-client), and its static `AddSerializers(IServiceCollection, ZeroAllocClientOptions)` registers the serializers the client needs. The generated `Add{I}` and `AddRestResilience` both use them. You rarely need to call them yourself.
+Every generated client also implements `IGeneratedRestClient<TSelf>`, explicitly, so the client's own surface is unchanged. Its static `Create(HttpClient, IServiceProvider)` builds the client with the serializer chosen by the rules in [Serialization](serialization.md#choosing-the-serializer-for-a-client), and its static `AddSerializers(IServiceCollection, ZeroAllocClientOptions)` registers the serializers the client needs and every declared [error mapper](advanced.md#your-own-error-type-errormapper). The generated `Add{I}` and `AddRestResilience` both use them. You rarely need to call them yourself.

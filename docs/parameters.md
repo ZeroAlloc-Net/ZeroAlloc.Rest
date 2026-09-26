@@ -124,4 +124,4 @@ var token = await api.GetTokenAsync(new Dictionary<string, string>
 });
 ```
 
-`[FormBody]` and `[Body]` are mutually exclusive on the same method. Using both produces a `ZRA001` compile-time error.
+`[FormBody]` and `[Body]` are mutually exclusive on the same method. Using both produces a [`ZRA001`](advanced.md#zra001-conflicting-body-attributes) compile-time error.
