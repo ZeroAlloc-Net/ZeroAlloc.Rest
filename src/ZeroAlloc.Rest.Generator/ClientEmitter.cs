@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Globalization;
 using System.Text;
 using Microsoft.CodeAnalysis;
 using ZeroAlloc.Rest.Generator.Models;
@@ -99,7 +100,7 @@ internal static class ClientEmitter
         EmitGeneratedClientMembers(sb, model, overrideSerializers);
 
         foreach (var method in model.Methods)
-            EmitMethod(ctx, sb, model.InterfaceName, method, serializerFieldMap);
+            EmitMethod(ctx, sb, model.InterfaceName, method, serializerFieldMap, model.MaxErrorBodyBytes);
 
         EmitRecordFailure(sb);
 
@@ -174,7 +175,7 @@ internal static class ClientEmitter
         sb.AppendLine();
     }
 
-    private static void EmitMethod(SourceProductionContext ctx, StringBuilder sb, string interfaceName, MethodModel method, IReadOnlyDictionary<string, string> serializerFieldMap)
+    private static void EmitMethod(SourceProductionContext ctx, StringBuilder sb, string interfaceName, MethodModel method, IReadOnlyDictionary<string, string> serializerFieldMap, int maxErrorBodyBytes)
     {
         var ctParam = FindCancellationToken(method.Parameters);
         var ctArg = ctParam != null ? ctParam.Name : "default";
@@ -217,7 +218,7 @@ internal static class ClientEmitter
 
         EmitUrlBuilding(sb, method.Route, pathParams, queryParams);
         EmitRequestCreation(sb, method, headerParams, bodyParam, formBodyParam, ctArg, serializerExpr);
-        EmitSendAndResponse(sb, method, ctParam?.Name, serializerExpr);
+        EmitSendAndResponse(sb, method, ctParam?.Name, serializerExpr, maxErrorBodyBytes);
 
         sb.AppendLine("    }");
         sb.AppendLine();
@@ -328,7 +329,7 @@ internal static class ClientEmitter
     }
 
     // callerToken is the name of the method's CancellationToken parameter, or null when it has none.
-    private static void EmitSendAndResponse(StringBuilder sb, MethodModel method, string? callerToken, string serializerExpr)
+    private static void EmitSendAndResponse(StringBuilder sb, MethodModel method, string? callerToken, string serializerExpr, int maxErrorBodyBytes)
     {
         var ctArg = callerToken ?? "default";
         sb.AppendLine("        try");
@@ -349,7 +350,7 @@ internal static class ClientEmitter
         sb.AppendLine("                new global::System.Collections.Generic.KeyValuePair<string, object?>(\"http.status_code\", __statusCode),");
         sb.AppendLine("                new global::System.Collections.Generic.KeyValuePair<string, object?>(\"server.address\", __serverAddress),");
         sb.AppendLine("                new global::System.Collections.Generic.KeyValuePair<string, object?>(\"rest.method\", __RestMethodTag));");
-        EmitResponseHandling(sb, method, ctArg, serializerExpr, indent: "            ");
+        EmitResponseHandling(sb, method, ctArg, serializerExpr, maxErrorBodyBytes, indent: "            ");
         sb.AppendLine("        }");
         sb.AppendLine("#pragma warning disable EPC12");
         if (method.ReturnsResult)
@@ -391,7 +392,7 @@ internal static class ClientEmitter
         sb.AppendLine("        }");
     }
 
-    private static void EmitResponseHandling(StringBuilder sb, MethodModel method, string ctArg, string serializerExpr, string indent = "        ")
+    private static void EmitResponseHandling(StringBuilder sb, MethodModel method, string ctArg, string serializerExpr, int maxErrorBodyBytes, string indent = "        ")
     {
         var i1 = indent + "    ";
         var i2 = i1 + "    ";
@@ -423,8 +424,20 @@ internal static class ClientEmitter
             sb.AppendLine($"{indent}}}");
             sb.AppendLine($"{indent}else");
             sb.AppendLine($"{indent}{{");
-            sb.AppendLine($"{i1}return {resultType}.Failure(");
-            sb.AppendLine($"{i1}    __CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Status, response, null));");
+            if (maxErrorBodyBytes > 0)
+            {
+                // Read before the response is disposed. The helper caps the body, turns a failed read
+                // into an empty body, and still throws on caller cancellation.
+                var cap = maxErrorBodyBytes.ToString(CultureInfo.InvariantCulture);
+                sb.AppendLine($"{i1}var __errorBody = await global::ZeroAlloc.Rest.GeneratedRestClient.ReadErrorBodyAsync(response.Content, {cap}, {ctArg}).ConfigureAwait(false);");
+                sb.AppendLine($"{i1}return {resultType}.Failure(");
+                sb.AppendLine($"{i1}    __CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Status, response, null, __errorBody.Body, __errorBody.Truncated));");
+            }
+            else
+            {
+                sb.AppendLine($"{i1}return {resultType}.Failure(");
+                sb.AppendLine($"{i1}    __CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Status, response, null));");
+            }
             sb.AppendLine($"{indent}}}");
         }
         else
@@ -454,8 +467,9 @@ internal static class ClientEmitter
     }
 
     // The one place a generated client builds an HttpError. A response, when there is one, supplies
-    // the status code and headers; the exception, when there is one, supplies the message. Keeping it
-    // in one method leaves a single hook for reading the error body or mapping to a user error type.
+    // the status code, headers and media type; the exception, when there is one, supplies the message.
+    // The Status path passes in the body it read, since reading is asynchronous and this is not.
+    // Keeping it in one method leaves a single hook for mapping to a user error type.
     private static void EmitCreateHttpError(StringBuilder sb)
     {
         const string Headers = "global::System.Collections.Generic.IReadOnlyDictionary<string, global::System.Collections.Generic.IReadOnlyList<string>>";
@@ -463,19 +477,24 @@ internal static class ClientEmitter
         sb.AppendLine("        new global::System.Collections.ObjectModel.ReadOnlyDictionary<string, global::System.Collections.Generic.IReadOnlyList<string>>(");
         sb.AppendLine("            new global::System.Collections.Generic.Dictionary<string, global::System.Collections.Generic.IReadOnlyList<string>>(0));");
         sb.AppendLine();
-        sb.AppendLine("    private static global::ZeroAlloc.Rest.HttpError __CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind kind, global::System.Net.Http.HttpResponseMessage? response, global::System.Exception? exception)");
+        sb.AppendLine("    private static global::ZeroAlloc.Rest.HttpError __CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind kind, global::System.Net.Http.HttpResponseMessage? response, global::System.Exception? exception, global::System.ReadOnlyMemory<byte> body = default, bool bodyTruncated = false)");
         sb.AppendLine("    {");
         sb.AppendLine("        global::System.Net.HttpStatusCode statusCode;");
         sb.AppendLine($"        {Headers} headers;");
+        sb.AppendLine("        string? contentType = null;");
         sb.AppendLine("        if (response is not null)");
         sb.AppendLine("        {");
         sb.AppendLine("            statusCode = response.StatusCode;");
         // Header names are case-insensitive, and HttpClient reports known headers in its own
-        // casing, such as X-Request-ID, so an ordinal lookup would miss them.
+        // casing, such as X-Request-ID, so an ordinal lookup would miss them. Content headers,
+        // such as Content-Type, live on the content, not the response, so both are copied.
         sb.AppendLine("            var copy = new global::System.Collections.Generic.Dictionary<string, global::System.Collections.Generic.IReadOnlyList<string>>(global::System.StringComparer.OrdinalIgnoreCase);");
         sb.AppendLine("            foreach (var kvp in response.Headers)");
         sb.AppendLine("                copy[kvp.Key] = new global::System.Collections.Generic.List<string>(kvp.Value).AsReadOnly();");
+        sb.AppendLine("            foreach (var kvp in response.Content.Headers)");
+        sb.AppendLine("                copy[kvp.Key] = new global::System.Collections.Generic.List<string>(kvp.Value).AsReadOnly();");
         sb.AppendLine("            headers = copy;");
+        sb.AppendLine("            contentType = response.Content.Headers.ContentType?.MediaType;");
         sb.AppendLine("        }");
         sb.AppendLine("        else");
         sb.AppendLine("        {");
@@ -489,6 +508,9 @@ internal static class ClientEmitter
         sb.AppendLine("        {");
         sb.AppendLine("            Kind = kind,");
         sb.AppendLine("            Exception = exception,");
+        sb.AppendLine("            Body = body,");
+        sb.AppendLine("            ContentType = contentType,");
+        sb.AppendLine("            BodyTruncated = bodyTruncated,");
         sb.AppendLine("        };");
         sb.AppendLine("    }");
         sb.AppendLine();

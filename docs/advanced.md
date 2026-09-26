@@ -3,7 +3,7 @@ id: advanced
 title: Advanced
 slug: /advanced
 sidebar_position: 10
-description: Result<T, HttpError>, multiple serializers, CancellationToken, and edge cases.
+description: Result<T, HttpError> with the error body, multiple serializers, CancellationToken, and edge cases.
 ---
 
 # Advanced
@@ -30,10 +30,10 @@ The generated client returns `Result<T, HttpError>.Success(value)` on a 2xx resp
 
 | Failure | `Kind` | `StatusCode` | `Headers` | `Exception` |
 |---|---|---|---|---|
-| The server answers with a non-2xx status | `Status` | The response status | The response headers | `null` |
+| The server answers with a non-2xx status | `Status` | The response status | The response and content headers | `null` |
 | The request fails before a response arrives: DNS, connection refused, TLS | `Transport` | `0`, or the status an `HttpRequestException` carries | Empty | The `HttpRequestException` |
 | The request times out, for example through `HttpClient.Timeout` | `Timeout` | `0` | Empty | The `OperationCanceledException` or `TaskCanceledException` |
-| The body of a 2xx response cannot be deserialized | `Deserialization` | The response status | The response headers | Whatever the serializer threw: a `JsonException`, a `MemoryPackSerializationException`, a `MessagePackSerializationException` and so on |
+| The body of a 2xx response cannot be deserialized | `Deserialization` | The response status | The response and content headers | Whatever the serializer threw: a `JsonException`, a `MemoryPackSerializationException`, a `MessagePackSerializationException` and so on |
 
 `HttpError` exposes:
 
@@ -41,9 +41,61 @@ The generated client returns `Result<T, HttpError>.Success(value)` on a 2xx resp
 |---|---|---|
 | `Kind` | `HttpErrorKind` | What went wrong: `Status`, `Transport`, `Timeout` or `Deserialization`. Defaults to `Status`. |
 | `StatusCode` | `HttpStatusCode` | Status code of the response, or `0` when none arrived |
-| `Headers` | `IReadOnlyDictionary<string, IReadOnlyList<string>>` | Response headers, or empty when no response arrived. Lookups ignore case. |
+| `Headers` | `IReadOnlyDictionary<string, IReadOnlyList<string>>` | Response headers and content headers such as Content-Type, or empty when no response arrived. Lookups ignore case. |
 | `Message` | `string?` | The exception message, or `null` for a `Status` failure |
 | `Exception` | `Exception?` | The exception behind a `Transport`, `Timeout` or `Deserialization` failure, or `null` for a `Status` failure |
+| `Body` | `ReadOnlyMemory<byte>` | The response body of a `Status` failure, up to `MaxErrorBodyBytes`. Empty for the other kinds, for a response without a body, when `MaxErrorBodyBytes` is `0`, and when the body could not be read. |
+| `ContentType` | `string?` | The media type of the response body, such as `application/problem+json`, for `Status` and `Deserialization` failures |
+| `BodyTruncated` | `bool` | `true` when the body was longer than `MaxErrorBodyBytes`, so `Body` holds only its start |
+
+### The error body
+
+For a `Status` failure the client reads the response body before it disposes the response, so an API's error detail survives:
+
+```csharp
+var result = await api.CreateUserAsync(request);
+if (result.IsFailure
+    && result.Error.Kind == HttpErrorKind.Status
+    && string.Equals(result.Error.ContentType, "application/problem+json", StringComparison.OrdinalIgnoreCase)
+    && !result.Error.BodyTruncated)
+{
+    using var problem = JsonDocument.Parse(result.Error.Body);
+    var detail = problem.RootElement.GetProperty("detail").GetString();
+}
+```
+
+The body is capped at 64 KiB. Change the cap per client:
+
+```csharp
+[ZeroAllocRestClient(MaxErrorBodyBytes = 4096)]
+public interface IUserApi { ... }
+```
+
+- A longer body is cut to the cap and `BodyTruncated` is `true`. Don't parse a truncated body as a whole document.
+- `MaxErrorBodyBytes = 0` means no read: the generated client contains no body-reading code. A negative value does the same.
+- A cap above `Array.MaxLength - 1` is clamped to `Array.MaxLength - 1`, the largest body one array can hold next to the byte that detects truncation.
+- The cap limits what `HttpError` keeps, not what is downloaded. `HttpClient` has already buffered the response when the client sees it; limit that with `HttpClient.MaxResponseContentBufferSize`.
+- If reading the body fails, the failure is still a `Status` error, with an empty `Body`: the status is the real failure. Cancellation you asked for still throws.
+- Only `Status` failures carry a body. `Transport` and `Timeout` failures have no response, and a `Deserialization` failure's body has already been consumed by the serializer.
+
+### Retry-After
+
+`GetRetryAfter` reads the `Retry-After` header of a 429 or 503 as the time to wait:
+
+```csharp
+var maxWait = TimeSpan.FromMinutes(5);
+
+if (result.IsFailure && result.Error.GetRetryAfter() is { } wait)
+{
+    var delay = wait < maxWait ? wait : maxWait;
+    await Task.Delay(delay, ct);
+}
+```
+
+`GetRetryAfter` returns the server's hint uncapped, and `Task.Delay` throws for a wait above about
+49.7 days, so clamp it to a delay your own retry policy is willing to wait.
+
+It accepts delta-seconds (`120`) and HTTP-dates (`Wed, 21 Oct 2015 07:28:00 GMT`, and the two obsolete forms). A date in the past gives `TimeSpan.Zero`. An absent or invalid header, including a negative number, gives `null`. A delta-seconds value above `int.MaxValue` is clamped to it. When the header has several values, only the first is used. Pass a `TimeProvider` to measure an HTTP-date against your own clock; it defaults to `TimeProvider.System`.
 
 ### What still throws
 

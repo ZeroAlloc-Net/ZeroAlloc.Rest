@@ -8,7 +8,8 @@ internal record ClientModel(
     string ClassName,
     IReadOnlyList<MethodModel> Methods,
     string? SerializerTypeName,
-    bool IsPublic)
+    bool IsPublic,
+    int MaxErrorBodyBytes)
 {
     // The generated types follow the interface: a public client over an internal interface
     // would leak it, and fails to compile when the interface uses internal DTOs.

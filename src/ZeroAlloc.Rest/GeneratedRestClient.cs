@@ -5,12 +5,13 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace ZeroAlloc.Rest;
 
 /// <summary>
-/// Calls the <see cref="IGeneratedRestClient{TSelf}"/> static members of a generated client.
-/// Generated clients implement those members explicitly, so they never clash with the client
-/// interface's own methods; the generated <c>Add{I}</c> reaches them through this helper.
+/// Support members for generated clients. It calls the <see cref="IGeneratedRestClient{TSelf}"/>
+/// static members of a generated client: generated clients implement those members explicitly, so
+/// they never clash with the client interface's own methods, and the generated <c>Add{I}</c>
+/// reaches them through this helper. It also reads error bodies for generated clients.
 /// </summary>
 [EditorBrowsable(EditorBrowsableState.Never)]
-public static class GeneratedRestClient
+public static partial class GeneratedRestClient
 {
     /// <inheritdoc cref="IGeneratedRestClient{TSelf}.Create"/>
     public static TClient Create<TClient>(HttpClient httpClient, IServiceProvider services)

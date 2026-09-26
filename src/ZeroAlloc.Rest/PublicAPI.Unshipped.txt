@@ -1,1 +1,12 @@
 #nullable enable
+static ZeroAlloc.Rest.GeneratedRestClient.ReadErrorBodyAsync(System.Net.Http.HttpContent! content, int maxBytes, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<(System.ReadOnlyMemory<byte> Body, bool Truncated)>
+ZeroAlloc.Rest.HttpError.Body.get -> System.ReadOnlyMemory<byte>
+ZeroAlloc.Rest.HttpError.Body.init -> void
+ZeroAlloc.Rest.HttpError.BodyTruncated.get -> bool
+ZeroAlloc.Rest.HttpError.BodyTruncated.init -> void
+ZeroAlloc.Rest.HttpError.ContentType.get -> string?
+ZeroAlloc.Rest.HttpError.ContentType.init -> void
+ZeroAlloc.Rest.Attributes.ZeroAllocRestClientAttribute.MaxErrorBodyBytes.get -> int
+ZeroAlloc.Rest.Attributes.ZeroAllocRestClientAttribute.MaxErrorBodyBytes.set -> void
+static ZeroAlloc.Rest.HttpErrorExtensions.GetRetryAfter(this ZeroAlloc.Rest.HttpError! error, System.TimeProvider? timeProvider = null) -> System.TimeSpan?
+ZeroAlloc.Rest.HttpErrorExtensions

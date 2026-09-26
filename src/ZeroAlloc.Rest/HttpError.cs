@@ -10,7 +10,10 @@ namespace ZeroAlloc.Rest;
 /// <see cref="HttpErrorKind.Transport"/> failure whose <see cref="System.Net.Http.HttpRequestException"/>
 /// carries a status code.
 /// </param>
-/// <param name="Headers">The response headers, or an empty dictionary when no response was received.</param>
+/// <param name="Headers">
+/// The response and content headers, such as <c>Content-Type</c>, in one dictionary whose lookups
+/// ignore case. It is empty when no response was received.
+/// </param>
 /// <param name="Message">A description of the failure. It is <see langword="null"/> for a <see cref="HttpErrorKind.Status"/> failure.</param>
 public sealed record HttpError(
     HttpStatusCode StatusCode,
@@ -26,4 +29,24 @@ public sealed record HttpError(
     /// It is <see langword="null"/> for a <see cref="HttpErrorKind.Status"/> failure.
     /// </summary>
     public Exception? Exception { get; init; }
+
+    /// <summary>
+    /// The response body of a <see cref="HttpErrorKind.Status"/> failure, cut to the client's
+    /// <c>MaxErrorBodyBytes</c>. It is empty for the other kinds, for a response without a body, when
+    /// reading is turned off, and when the body could not be read.
+    /// </summary>
+    public ReadOnlyMemory<byte> Body { get; init; }
+
+    /// <summary>
+    /// The media type of the response body, such as <c>application/problem+json</c>, without
+    /// parameters. Set for <see cref="HttpErrorKind.Status"/> and
+    /// <see cref="HttpErrorKind.Deserialization"/> failures whose response declares one.
+    /// </summary>
+    public string? ContentType { get; init; }
+
+    /// <summary>
+    /// <see langword="true"/> when the body was longer than <c>MaxErrorBodyBytes</c>, so
+    /// <see cref="Body"/> holds only its start. Do not parse a truncated body as a whole document.
+    /// </summary>
+    public bool BodyTruncated { get; init; }
 }

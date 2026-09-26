@@ -18,6 +18,7 @@ internal static class ModelExtractor
     private const string HeaderAttr = "ZeroAlloc.Rest.Attributes.HeaderAttribute";
     private const string SerializerAttr = "ZeroAlloc.Rest.Attributes.SerializerAttribute";
     private const string ResultOpenType = "ZeroAlloc.Results.Result<T, E>";
+    private const int DefaultMaxErrorBodyBytes = 65536;
 
     internal static ClientModel? Extract(
         GeneratorAttributeSyntaxContext ctx,
@@ -47,7 +48,8 @@ internal static class ModelExtractor
             if (methodModel is not null) methods.Add(methodModel);
         }
 
-        return new ClientModel(ns, interfaceName, className, methods.AsReadOnly(), clientSerializer, IsEffectivelyPublic(interfaceSymbol));
+        return new ClientModel(ns, interfaceName, className, methods.AsReadOnly(), clientSerializer,
+            IsEffectivelyPublic(interfaceSymbol), GetMaxErrorBodyBytes(ctx));
     }
 
     private static bool IsEffectivelyPublic(INamedTypeSymbol type)
@@ -58,6 +60,20 @@ internal static class ModelExtractor
                 return false;
         }
         return true;
+    }
+
+    // [ZeroAllocRestClient(MaxErrorBodyBytes = n)]. A value below 0 means the same as 0: no read.
+    private static int GetMaxErrorBodyBytes(GeneratorAttributeSyntaxContext ctx)
+    {
+        foreach (var attr in ctx.Attributes)
+        {
+            foreach (var namedArg in attr.NamedArguments)
+            {
+                if (namedArg.Key == "MaxErrorBodyBytes" && namedArg.Value.Value is int value)
+                    return value < 0 ? 0 : value;
+            }
+        }
+        return DefaultMaxErrorBodyBytes;
     }
 
     private static MethodModel? ExtractMethod(IMethodSymbol method)
