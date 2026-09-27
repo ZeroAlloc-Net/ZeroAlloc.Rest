@@ -13,4 +13,8 @@ public interface IUserApi
 
     [Get("/users/{id}")]
     Task<Result<string, HttpError>> TryGetUserAsync(int id, CancellationToken ct = default);
+
+    // Issue #318: no path — the request goes to the HttpClient's BaseAddress itself.
+    [Get]
+    Task<string?> PingAsync(CancellationToken ct = default);
 }

@@ -136,5 +136,20 @@ using (var refusingHttp = new System.Net.Http.HttpClient(new RefusingHandler()) 
     }
 }
 
+// Issue #318: [Get] with no path sends the request to the HttpClient's BaseAddress itself,
+// trailing path segment included.
+{
+    var baseAddress = new Uri("http://localhost/api/");
+    var capturingHandler = new RequestUriCapturingHandler();
+    using var pingHttp = new System.Net.Http.HttpClient(capturingHandler) { BaseAddress = baseAddress };
+    IUserApi pinging = new UserApiClient(pingHttp, new SmokeSerializer());
+    await pinging.PingAsync().ConfigureAwait(false);
+    if (capturingHandler.CapturedUri != baseAddress)
+    {
+        Console.Error.WriteLine("AOT smoke: FAIL — a pathless [Get] should request the BaseAddress itself");
+        return 1;
+    }
+}
+
 Console.WriteLine("AOT smoke: PASS");
 return 0;

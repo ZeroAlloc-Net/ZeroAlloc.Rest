@@ -249,6 +249,11 @@ internal static class ModelExtractor
         return DefaultMaxErrorBodyBytes;
     }
 
+    // The attribute's zero-argument constructor has no ConstructorArguments at all; that means
+    // an empty route, not a missing one, so it must not be confused with "no HTTP attribute".
+    private static string RouteOf(AttributeData attr)
+        => attr.ConstructorArguments.Length > 0 ? (string?)attr.ConstructorArguments[0].Value ?? "" : "";
+
     private static MethodModel? ExtractMethod(IMethodSymbol method, ErrorMapperResolution mappers, List<DiagnosticInfo> diagnostics)
     {
         string? httpMethod = null;
@@ -258,11 +263,13 @@ internal static class ModelExtractor
         {
             var attrClass = attr.AttributeClass?.ToDisplayString();
             if (attrClass is null) continue;
-            if (attrClass == GetAttr    && attr.ConstructorArguments.Length > 0) { httpMethod = "GET";    route = (string?)attr.ConstructorArguments[0].Value; break; }
-            if (attrClass == PostAttr   && attr.ConstructorArguments.Length > 0) { httpMethod = "POST";   route = (string?)attr.ConstructorArguments[0].Value; break; }
-            if (attrClass == PutAttr    && attr.ConstructorArguments.Length > 0) { httpMethod = "PUT";    route = (string?)attr.ConstructorArguments[0].Value; break; }
-            if (attrClass == PatchAttr  && attr.ConstructorArguments.Length > 0) { httpMethod = "PATCH";  route = (string?)attr.ConstructorArguments[0].Value; break; }
-            if (attrClass == DeleteAttr && attr.ConstructorArguments.Length > 0) { httpMethod = "DELETE"; route = (string?)attr.ConstructorArguments[0].Value; break; }
+            // The zero-argument constructor means an empty route: the request goes to the
+            // HttpClient's BaseAddress itself. The one-argument constructor carries the route.
+            if (attrClass == GetAttr)    { httpMethod = "GET";    route = RouteOf(attr); break; }
+            if (attrClass == PostAttr)   { httpMethod = "POST";   route = RouteOf(attr); break; }
+            if (attrClass == PutAttr)    { httpMethod = "PUT";    route = RouteOf(attr); break; }
+            if (attrClass == PatchAttr)  { httpMethod = "PATCH";  route = RouteOf(attr); break; }
+            if (attrClass == DeleteAttr) { httpMethod = "DELETE"; route = RouteOf(attr); break; }
         }
 
         var staticHeaders = new List<(string, string)>();
