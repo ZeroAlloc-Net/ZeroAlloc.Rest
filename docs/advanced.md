@@ -314,6 +314,25 @@ Message: `Route '/users/{id}' of method 'GetUserAsync' has a '{id}' token that n
 ZRA005 comes from an analyzer in the generator package, so `#pragma warning disable ZRA005`,
 `[SuppressMessage]` and an `.editorconfig` severity all apply to it.
 
+### OpenAPI code generation: ZRT diagnostics
+
+[OpenAPI code generation](openapi-codegen.md) reports its own warnings with a `ZRT` prefix. They
+come from the `ZeroAlloc.Rest.Tools` CLI and MSBuild task, not the compiler, so they point at the
+spec file. `#pragma` and `.editorconfig` do not apply to them.
+
+#### ZRT001: Cookie parameter not emitted
+
+Severity: Warning.
+
+The spec declares a parameter with `in: cookie`. ZeroAlloc.Rest has no cookie binding, so the
+generated method leaves the parameter out and carries a comment saying so. Send the cookie from the
+`HttpClient` instead, for example with a `CookieContainer` on its handler.
+
+Message: `Operation 'listUsers': cookie parameter 'session' is not emitted, because ZeroAlloc.Rest has no cookie binding. Send the cookie from the HttpClient, for example with a CookieContainer on its handler.`
+
+To suppress it, add the code to `<NoWarn>` in the project that runs the MSBuild task, or pass
+`--nowarn ZRT001` to `zeroalloc generate`.
+
 ## CancellationToken
 
 Always add `CancellationToken ct = default` as the last parameter. The generator recognises the type by its well-known fully qualified name `System.Threading.CancellationToken` and passes it to `HttpClient.SendAsync`. No attribute is required.

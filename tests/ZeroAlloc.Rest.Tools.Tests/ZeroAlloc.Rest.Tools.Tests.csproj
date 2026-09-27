@@ -11,6 +11,9 @@
     <!-- Compile the emitted interface with the source generator and RouteTemplateAnalyzer -->
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
     <PackageReference Include="Basic.Reference.Assemblies.Net100" />
+    <!-- Run GenerateRestClientTask against a recording build engine -->
+    <PackageReference Include="Microsoft.Build.Framework" />
+    <PackageReference Include="Microsoft.Build.Utilities.Core" />
     <ProjectReference Include="../../src/ZeroAlloc.Rest.Generator/ZeroAlloc.Rest.Generator.csproj" />
     <!-- Reference the Tools project's library code, not as a tool -->
     <ProjectReference Include="../../src/ZeroAlloc.Rest.Tools/ZeroAlloc.Rest.Tools.csproj" />

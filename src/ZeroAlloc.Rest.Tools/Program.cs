@@ -5,6 +5,11 @@ var specOption = new Option<string>("--spec") { Description = "Path or URL to Op
 var nsOption = new Option<string>("--namespace") { Description = "C# namespace for generated interface" };
 var outputOption = new Option<string>("--output") { Description = "Output .cs file path" };
 var ifaceOption = new Option<string>("--interface") { Description = "Interface name", DefaultValueFactory = _ => "IApiClient" };
+var noWarnOption = new Option<string[]>("--nowarn")
+{
+    Description = "Warning codes to suppress, such as ZRT001; repeat the option or separate codes with ',' or ';'",
+    AllowMultipleArgumentsPerToken = true,
+};
 
 specOption.Validators.Add(r => { if (r.GetValueOrDefault<string>() is null) r.AddError("--spec is required"); });
 nsOption.Validators.Add(r => { if (r.GetValueOrDefault<string>() is null) r.AddError("--namespace is required"); });
@@ -15,6 +20,7 @@ generateCommand.Options.Add(specOption);
 generateCommand.Options.Add(nsOption);
 generateCommand.Options.Add(outputOption);
 generateCommand.Options.Add(ifaceOption);
+generateCommand.Options.Add(noWarnOption);
 
 generateCommand.SetAction(async (parseResult, ct) =>
 {
@@ -22,17 +28,22 @@ generateCommand.SetAction(async (parseResult, ct) =>
     var ns = parseResult.GetValue(nsOption)!;
     var output = parseResult.GetValue(outputOption)!;
     var iface = parseResult.GetValue(ifaceOption)!;
+    var noWarn = new HashSet<string>(
+        (parseResult.GetValue(noWarnOption) ?? [])
+            .SelectMany(v => v.Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)),
+        StringComparer.OrdinalIgnoreCase);
 
     string content;
-    var warnings = new List<string>();
+    var warnings = new List<OpenApiWarning>();
     if (spec.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
         spec.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
         content = await OpenApiInterfaceGenerator.GenerateFromUrlAsync(spec, ns, iface, warnings, ct);
     else
         content = await OpenApiInterfaceGenerator.GenerateFromFileAsync(spec, ns, iface, warnings, ct);
 
-    foreach (var warning in warnings)
-        await Console.Error.WriteLineAsync($"{spec}: warning: {warning}");
+    // The canonical "file: warning CODE: message" form, which build logs and IDEs recognise.
+    foreach (var warning in warnings.Where(w => !noWarn.Contains(w.Code)))
+        await Console.Error.WriteLineAsync($"{spec}: warning {warning.Code}: {warning.Message}");
 
     var dir = Path.GetDirectoryName(output);
     if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
