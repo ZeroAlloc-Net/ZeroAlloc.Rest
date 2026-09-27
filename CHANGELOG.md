@@ -1,5 +1,43 @@
 # Changelog
 
+## [2.2.0](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v2.1.0...v2.2.0) (2026-09-27)
+
+
+### Features
+
+* allow HTTP method attributes without a path ([#332](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/332)) ([7561bbd](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/7561bbdf00afa0b21021f4d39fa14e3572043155)), closes [#318](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/318)
+* ship the MSBuild task as ZeroAlloc.Rest.Tools.MSBuild ([c3a0b68](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/c3a0b68182ace898dda3d1330d4f4a5c985618f6))
+* warn with ZRA005 when a route template and its route parameters do not match ([02d3d66](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/02d3d664865cbe517f1ee4ad6a2a06aa009087ed))
+
+
+### Bug Fixes
+
+* a non-nullable value-type [Header] parameter such as int no longer fails to compile with CS0023 ([4009100](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/4009100b7e12115f029542cf904e7abdfec55899))
+* bind OpenAPI path parameters to their route tokens and skip cookie parameters ([#344](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/344)) ([9de8ec5](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/9de8ec5c07c7c712aad3e07442311b5c92a85ae3)), closes [#338](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/338)
+* escape route text and keyword parameter names, and stop generated locals colliding with parameters ([02d3d66](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/02d3d664865cbe517f1ee4ad6a2a06aa009087ed))
+* generate the same OpenAPI method names under every culture ([c3a0b68](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/c3a0b68182ace898dda3d1330d4f4a5c985618f6))
+* keep filling a route token that compiled before ZRA005, so no working URL changes ([#340](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/340)) ([a651450](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/a65145050ba4257d23d606019155e41ac628274c)), closes [#333](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/333)
+* omit a [Header] parameter whose value is null ([4009100](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/4009100b7e12115f029542cf904e7abdfec55899))
+* report skipped OpenAPI cookie parameters as warning ZRT001 ([#345](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/345)) ([861a68e](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/861a68ea1cbe8a5ba7307764d99cc5d7c28ceefa))
+* stop __CreateHttpError from boxing its headers enumerator ([#337](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/337)) ([ae0124f](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/ae0124f83f161b13b04ec71e1bf7590f5f786930)), closes [#335](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/335)
+
+
+### Performance Improvements
+
+* make generator models value-equatable so incremental caching hits ([#334](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/334)) ([e0429bc](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/e0429bc44b327f5cafedc286776f3e1c5fa35f07)), closes [#319](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/319)
+
+
+### Code Refactoring
+
+* make OpenApiInterfaceGenerator internal ([17e4254](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/17e4254f7e4e439b8d1095f259273aaafb601031))
+
+
+### Documentation
+
+* design OpenAPI model generation and AOT-safe serialization (Rest 3.0) ([#353](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/353)) ([05d2f4d](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/05d2f4d1586e081f037f27594718432ca746e981))
+* document retrying a failed Result with RetryWhen and DelayHint ([#327](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/327)) ([a6b1ff9](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/a6b1ff9509104c817dc02549336160697258e4f1)), closes [#325](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/325)
+* drop the C# API section from openapi-codegen.md ([17e4254](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/17e4254f7e4e439b8d1095f259273aaafb601031))
+
 ## [2.1.0](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v2.0.1...v2.1.0) (2026-09-26)
 
 
