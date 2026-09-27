@@ -29,6 +29,46 @@ public class AttributeTests
     }
 
     [Fact]
+    public void GetAttribute_NoRoute_DefaultsToEmptyRoute()
+    {
+        var attr = new GetAttribute();
+        Assert.Equal(string.Empty, attr.Route);
+        Assert.Equal("GET", attr.Method);
+    }
+
+    [Fact]
+    public void PostAttribute_NoRoute_DefaultsToEmptyRoute()
+    {
+        var attr = new PostAttribute();
+        Assert.Equal(string.Empty, attr.Route);
+        Assert.Equal("POST", attr.Method);
+    }
+
+    [Fact]
+    public void PutAttribute_NoRoute_DefaultsToEmptyRoute()
+    {
+        var attr = new PutAttribute();
+        Assert.Equal(string.Empty, attr.Route);
+        Assert.Equal("PUT", attr.Method);
+    }
+
+    [Fact]
+    public void PatchAttribute_NoRoute_DefaultsToEmptyRoute()
+    {
+        var attr = new PatchAttribute();
+        Assert.Equal(string.Empty, attr.Route);
+        Assert.Equal("PATCH", attr.Method);
+    }
+
+    [Fact]
+    public void DeleteAttribute_NoRoute_DefaultsToEmptyRoute()
+    {
+        var attr = new DeleteAttribute();
+        Assert.Equal(string.Empty, attr.Route);
+        Assert.Equal("DELETE", attr.Method);
+    }
+
+    [Fact]
     public void PutAttribute_StoresRoute()
     {
         var attr = new PutAttribute("/users/{id}");

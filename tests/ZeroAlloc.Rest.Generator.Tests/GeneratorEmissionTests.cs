@@ -119,6 +119,88 @@ public class GeneratorEmissionTests
     }
 
     [Fact]
+    public void GeneratedMethod_PathlessPost_UsesEmptyUrl()
+    {
+        // Issue #318: [Post] with no path sends the request to the HttpClient's BaseAddress itself.
+        var source = """
+            using ZeroAlloc.Rest.Attributes;
+            namespace MyApp;
+            [ZeroAllocRestClient]
+            public interface IEvalApi
+            {
+                [Post]
+                System.Threading.Tasks.Task<string> EvaluateAsync([Body] string body, System.Threading.CancellationToken ct = default);
+            }
+            """;
+        var output = GetGeneratedSource(source, "IEvalApi.g.cs");
+        Assert.Contains("var url = \"\";", output);
+    }
+
+    [Theory]
+    [InlineData("Get")]
+    [InlineData("Put")]
+    [InlineData("Patch")]
+    [InlineData("Delete")]
+    public void GeneratedMethod_PathlessOtherVerbs_UsesEmptyUrl(string verb)
+    {
+        const string Template = """
+            using ZeroAlloc.Rest.Attributes;
+            namespace MyApp;
+            [ZeroAllocRestClient]
+            public interface IEvalApi
+            {{
+                [{0}]
+                System.Threading.Tasks.Task<string> EvaluateAsync(System.Threading.CancellationToken ct = default);
+            }}
+            """;
+        var source = string.Format(System.Globalization.CultureInfo.InvariantCulture, Template, verb);
+        var (output, errors) = CompileGenerated(source, "IEvalApi.g.cs");
+        Assert.Empty(errors);
+        Assert.Contains("var url = \"\";", output);
+    }
+
+    [Fact]
+    public void QueryParam_OnPathlessMethod_StillAppendsToUrl()
+    {
+        var source = """
+            using ZeroAlloc.Rest.Attributes;
+            namespace MyApp;
+            [ZeroAllocRestClient]
+            public interface IEvalApi
+            {
+                [Post]
+                System.Threading.Tasks.Task<string> EvaluateAsync([Query] int x, System.Threading.CancellationToken ct = default);
+            }
+            """;
+        var output = GetGeneratedSource(source, "IEvalApi.g.cs");
+        Assert.Contains("var urlBase = $\"\";", output);
+        Assert.Contains("\"x=\"", output);
+    }
+
+    [Fact]
+    public void RouteParam_OnPathlessMethod_CompilesAndIsUnusedInTheUrl()
+    {
+        // {id} has nothing to bind to on a pathless method: this behaves exactly like an
+        // implicit path parameter whose name does not appear in the route string today —
+        // it is silently unused in the URL, not a diagnostic.
+        var source = """
+            using ZeroAlloc.Rest.Attributes;
+            namespace MyApp;
+            [ZeroAllocRestClient]
+            public interface IEvalApi
+            {
+                [Post]
+                System.Threading.Tasks.Task<string> EvaluateAsync(int id, [Body] string body, System.Threading.CancellationToken ct = default);
+            }
+            """;
+        var (output, errors) = CompileGenerated(source, "IEvalApi.g.cs");
+        Assert.Empty(errors);
+        // A path-kind parameter forces the interpolated form; there is no "{id}" token in an
+        // empty route for it to bind to, so the interpolation still produces an empty URL.
+        Assert.Contains("var url = $\"\";", output);
+    }
+
+    [Fact]
     public void GeneratedMethod_UsesConfigureAwaitFalse()
     {
         var source = """
