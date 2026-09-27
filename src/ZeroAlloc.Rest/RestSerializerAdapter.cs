@@ -1,5 +1,4 @@
 using System.Buffers;
-using System.Diagnostics.CodeAnalysis;
 
 namespace ZeroAlloc.Rest;
 
@@ -24,8 +23,6 @@ public sealed class RestSerializerAdapter<T> : IRestSerializer
 
     public string ContentType => _contentType;
 
-    [RequiresDynamicCode("Serialization of arbitrary types may require dynamic code.")]
-    [RequiresUnreferencedCode("Serialization of arbitrary types may require unreferenced code.")]
     public async ValueTask<TResult?> DeserializeAsync<TResult>(Stream stream, CancellationToken ct = default)
     {
         if (typeof(TResult) != typeof(T))
@@ -37,8 +34,6 @@ public sealed class RestSerializerAdapter<T> : IRestSerializer
         return (TResult?)(object?)result;
     }
 
-    [RequiresDynamicCode("Serialization of arbitrary types may require dynamic code.")]
-    [RequiresUnreferencedCode("Serialization of arbitrary types may require unreferenced code.")]
     public async ValueTask SerializeAsync<TValue>(Stream stream, TValue value, CancellationToken ct = default)
     {
         if (value is not T typed)

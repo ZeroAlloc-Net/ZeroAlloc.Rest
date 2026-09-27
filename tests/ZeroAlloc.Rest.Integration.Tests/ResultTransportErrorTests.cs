@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Net.Http;
 using System.Text;
@@ -285,16 +284,12 @@ public sealed class ResultTransportErrorTests
     {
         public string ContentType => "application/json";
 
-        [RequiresDynamicCode("Test serializer.")]
-        [RequiresUnreferencedCode("Test serializer.")]
         public ValueTask<T?> DeserializeAsync<T>(Stream stream, CancellationToken ct = default)
         {
             source.Cancel();
             throw new OperationCanceledException(source.Token);
         }
 
-        [RequiresDynamicCode("Test serializer.")]
-        [RequiresUnreferencedCode("Test serializer.")]
         public ValueTask SerializeAsync<T>(Stream stream, T value, CancellationToken ct = default)
             => ValueTask.CompletedTask;
     }

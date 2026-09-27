@@ -1,5 +1,4 @@
 using System.Buffers;
-using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -12,8 +11,6 @@ public sealed class MemoryPackRestSerializer : IRestSerializer
 {
     public string ContentType => "application/x-memorypack";
 
-    [RequiresDynamicCode("MemoryPack serialization of arbitrary types may require dynamic code.")]
-    [RequiresUnreferencedCode("MemoryPack serialization of arbitrary types may require unreferenced code.")]
     public async ValueTask<T?> DeserializeAsync<T>(Stream stream, CancellationToken ct = default)
     {
         if (stream.CanSeek && stream.Position >= stream.Length) return default;
@@ -21,8 +18,6 @@ public sealed class MemoryPackRestSerializer : IRestSerializer
         return MemoryPackSerializer.Deserialize<T>(bytes);
     }
 
-    [RequiresDynamicCode("MemoryPack serialization of arbitrary types may require dynamic code.")]
-    [RequiresUnreferencedCode("MemoryPack serialization of arbitrary types may require unreferenced code.")]
     public async ValueTask SerializeAsync<T>(Stream stream, T value, CancellationToken ct = default)
     {
         var buffer = new ArrayBufferWriter<byte>();

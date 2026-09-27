@@ -27,24 +27,16 @@ public class GeneratorInterfaceSerializerTests
         public sealed class JevSerializer : IRestSerializer
         {
             public string ContentType => "application/x-jev";
-            [System.Diagnostics.CodeAnalysis.RequiresDynamicCode("")]
-            [System.Diagnostics.CodeAnalysis.RequiresUnreferencedCode("")]
             public ValueTask<T?> DeserializeAsync<T>(Stream stream, CancellationToken ct = default)
                 => ValueTask.FromResult<T?>(default);
-            [System.Diagnostics.CodeAnalysis.RequiresDynamicCode("")]
-            [System.Diagnostics.CodeAnalysis.RequiresUnreferencedCode("")]
             public ValueTask SerializeAsync<T>(Stream stream, T value, CancellationToken ct = default)
                 => ValueTask.CompletedTask;
         }
         public sealed class UploadSerializer : IRestSerializer
         {
             public string ContentType => "application/octet-stream";
-            [System.Diagnostics.CodeAnalysis.RequiresDynamicCode("")]
-            [System.Diagnostics.CodeAnalysis.RequiresUnreferencedCode("")]
             public ValueTask<T?> DeserializeAsync<T>(Stream stream, CancellationToken ct = default)
                 => ValueTask.FromResult<T?>(default);
-            [System.Diagnostics.CodeAnalysis.RequiresDynamicCode("")]
-            [System.Diagnostics.CodeAnalysis.RequiresUnreferencedCode("")]
             public ValueTask SerializeAsync<T>(Stream stream, T value, CancellationToken ct = default)
                 => ValueTask.CompletedTask;
         }
@@ -132,12 +124,8 @@ public class GeneratorInterfaceSerializerTests
                 public sealed class JevSerializer : IRestSerializer
                 {
                     public string ContentType => "application/x-jev";
-                    [System.Diagnostics.CodeAnalysis.RequiresDynamicCode("")]
-                    [System.Diagnostics.CodeAnalysis.RequiresUnreferencedCode("")]
                     public ValueTask<T?> DeserializeAsync<T>(Stream stream, CancellationToken ct = default)
                         => ValueTask.FromResult<T?>(default);
-                    [System.Diagnostics.CodeAnalysis.RequiresDynamicCode("")]
-                    [System.Diagnostics.CodeAnalysis.RequiresUnreferencedCode("")]
                     public ValueTask SerializeAsync<T>(Stream stream, T value, CancellationToken ct = default)
                         => ValueTask.CompletedTask;
                 }
