@@ -133,7 +133,7 @@ public class GeneratorEmissionTests
             }
             """;
         var output = GetGeneratedSource(source, "IEvalApi.g.cs");
-        Assert.Contains("var url = \"\";", output);
+        Assert.Contains("var __url = \"\";", output);
     }
 
     [Theory]
@@ -156,7 +156,7 @@ public class GeneratorEmissionTests
         var source = string.Format(System.Globalization.CultureInfo.InvariantCulture, Template, verb);
         var (output, errors) = CompileGenerated(source, "IEvalApi.g.cs");
         Assert.Empty(errors);
-        Assert.Contains("var url = \"\";", output);
+        Assert.Contains("var __url = \"\";", output);
     }
 
     [Fact]
@@ -173,7 +173,7 @@ public class GeneratorEmissionTests
             }
             """;
         var output = GetGeneratedSource(source, "IEvalApi.g.cs");
-        Assert.Contains("var urlBase = $\"\";", output);
+        Assert.Contains("var __urlBase = $\"\";", output);
         Assert.Contains("\"x=\"", output);
     }
 
@@ -197,7 +197,7 @@ public class GeneratorEmissionTests
         Assert.Empty(errors);
         // A path-kind parameter forces the interpolated form; there is no "{id}" token in an
         // empty route for it to bind to, so the interpolation still produces an empty URL.
-        Assert.Contains("var url = $\"\";", output);
+        Assert.Contains("var __url = $\"\";", output);
     }
 
     [Fact]
@@ -517,15 +517,15 @@ public class GeneratorEmissionTests
 
         Assert.Equal(1, CountOccurrences(output, "ReadErrorBodyAsync("));
         Assert.Contains(
-            "var __errorBody = await global::ZeroAlloc.Rest.GeneratedRestClient.ReadErrorBodyAsync(response.Content, 65536, ct).ConfigureAwait(false);",
+            "var __errorBody = await global::ZeroAlloc.Rest.GeneratedRestClient.ReadErrorBodyAsync(__response.Content, 65536, ct).ConfigureAwait(false);",
             output);
         Assert.Contains(
-            "__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Status, response, null, __errorBody.Body, __errorBody.Truncated));",
+            "__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Status, __response, null, __errorBody.Body, __errorBody.Truncated));",
             output);
         // Transport, Timeout and Deserialization carry no body.
         Assert.Contains("__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Timeout, null, __ex));", output);
         Assert.Contains("__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Transport, null, __ex));", output);
-        Assert.Contains("__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Deserialization, response, __ex));", output);
+        Assert.Contains("__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Deserialization, __response, __ex));", output);
     }
 
     [Fact]
@@ -547,7 +547,7 @@ public class GeneratorEmissionTests
 
         var output = GetGeneratedSourceWithResults(source, "IUserApi.g.cs");
 
-        Assert.Contains("ReadErrorBodyAsync(response.Content, 1024, ct)", output);
+        Assert.Contains("ReadErrorBodyAsync(__response.Content, 1024, ct)", output);
     }
 
     [Fact]
@@ -557,7 +557,7 @@ public class GeneratorEmissionTests
 
         var output = GetGeneratedSourceWithResults(source, "IUserApi.g.cs");
 
-        Assert.Contains("ReadErrorBodyAsync(response.Content, 4096,", output);
+        Assert.Contains("ReadErrorBodyAsync(__response.Content, 4096,", output);
     }
 
     [Fact]
@@ -598,7 +598,7 @@ public class GeneratorEmissionTests
 
         Assert.DoesNotContain("ReadErrorBodyAsync", output);
         Assert.DoesNotContain("__errorBody", output);
-        Assert.Contains("__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Status, response, null));", output);
+        Assert.Contains("__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Status, __response, null));", output);
     }
 
     [Fact]
@@ -608,7 +608,7 @@ public class GeneratorEmissionTests
 
         var output = GetGeneratedSourceWithResults(source, "IUserApi.g.cs");
 
-        Assert.Contains("ReadErrorBodyAsync(response.Content, 65536, default)", output);
+        Assert.Contains("ReadErrorBodyAsync(__response.Content, 65536, default)", output);
     }
 
     [Fact]

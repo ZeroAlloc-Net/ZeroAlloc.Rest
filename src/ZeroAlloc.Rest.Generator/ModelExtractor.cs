@@ -252,26 +252,77 @@ internal static class ModelExtractor
 
     // The attribute's zero-argument constructor has no ConstructorArguments at all; that means
     // an empty route, not a missing one, so it must not be confused with "no HTTP attribute".
-    private static string RouteOf(AttributeData attr)
+    internal static string RouteOf(AttributeData attr)
         => attr.ConstructorArguments.Length > 0 ? (string?)attr.ConstructorArguments[0].Value ?? "" : "";
+
+    // The method's first HTTP method attribute, [Get] to [Delete], and its verb; null for a method
+    // without one, which the generator does not implement.
+    internal static AttributeData? FindHttpAttribute(IMethodSymbol method, out string? httpMethod)
+    {
+        foreach (var attr in method.GetAttributes())
+        {
+            httpMethod = attr.AttributeClass?.ToDisplayString() switch
+            {
+                GetAttr    => "GET",
+                PostAttr   => "POST",
+                PutAttr    => "PUT",
+                PatchAttr  => "PATCH",
+                DeleteAttr => "DELETE",
+                _          => null,
+            };
+            if (httpMethod is not null)
+                return attr;
+        }
+        httpMethod = null;
+        return null;
+    }
+
+    // How the generated client sends a parameter. A parameter with none of [Body], [FormBody],
+    // [Query] or [Header], other than the CancellationToken, is a route parameter: it binds each
+    // {token} in the route with exactly its name, and is not sent anywhere else.
+    internal static ParameterKind ClassifyParameter(IParameterSymbol param, out string? headerName, out string? queryName)
+    {
+        headerName = null;
+        queryName = null;
+        if (param.Type.ToDisplayString() == "System.Threading.CancellationToken")
+            return ParameterKind.CancellationToken;
+
+        foreach (var attr in param.GetAttributes())
+        {
+            var attrClass = attr.AttributeClass?.ToDisplayString();
+            if (attrClass == BodyAttr)
+                return ParameterKind.Body;
+            if (attrClass == FormBodyAttr)
+                return ParameterKind.FormBody;
+            if (attrClass == QueryAttr)
+            {
+                // Check named arg "Name", fall back to param name
+                queryName = param.Name;
+                foreach (var namedArg in attr.NamedArguments)
+                {
+                    if (namedArg.Key == "Name" && namedArg.Value.Value is string n)
+                    {
+                        queryName = n;
+                        break;
+                    }
+                }
+                return ParameterKind.Query;
+            }
+            if (attrClass == HeaderAttr)
+            {
+                headerName = attr.ConstructorArguments.Length > 0
+                    ? (string?)attr.ConstructorArguments[0].Value ?? param.Name
+                    : param.Name;
+                return ParameterKind.Header;
+            }
+        }
+        return ParameterKind.Path;
+    }
 
     private static MethodModel? ExtractMethod(IMethodSymbol method, ErrorMapperResolution mappers, List<DiagnosticInfo> diagnostics)
     {
-        string? httpMethod = null;
-        string? route = null;
-
-        foreach (var attr in method.GetAttributes())
-        {
-            var attrClass = attr.AttributeClass?.ToDisplayString();
-            if (attrClass is null) continue;
-            // The zero-argument constructor means an empty route: the request goes to the
-            // HttpClient's BaseAddress itself. The one-argument constructor carries the route.
-            if (attrClass == GetAttr)    { httpMethod = "GET";    route = RouteOf(attr); break; }
-            if (attrClass == PostAttr)   { httpMethod = "POST";   route = RouteOf(attr); break; }
-            if (attrClass == PutAttr)    { httpMethod = "PUT";    route = RouteOf(attr); break; }
-            if (attrClass == PatchAttr)  { httpMethod = "PATCH";  route = RouteOf(attr); break; }
-            if (attrClass == DeleteAttr) { httpMethod = "DELETE"; route = RouteOf(attr); break; }
-        }
+        var httpAttr = FindHttpAttribute(method, out var httpMethod);
+        var route = httpAttr is null ? null : RouteOf(httpAttr);
 
         var staticHeaders = new List<(string, string)>();
         foreach (var attr in method.GetAttributes())
@@ -365,53 +416,11 @@ internal static class ModelExtractor
         foreach (var param in method.Parameters)
         {
             var typeName = param.Type.ToDisplayString();
-
-            if (typeName == "System.Threading.CancellationToken")
+            var kind = ClassifyParameter(param, out var headerName, out var queryName);
+            if (kind == ParameterKind.CancellationToken)
             {
                 result.Add(new ParameterModel(param.Name, typeName, ParameterKind.CancellationToken));
                 continue;
-            }
-
-            var kind = ParameterKind.Path; // default: interpreted as path segment
-            string? headerName = null;
-            string? queryName = null;
-
-            foreach (var attr in param.GetAttributes())
-            {
-                var attrClass = attr.AttributeClass?.ToDisplayString();
-                if (attrClass == BodyAttr)
-                {
-                    kind = ParameterKind.Body;
-                    break;
-                }
-                if (attrClass == FormBodyAttr)
-                {
-                    kind = ParameterKind.FormBody;
-                    break;
-                }
-                if (attrClass == QueryAttr)
-                {
-                    kind = ParameterKind.Query;
-                    // Check named arg "Name", fall back to param name
-                    queryName = param.Name;
-                    foreach (var namedArg in attr.NamedArguments)
-                    {
-                        if (namedArg.Key == "Name" && namedArg.Value.Value is string n)
-                        {
-                            queryName = n;
-                            break;
-                        }
-                    }
-                    break;
-                }
-                if (attrClass == HeaderAttr)
-                {
-                    kind = ParameterKind.Header;
-                    headerName = attr.ConstructorArguments.Length > 0
-                        ? (string?)attr.ConstructorArguments[0].Value ?? param.Name
-                        : param.Name;
-                    break;
-                }
             }
 
             // Non-nullable value types (int, bool, Guid…) can never be null at runtime.

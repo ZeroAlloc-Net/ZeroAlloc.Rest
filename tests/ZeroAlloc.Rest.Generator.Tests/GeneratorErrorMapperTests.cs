@@ -318,16 +318,16 @@ public class GeneratorErrorMapperTests
 
         Assert.Contains("global::ZeroAlloc.Rest.HttpError __httpError;", client);
         Assert.Contains(
-            "__httpError = __CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Status, response, null, __errorBody.Body, __errorBody.Truncated);",
+            "__httpError = __CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Status, __response, null, __errorBody.Body, __errorBody.Truncated);",
             client);
-        Assert.Contains("__httpError = __CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Deserialization, response, __ex);", client);
+        Assert.Contains("__httpError = __CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Deserialization, __response, __ex);", client);
         Assert.Contains("__httpError = __CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Timeout, null, __ex);", client);
         Assert.Contains("__httpError = __CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Transport, null, __ex);", client);
         Assert.Contains(
             "return ZeroAlloc.Results.Result<MyApp.SystemOneResponse, global::MyApp.JevError>.Failure(_jevErrorMapper.Map(__httpError));",
             client);
         Assert.Contains(
-            "return ZeroAlloc.Results.Result<MyApp.SystemOneResponse, global::MyApp.JevError>.Success(content);",
+            "return ZeroAlloc.Results.Result<MyApp.SystemOneResponse, global::MyApp.JevError>.Success(__content);",
             client);
         Assert.Equal(1, CountOccurrences(client, ".Map("));
         Assert.Contains("__RecordMapperFailure(__activity, __ex);", client);

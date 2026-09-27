@@ -34,6 +34,10 @@ Task RemoveMemberAsync(int orgId, int userId, CancellationToken ct = default);
 
 Path parameters are URL-encoded with `Uri.EscapeDataString` before substitution.
 
+A token binds only the parameter with exactly its name, case included. A route parameter with no
+matching token is never sent, and a token with no matching route parameter is sent as literal text;
+both get a [ZRA005](advanced.md#zra005-route-template-and-route-parameters-do-not-match) warning.
+
 ## No path
 
 Every method attribute also has a parameterless form. A missing route means an empty path, so
@@ -56,9 +60,9 @@ empty relative request URI as the base address itself, trailing path segment inc
 
 `[Query]` parameters still work on a pathless method; they are appended after the base address
 (`https://api.example.com/v2/eval?x=1`). A route (or implicit path) parameter has nothing to bind
-to on a pathless method — there is no `{name}` token for it to replace — so it is silently unused
-in the URL, exactly as an unmatched `{name}` token behaves today. Give the method a route if you
-need the parameter to appear in the request.
+to on a pathless method — there is no `{name}` token for it to replace — so it is never sent, and
+[ZRA005](advanced.md#zra005-route-template-and-route-parameters-do-not-match) warns about it.
+Give the method a route, or bind the parameter with `[Query]`, `[Header]` or `[Body]`.
 
 ## Supported HTTP methods
 

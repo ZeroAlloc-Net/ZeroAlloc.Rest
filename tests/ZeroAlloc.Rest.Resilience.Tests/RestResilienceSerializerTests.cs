@@ -55,7 +55,8 @@ public interface IAttributedApi
 }
 
 // Declares methods named like IGeneratedRestClient's static members: the generated client
-// implements those explicitly, so this compiles and the bridge still reaches them.
+// implements those explicitly, so this compiles and the bridge still reaches them. The parameters
+// are headers so that each is sent somewhere; as route parameters with no {token}, ZRA005 flags them.
 [ZeroAllocRestClient]
 [Retry(MaxAttempts = 2, BackoffMs = 1)]
 public interface IClashApi
@@ -64,10 +65,14 @@ public interface IClashApi
     Task<string> GetItemAsync(int id, CancellationToken ct = default);
 
     [Get("/create")]
-    Task<string> Create(System.Net.Http.HttpClient httpClient, IServiceProvider services);
+    Task<string> Create(
+        [Header("X-Http-Client")] System.Net.Http.HttpClient httpClient,
+        [Header("X-Services")] IServiceProvider services);
 
     [Post("/serializers")]
-    Task AddSerializers(IServiceCollection services, ZeroAllocClientOptions options);
+    Task AddSerializers(
+        [Header("X-Services")] IServiceCollection services,
+        [Header("X-Options")] ZeroAllocClientOptions options);
 }
 
 public sealed class RestResilienceSerializerTests
