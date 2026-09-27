@@ -51,8 +51,9 @@ public class ModelEmitterTests
 
         Assert.Contains("[global::System.Text.Json.Serialization.JsonConverter(typeof(PetStatusConverter))]", code);
         Assert.Contains("[global::System.Text.Json.Serialization.JsonStringEnumMemberName(\"sold out\")]\n    SoldOut,", Normalize(code));
-        Assert.Contains("internal sealed class PetStatusConverter : global::System.Text.Json.Serialization.JsonStringEnumConverter<PetStatus>", code);
-        Assert.Contains(": base(namingPolicy: null, allowIntegerValues: false)", code);
+        Assert.Contains("internal sealed class PetStatusConverter : global::System.Text.Json.Serialization.JsonConverter<PetStatus>", code);
+        Assert.Contains("if (reader.ValueTextEquals(\"sold out\"))\n                return PetStatus.SoldOut;", Normalize(code));
+        Assert.DoesNotContain("JsonStringEnumConverter", code);
         Assert.Contains("Value1 = 1,", code);
         Assert.Contains("internal sealed class PetPriorityConverter : global::System.Text.Json.Serialization.JsonConverter<PetPriority>", code);
     }
@@ -91,6 +92,12 @@ public class ModelEmitterTests
     [InlineData("{\"id\":1,\"owner\":null,\"status\":\"lost\"}", "JsonException")]
     [InlineData("{\"id\":1,\"owner\":null,\"status\":0}", "JsonException")]
     [InlineData("{\"id\":1,\"owner\":null,\"priority\":3}", "JsonException")]
+    [InlineData("{\"id\":1,\"owner\":null,\"status\":\"available, sold out\"}", "JsonException")]
+    [InlineData("{\"id\":1,\"owner\":null,\"status\":\"sold out,pending\"}", "JsonException")]
+    [InlineData("{\"id\":1,\"owner\":null,\"status\":1}", "JsonException")]
+    [InlineData("{\"id\":1,\"owner\":null,\"status\":\"AVAILABLE\"}", "JsonException")]
+    [InlineData("{\"id\":1,\"owner\":null,\"priority\":\"1\"}", "JsonException")]
+    [InlineData("{\"id\":1,\"owner\":null,\"priority\":1e30}", "JsonException")]
     public void Deserialization_IsStrict(string json, string expected)
     {
         var output = GeneratedCode.Compile(ModelFixture.Emit(PetSpec), Probe($$"""
@@ -106,6 +113,53 @@ public class ModelEmitterTests
             """));
 
         Assert.Equal(expected, output.RunProbe());
+    }
+
+    [Theory]
+    [InlineData("\"available\"", "Available")]
+    [InlineData("\"sold out\"", "SoldOut")]
+    public void StringEnum_RoundTripsEveryDeclaredMember(string json, string member)
+    {
+        var output = GeneratedCode.Compile(ModelFixture.Emit(PetSpec), Probe($$"""
+            var value = JsonSerializer.Deserialize({{Quote(json)}}, MyApiJsonContext.Default.PetStatus);
+            return value + "|" + JsonSerializer.Serialize(value, MyApiJsonContext.Default.PetStatus);
+            """));
+
+        Assert.Equal(member + "|" + json, output.RunProbe());
+    }
+
+    [Theory]
+    [InlineData("1", "Value1")]
+    [InlineData("2", "Value2")]
+    public void IntegerEnum_RoundTripsEveryDeclaredMember(string json, string member)
+    {
+        var output = GeneratedCode.Compile(ModelFixture.Emit(PetSpec), Probe($$"""
+            var value = JsonSerializer.Deserialize({{Quote(json)}}, MyApiJsonContext.Default.PetPriority);
+            return value + "|" + JsonSerializer.Serialize(value, MyApiJsonContext.Default.PetPriority);
+            """));
+
+        Assert.Equal(member + "|" + json, output.RunProbe());
+    }
+
+    // An undefined value has no wire form: writing it throws rather than sending what the API rejects.
+    [Theory]
+    [InlineData("PetStatus")]
+    [InlineData("PetPriority")]
+    public void Enum_WritingAnUndefinedValue_Throws(string enumName)
+    {
+        var output = GeneratedCode.Compile(ModelFixture.Emit(PetSpec), Probe($$"""
+            try
+            {
+                JsonSerializer.Serialize(({{enumName}})3, MyApiJsonContext.Default.{{enumName}});
+                return "written";
+            }
+            catch (JsonException)
+            {
+                return "JsonException";
+            }
+            """));
+
+        Assert.Equal("JsonException", output.RunProbe());
     }
 
     // A probe whose Run() body is the given statements, in namespace MyApp.

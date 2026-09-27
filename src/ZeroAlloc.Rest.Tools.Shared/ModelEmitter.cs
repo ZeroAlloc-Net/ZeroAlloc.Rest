@@ -93,31 +93,43 @@ internal static class ModelEmitter
         }
         sb.AppendLine("}").AppendLine();
         if (model.IsString)
-            EmitStringEnumConverter(sb, model.Name, converter);
+            EmitStringEnumConverter(sb, model, converter);
         else
             EmitIntegerEnumConverter(sb, model, converter);
     }
 
-    private static void EmitStringEnumConverter(StringBuilder sb, string enumName, string converter)
+    // Reads a JSON string equal to exactly one wire name, so a comma-separated combination, another
+    // casing or a number is rejected. The stock JsonStringEnumConverter parses flags combinations.
+    // Each member keeps [JsonStringEnumMemberName] because the Rest generator formats values by it.
+    private static void EmitStringEnumConverter(StringBuilder sb, EnumModel model, string converter)
     {
-        sb.Append("internal sealed class ").Append(converter).Append(" : ").Append(Serialization)
-            .Append(".JsonStringEnumConverter<").Append(enumName).AppendLine(">");
-        sb.AppendLine("{");
-        sb.Append("    public ").Append(converter).AppendLine("()");
-        sb.AppendLine("        : base(namingPolicy: null, allowIntegerValues: false)");
-        sb.AppendLine("    {");
-        sb.AppendLine("    }");
-        sb.AppendLine("}");
+        EmitConverterHeader(sb, model, converter);
+        sb.Append("        if (reader.TokenType == ").Append(Json).AppendLine(".JsonTokenType.String)");
+        sb.AppendLine("        {");
+        foreach (var member in model.Members)
+        {
+            sb.Append("            if (reader.ValueTextEquals(").Append(CSharpNames.Literal(member.WireValue)).AppendLine("))");
+            sb.Append("                return ").Append(model.Name).Append('.').Append(member.Name).AppendLine(";");
+        }
+        sb.AppendLine("        }");
+        EmitReadFailureAndWriteHeader(sb, model);
+        sb.AppendLine("        switch (value)");
+        sb.AppendLine("        {");
+        foreach (var member in model.Members)
+        {
+            sb.Append("            case ").Append(model.Name).Append('.').Append(member.Name).AppendLine(":");
+            sb.Append("                writer.WriteStringValue(").Append(CSharpNames.Literal(member.WireValue)).AppendLine(");");
+            sb.AppendLine("                return;");
+        }
+        sb.AppendLine("        }");
+        EmitWriteFailure(sb, model);
     }
 
+    // Reads a JSON number equal to one declared value, so a string, a fraction or an out-of-range
+    // number is rejected.
     private static void EmitIntegerEnumConverter(StringBuilder sb, EnumModel model, string converter)
     {
-        sb.Append("internal sealed class ").Append(converter).Append(" : ").Append(Serialization)
-            .Append(".JsonConverter<").Append(model.Name).AppendLine(">");
-        sb.AppendLine("{");
-        sb.Append("    public override ").Append(model.Name).Append(" Read(ref ").Append(Json)
-            .Append(".Utf8JsonReader reader, global::System.Type typeToConvert, ").Append(Json).AppendLine(".JsonSerializerOptions options)");
-        sb.AppendLine("    {");
+        EmitConverterHeader(sb, model, converter);
         sb.Append("        if (reader.TokenType == ").Append(Json).AppendLine(".JsonTokenType.Number && reader.TryGetInt64(out var value))");
         sb.AppendLine("        {");
         sb.AppendLine("            switch (value)");
@@ -126,12 +138,46 @@ internal static class ModelEmitter
             sb.Append("                case ").Append(member.WireValue).Append(": return ").Append(model.Name).Append('.').Append(member.Name).AppendLine(";");
         sb.AppendLine("            }");
         sb.AppendLine("        }");
-        sb.Append("        throw new ").Append(Json).Append(".JsonException(").Append(CSharpNames.Literal($"The JSON value is not a defined {model.Name} value.")).AppendLine(");");
+        EmitReadFailureAndWriteHeader(sb, model);
+        sb.AppendLine("        switch (value)");
+        sb.AppendLine("        {");
+        foreach (var member in model.Members)
+        {
+            sb.Append("            case ").Append(model.Name).Append('.').Append(member.Name).AppendLine(":");
+            sb.Append("                writer.WriteNumberValue(").Append(member.WireValue).AppendLine(");");
+            sb.AppendLine("                return;");
+        }
+        sb.AppendLine("        }");
+        EmitWriteFailure(sb, model);
+    }
+
+    private static void EmitConverterHeader(StringBuilder sb, EnumModel model, string converter)
+    {
+        sb.Append("internal sealed class ").Append(converter).Append(" : ").Append(Serialization)
+            .Append(".JsonConverter<").Append(model.Name).AppendLine(">");
+        sb.AppendLine("{");
+        sb.Append("    public override ").Append(model.Name).Append(" Read(ref ").Append(Json)
+            .Append(".Utf8JsonReader reader, global::System.Type typeToConvert, ").Append(Json).AppendLine(".JsonSerializerOptions options)");
+        sb.AppendLine("    {");
+    }
+
+    private static void EmitReadFailureAndWriteHeader(StringBuilder sb, EnumModel model)
+    {
+        sb.Append("        throw new ").Append(Json).Append(".JsonException(")
+            .Append(CSharpNames.Literal($"The JSON value is not a defined {model.Name} value.")).AppendLine(");");
         sb.AppendLine("    }");
         sb.AppendLine();
         sb.Append("    public override void Write(").Append(Json).Append(".Utf8JsonWriter writer, ").Append(model.Name)
             .Append(" value, ").Append(Json).AppendLine(".JsonSerializerOptions options)");
-        sb.AppendLine("        => writer.WriteNumberValue((long)value);");
+        sb.AppendLine("    {");
+    }
+
+    // An undefined value has no wire form; sending one would only be rejected by the API.
+    private static void EmitWriteFailure(StringBuilder sb, EnumModel model)
+    {
+        sb.Append("        throw new ").Append(Json).Append(".JsonException(")
+            .Append(CSharpNames.Literal($"The value is not a defined {model.Name} value.")).AppendLine(");");
+        sb.AppendLine("    }");
         sb.AppendLine("}");
     }
 }

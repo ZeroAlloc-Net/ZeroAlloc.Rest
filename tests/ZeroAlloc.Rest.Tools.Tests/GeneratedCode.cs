@@ -54,12 +54,16 @@ internal static class GeneratedCode
             .WithAnalyzers([new RouteTemplateAnalyzer()])
             .GetAnalyzerDiagnosticsAsync().GetAwaiter().GetResult();
 
-        // Every error counts, wherever it is. A warning counts when it has a source location: a
-        // diagnostic about code, generated code included, always carries one. A location-less warning
-        // describes this reference set instead. ZeroAlloc.Collections ships no net10.0 asset, so
-        // binding its net9.0 one reports CS1701, which the SDK's default compile hides for consumers too.
+        // A generator or analyzer diagnostic counts at Warning and above; Info and Hidden do not fail
+        // a consumer's build. Of the compilation's own diagnostics, every error counts, wherever it is,
+        // and a warning counts when it has a source location: a diagnostic about code, generated code
+        // included, always carries one. A location-less warning describes this reference set instead.
+        // ZeroAlloc.Collections ships no net10.0 asset, so binding its net9.0 one reports CS1701, which
+        // the SDK's default compile hides for consumers too.
         var problems = generatorDiagnostics
             .AddRange(analyzerDiagnostics)
+            .Where(d => d.Severity >= DiagnosticSeverity.Warning)
+            .ToImmutableArray()
             .AddRange(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error
                 || (d.Severity == DiagnosticSeverity.Warning && d.Location.IsInSource)));
         return new Output(code, output, problems);
