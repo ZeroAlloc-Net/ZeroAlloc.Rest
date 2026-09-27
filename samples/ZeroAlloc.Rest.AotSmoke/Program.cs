@@ -160,7 +160,7 @@ using (var refusingHttp = new System.Net.Http.HttpClient(new RefusingHandler()) 
     using var timeout = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(30));
 
     var serving = server.ServeAsync(200, "{\"id\":7,\"name\":\"Rex\",\"status\":\"sold\"}", timeout.Token);
-    var pet = await pets.GetPetAsync(7).ConfigureAwait(false);
+    var pet = await pets.GetPetAsync(7, timeout.Token).ConfigureAwait(false);
     await serving.ConfigureAwait(false);
     if (!pet.IsSuccess || !string.Equals(pet.Value.Name, "Rex", StringComparison.Ordinal) || pet.Value.Status != ZeroAlloc.Rest.AotSmoke.PetStore.PetStatus.Sold
         || !server.LastRequest.StartsWith("GET /pets/7 ", StringComparison.Ordinal))
@@ -170,7 +170,7 @@ using (var refusingHttp = new System.Net.Http.HttpClient(new RefusingHandler()) 
     }
 
     serving = server.ServeAsync(201, "{\"code\":\"duplicate\"}", timeout.Token);
-    var added = await pets.AddPetAsync(new ZeroAlloc.Rest.AotSmoke.PetStore.Pet { Id = 8, Name = "Tom" }).ConfigureAwait(false);
+    var added = await pets.AddPetAsync(new ZeroAlloc.Rest.AotSmoke.PetStore.Pet { Id = 8, Name = "Tom" }, timeout.Token).ConfigureAwait(false);
     await serving.ConfigureAwait(false);
     if (!added.IsSuccess || !string.Equals(added.Value.AsError?.Code, "duplicate", StringComparison.Ordinal)
         || !server.LastRequest.EndsWith("{\"id\":8,\"name\":\"Tom\"}", StringComparison.Ordinal))
@@ -180,7 +180,7 @@ using (var refusingHttp = new System.Net.Http.HttpClient(new RefusingHandler()) 
     }
 
     serving = server.ServeAsync(200, "{\"id\":7,\"name\":\"Rex\",\"status\":\"lost\"}", timeout.Token);
-    var unknown = await pets.GetPetAsync(7).ConfigureAwait(false);
+    var unknown = await pets.GetPetAsync(7, timeout.Token).ConfigureAwait(false);
     await serving.ConfigureAwait(false);
     if (!unknown.IsFailure || unknown.Error.Kind != HttpErrorKind.Deserialization)
     {
@@ -189,7 +189,7 @@ using (var refusingHttp = new System.Net.Http.HttpClient(new RefusingHandler()) 
     }
 
     serving = server.ServeAsync(204, "", timeout.Token);
-    var deleted = await pets.DeletePetAsync(7).ConfigureAwait(false);
+    var deleted = await pets.DeletePetAsync(7, timeout.Token).ConfigureAwait(false);
     await serving.ConfigureAwait(false);
     if (!deleted.IsSuccess)
     {
