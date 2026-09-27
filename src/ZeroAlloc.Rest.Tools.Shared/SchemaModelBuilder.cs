@@ -21,13 +21,44 @@ internal sealed class SchemaModelBuilder : ISchemaTypeNamer
     private readonly Queue<(OpenApiSchema Schema, string Name, string Path)> _pending = new();
     private readonly List<ModelDefinition> _models = [];
 
+    // Each variant of a discriminated oneOf or anyOf, with its base.
+    private readonly Dictionary<OpenApiSchema, OpenApiSchema> _baseOf = new(ReferenceEqualityComparer.Instance);
+
     // reservedNames are the names the generated file already uses: the interface, the client the
     // source generator derives from it, and the JSON context.
-    internal SchemaModelBuilder(IEnumerable<string> reservedNames, List<OpenApiWarning> warnings)
+    internal SchemaModelBuilder(OpenApiDocument document, IEnumerable<string> reservedNames, List<OpenApiWarning> warnings)
     {
         _warnings = warnings;
         _typeNames = new HashSet<string>(reservedNames, StringComparer.Ordinal);
+        ClaimVariants(document);
     }
+
+    // A C# record has one base type. Claiming every variant before anything is built means a
+    // variant the interface reaches before its base still derives from it.
+    private void ClaimVariants(OpenApiDocument document)
+    {
+        if (document.Components?.Schemas is null)
+            return;
+        foreach (var (id, schema) in document.Components.Schemas)
+        {
+            if (!IsPolymorphic(schema))
+                continue;
+            foreach (var variant in Variants(schema))
+            {
+                if (variant.Reference?.Id is not { } variantId)
+                    throw new InvalidOperationException($"Schema '{id}': each variant of a oneOf or anyOf with a discriminator must be a $ref.");
+                if (_baseOf.TryGetValue(variant, out var other) && !ReferenceEquals(other, schema))
+                    throw new InvalidOperationException(
+                        $"Schema '{variantId}' is a variant of both '{other.Reference?.Id}' and '{id}'; a C# record has one base type.");
+                _baseOf[variant] = schema;
+            }
+        }
+    }
+
+    private static bool IsPolymorphic(OpenApiSchema schema)
+        => schema.Discriminator is not null && (schema.OneOf.Count > 0 || schema.AnyOf.Count > 0);
+
+    private static IList<OpenApiSchema> Variants(OpenApiSchema schema) => schema.OneOf.Count > 0 ? schema.OneOf : schema.AnyOf;
 
     public TypeRef Named(OpenApiSchema schema, string contextName, string path)
     {
@@ -69,14 +100,58 @@ internal sealed class SchemaModelBuilder : ISchemaTypeNamer
     }
 
     private ModelDefinition BuildModel(OpenApiSchema schema, string name, string path)
-        => TypeMapper.IsEnum(schema) ? BuildEnum(schema, name) : BuildRecord(schema, name, path);
+    {
+        if (TypeMapper.IsEnum(schema))
+            return BuildEnum(schema, name);
+        if (IsPolymorphic(schema))
+            return BuildPolymorphic(schema, name, path);
+        return BuildRecord(schema, name, path);
+    }
 
+    // A variant derives from its base, and inherits the base's properties and the discriminator,
+    // which STJ writes itself and rejects as a declared property.
     private RecordModel BuildRecord(OpenApiSchema schema, string name, string path)
     {
+        string? baseName = null;
+        var inherited = new HashSet<string>(StringComparer.Ordinal);
+        _baseOf.TryGetValue(schema, out var baseSchema);
+        if (baseSchema is not null)
+        {
+            baseName = Named(baseSchema, name + "Base", path).Name;
+            inherited.Add(baseSchema.Discriminator.PropertyName);
+            inherited.UnionWith(baseSchema.Properties.Keys);
+        }
+        var collected = new List<CollectedProperty>();
+        var required = new HashSet<string>(StringComparer.Ordinal);
+        Collect(schema, path, name, collected, required, skip: baseSchema);
+        collected.RemoveAll(p => inherited.Contains(p.WireName));
+        return new RecordModel(name, schema.Description, Properties(name, collected, required), baseName);
+    }
+
+    // Spec §5.5: values come from discriminator.mapping, and otherwise from the schema name. A
+    // mapping target is a $ref or a bare schema name; either way its last segment is the name.
+    private PolymorphicModel BuildPolymorphic(OpenApiSchema schema, string name, string path)
+    {
+        var discriminator = schema.Discriminator.PropertyName;
+        var valueById = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (value, target) in schema.Discriminator.Mapping)
+            valueById.TryAdd(target[(target.LastIndexOf('/') + 1)..], value);
+
+        var variants = new List<DerivedTypeModel>();
+        foreach (var variant in Variants(schema))
+        {
+            var id = variant.Reference?.Id
+                ?? throw new InvalidOperationException($"Schema '{name}': each variant of a oneOf or anyOf with a discriminator must be a $ref.");
+            _baseOf.TryAdd(variant, schema);
+            var type = Named(variant, id, path);
+            variants.Add(new DerivedTypeModel(type.Name, valueById.GetValueOrDefault(id, id)));
+        }
+
         var collected = new List<CollectedProperty>();
         var required = new HashSet<string>(StringComparer.Ordinal);
         Collect(schema, path, name, collected, required, skip: null);
-        return new RecordModel(name, schema.Description, Properties(name, collected, required));
+        collected.RemoveAll(p => string.Equals(p.WireName, discriminator, StringComparison.Ordinal));
+        return new PolymorphicModel(name, schema.Description, discriminator, Properties(name, collected, required), new EquatableList<DerivedTypeModel>(variants));
     }
 
     private readonly record struct CollectedProperty(string WireName, OpenApiSchema Schema, string Path);

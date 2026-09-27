@@ -32,7 +32,7 @@ internal static class ModelFixture
     {
         var document = Parse(schemasYaml);
         var warnings = new List<OpenApiWarning>();
-        var builder = new SchemaModelBuilder(ReservedNames, warnings);
+        var builder = new SchemaModelBuilder(document, ReservedNames, warnings);
         foreach (var (id, schema) in document.Components.Schemas)
             TypeMapper.Map(schema, id, "#/components/schemas/" + id, builder);
         return (builder.Build(), warnings);

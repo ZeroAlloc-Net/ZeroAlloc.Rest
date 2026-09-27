@@ -308,4 +308,96 @@ public class SchemaModelBuilderTests
         Assert.DoesNotContain(models, m => m.Name is "A" or "B");
         Assert.Contains(warnings, w => w.Message.Contains("its allOf refers back to itself", StringComparison.Ordinal));
     }
+
+    private const string Pets = """
+                Pet:
+                  type: object
+                  required: [petType]
+                  properties:
+                    petType:
+                      type: string
+                    name:
+                      type: string
+                  discriminator:
+                    propertyName: petType
+                    mapping:
+                      cat: '#/components/schemas/Cat'
+                  oneOf:
+                    - $ref: '#/components/schemas/Cat'
+                    - $ref: '#/components/schemas/Dog'
+                Cat:
+                  allOf:
+                    - $ref: '#/components/schemas/Pet'
+                    - type: object
+                      properties:
+                        lives:
+                          type: integer
+                Dog:
+                  type: object
+                  properties:
+                    petType:
+                      type: string
+                    bark:
+                      type: boolean
+            """;
+
+    [Fact]
+    public void Discriminator_MakesAnAbstractBase_WithOneDerivedTypePerVariant()
+    {
+        var (models, _) = Build(Pets);
+
+        Assert.Equal(
+            new PolymorphicModel("Pet", null, "petType",
+                List(Optional("Name", "name", TypeRef.String)),
+                List(new DerivedTypeModel("Cat", "cat"), new DerivedTypeModel("Dog", "Dog"))),
+            models[0]);
+    }
+
+    [Fact]
+    public void Variants_DeriveFromTheBase_WithoutTheDiscriminatorOrInheritedProperties()
+    {
+        var (models, _) = Build(Pets);
+
+        Assert.Equal(new RecordModel("Cat", null, List(Optional("Lives", "lives", TypeRef.Int)), BaseName: "Pet"), models[1]);
+        Assert.Equal(new RecordModel("Dog", null, List(Optional("Bark", "bark", TypeRef.Bool)), BaseName: "Pet"), models[2]);
+    }
+
+    [Fact]
+    public void Variant_ReferencedBeforeItsBase_StillDerivesFromIt()
+    {
+        var document = ModelFixture.Parse(Pets);
+        var builder = new SchemaModelBuilder(document, ModelFixture.ReservedNames, []);
+
+        TypeMapper.Map(document.Components.Schemas["Dog"], "Dog", "#/components/schemas/Dog", builder);
+        var models = builder.Build();
+
+        Assert.Equal("Pet", Assert.IsType<RecordModel>(models[0]).BaseName);
+        Assert.Contains(models, m => m is PolymorphicModel { Name: "Pet" });
+    }
+
+    [Fact]
+    public void VariantOfTwoBases_IsAGenerationError()
+    {
+        var error = Assert.Throws<InvalidOperationException>(() => Build("""
+                A:
+                  required: [kind]
+                  discriminator:
+                    propertyName: kind
+                  oneOf:
+                    - $ref: '#/components/schemas/V'
+                B:
+                  required: [kind]
+                  discriminator:
+                    propertyName: kind
+                  oneOf:
+                    - $ref: '#/components/schemas/V'
+                V:
+                  type: object
+                  properties:
+                    x:
+                      type: string
+            """));
+
+        Assert.Equal("Schema 'V' is a variant of both 'A' and 'B'; a C# record has one base type.", error.Message);
+    }
 }
