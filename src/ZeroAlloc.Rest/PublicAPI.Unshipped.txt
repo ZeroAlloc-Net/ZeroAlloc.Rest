@@ -1,7 +1,1 @@
 #nullable enable
-ZeroAlloc.Rest.Attributes.DeleteAttribute.DeleteAttribute() -> void
-ZeroAlloc.Rest.Attributes.GetAttribute.GetAttribute() -> void
-ZeroAlloc.Rest.Attributes.HttpMethodAttribute.HttpMethodAttribute(string! method) -> void
-ZeroAlloc.Rest.Attributes.PatchAttribute.PatchAttribute() -> void
-ZeroAlloc.Rest.Attributes.PostAttribute.PostAttribute() -> void
-ZeroAlloc.Rest.Attributes.PutAttribute.PutAttribute() -> void

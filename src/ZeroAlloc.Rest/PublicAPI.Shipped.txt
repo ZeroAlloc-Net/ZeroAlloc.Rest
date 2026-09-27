@@ -17,6 +17,7 @@ static ZeroAlloc.Rest.ServiceCollectionExtensions.AddZeroAllocClient(this Micros
 ZeroAlloc.Rest.Attributes.BodyAttribute
 ZeroAlloc.Rest.Attributes.BodyAttribute.BodyAttribute() -> void
 ZeroAlloc.Rest.Attributes.DeleteAttribute
+ZeroAlloc.Rest.Attributes.DeleteAttribute.DeleteAttribute() -> void
 ZeroAlloc.Rest.Attributes.DeleteAttribute.DeleteAttribute(string! route) -> void
 ZeroAlloc.Rest.Attributes.ErrorMapperAttribute
 ZeroAlloc.Rest.Attributes.ErrorMapperAttribute.ErrorMapperAttribute(System.Type! mapperType) -> void
@@ -24,6 +25,7 @@ ZeroAlloc.Rest.Attributes.ErrorMapperAttribute.MapperType.get -> System.Type!
 ZeroAlloc.Rest.Attributes.FormBodyAttribute
 ZeroAlloc.Rest.Attributes.FormBodyAttribute.FormBodyAttribute() -> void
 ZeroAlloc.Rest.Attributes.GetAttribute
+ZeroAlloc.Rest.Attributes.GetAttribute.GetAttribute() -> void
 ZeroAlloc.Rest.Attributes.GetAttribute.GetAttribute(string! route) -> void
 ZeroAlloc.Rest.Attributes.HeaderAttribute
 ZeroAlloc.Rest.Attributes.HeaderAttribute.HeaderAttribute(string! name) -> void
@@ -31,14 +33,18 @@ ZeroAlloc.Rest.Attributes.HeaderAttribute.Name.get -> string!
 ZeroAlloc.Rest.Attributes.HeaderAttribute.Value.get -> string?
 ZeroAlloc.Rest.Attributes.HeaderAttribute.Value.init -> void
 ZeroAlloc.Rest.Attributes.HttpMethodAttribute
+ZeroAlloc.Rest.Attributes.HttpMethodAttribute.HttpMethodAttribute(string! method) -> void
 ZeroAlloc.Rest.Attributes.HttpMethodAttribute.HttpMethodAttribute(string! method, string! route) -> void
 ZeroAlloc.Rest.Attributes.HttpMethodAttribute.Method.get -> string!
 ZeroAlloc.Rest.Attributes.HttpMethodAttribute.Route.get -> string!
 ZeroAlloc.Rest.Attributes.PatchAttribute
+ZeroAlloc.Rest.Attributes.PatchAttribute.PatchAttribute() -> void
 ZeroAlloc.Rest.Attributes.PatchAttribute.PatchAttribute(string! route) -> void
 ZeroAlloc.Rest.Attributes.PostAttribute
+ZeroAlloc.Rest.Attributes.PostAttribute.PostAttribute() -> void
 ZeroAlloc.Rest.Attributes.PostAttribute.PostAttribute(string! route) -> void
 ZeroAlloc.Rest.Attributes.PutAttribute
+ZeroAlloc.Rest.Attributes.PutAttribute.PutAttribute() -> void
 ZeroAlloc.Rest.Attributes.PutAttribute.PutAttribute(string! route) -> void
 ZeroAlloc.Rest.Attributes.QueryAttribute
 ZeroAlloc.Rest.Attributes.QueryAttribute.Name.get -> string?

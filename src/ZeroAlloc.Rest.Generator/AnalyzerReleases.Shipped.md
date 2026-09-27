@@ -18,3 +18,11 @@ Rule ID | Category                 | Severity | Notes
 ZRA002  | ZeroAlloc.Rest.Generator | Error    | No error mapper for a Result error type
 ZRA003  | ZeroAlloc.Rest.Generator | Error    | Invalid error mapper type
 ZRA004  | ZeroAlloc.Rest.Generator | Error    | Duplicate error mapper
+
+## Release 2.2.0
+
+### New Rules
+
+Rule ID | Category                 | Severity | Notes
+--------|--------------------------|----------|--------------------------------------------------
+ZRA005  | ZeroAlloc.Rest.Generator | Warning  | Route template and route parameters do not match
