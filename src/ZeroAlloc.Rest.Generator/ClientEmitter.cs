@@ -627,7 +627,12 @@ internal static class ClientEmitter
         sb.AppendLine("    private static global::ZeroAlloc.Rest.HttpError __CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind kind, global::System.Net.Http.HttpResponseMessage? response, global::System.Exception? exception, global::System.ReadOnlyMemory<byte> body = default, bool bodyTruncated = false)");
         sb.AppendLine("    {");
         sb.AppendLine("        global::System.Net.HttpStatusCode statusCode;");
-        sb.AppendLine($"        {Headers} headers;");
+        // `headers` stays the concrete Dictionary, not the IReadOnlyDictionary that HttpError
+        // wants: assigning a Dictionary<,> to an interface-typed local boxes its struct enumerator
+        // on any later enumeration through that local (NetFabric.Hyperlinq.Analyzer HLQ001).
+        // Passing it as a constructor argument below converts it without ever going through such
+        // an assignment, and `__noHeaders` needs no wrapping since it is already interface-typed.
+        sb.AppendLine("        global::System.Collections.Generic.Dictionary<string, global::System.Collections.Generic.IReadOnlyList<string>>? headers = null;");
         sb.AppendLine("        string? contentType = null;");
         sb.AppendLine("        if (response is not null)");
         sb.AppendLine("        {");
@@ -649,9 +654,8 @@ internal static class ClientEmitter
         sb.AppendLine("            statusCode = exception is global::System.Net.Http.HttpRequestException { StatusCode: { } requestStatus }");
         sb.AppendLine("                ? requestStatus");
         sb.AppendLine("                : (global::System.Net.HttpStatusCode)0;");
-        sb.AppendLine("            headers = __noHeaders;");
         sb.AppendLine("        }");
-        sb.AppendLine("        return new global::ZeroAlloc.Rest.HttpError(statusCode, headers, exception?.Message)");
+        sb.AppendLine("        return new global::ZeroAlloc.Rest.HttpError(statusCode, headers ?? __noHeaders, exception?.Message)");
         sb.AppendLine("        {");
         sb.AppendLine("            Kind = kind,");
         sb.AppendLine("            Exception = exception,");

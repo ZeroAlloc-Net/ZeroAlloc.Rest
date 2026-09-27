@@ -12,7 +12,24 @@
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.SourceGenerators.Testing.XUnit" />
     <PackageReference Include="Basic.Reference.Assemblies.Net100" />
+    <!-- Ships only an "analyzers" asset, so a plain PackageReference contributes no compile-time
+         reference. GeneratePathProperty exposes the package's restore folder so the analyzer DLL
+         can be referenced directly, letting tests run it against generated code (see #335). -->
+    <PackageReference Include="NetFabric.Hyperlinq.Analyzer" GeneratePathProperty="true" PrivateAssets="all" ExcludeAssets="analyzers" />
     <ProjectReference Include="../../src/ZeroAlloc.Rest.Generator/ZeroAlloc.Rest.Generator.csproj" />
     <ProjectReference Include="../../src/ZeroAlloc.Rest/ZeroAlloc.Rest.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <Reference Include="$(PkgNetFabric_Hyperlinq_Analyzer)\analyzers\dotnet\cs\NetFabric.Hyperlinq.Analyzer.dll" Private="true" />
+  </ItemGroup>
+  <!-- The SDK's package-asset resolution adds every DLL under an "analyzers" package folder to
+       @(Analyzer) for THIS project's own compile, regardless of ExcludeAssets on the
+       PackageReference above (that only stops the asset from flowing to consumers). Strip it back
+       out so NetFabric.Hyperlinq.Analyzer runs only where a test explicitly invokes it against
+       generated code, not against this test project's own source. -->
+  <Target Name="RemoveHyperlinqAnalyzerFromOwnCompilation" BeforeTargets="CoreCompile" AfterTargets="ResolveLockFileAnalyzers">
+    <ItemGroup>
+      <Analyzer Remove="@(Analyzer)" Condition="$([System.String]::Copy('%(Analyzer.Identity)').Contains('NetFabric.Hyperlinq.Analyzer'))" />
+    </ItemGroup>
+  </Target>
 </Project>
