@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text;
 using Microsoft.OpenApi.Models;
 using Microsoft.OpenApi.Readers;
@@ -96,7 +95,7 @@ internal static class OpenApiInterfaceGenerator
         };
         if (httpAttr is null) return;
 
-        var methodName = ToIdentifier(ToPascalCase(operation.OperationId
+        var methodName = CSharpNames.ToIdentifier(CSharpNames.ToPascalCase(operation.OperationId
             ?? $"{httpAttr}{path.Replace("/", "_").Replace("{", "").Replace("}", "")}"), upperFirst: true) + "Async";
         var operationName = operation.OperationId ?? $"{httpAttr.ToUpperInvariant()} {path}";
 
@@ -120,7 +119,7 @@ internal static class OpenApiInterfaceGenerator
                 continue;
             }
 
-            var identifier = Unique(ToIdentifier(param.Name, upperFirst: false), used);
+            var identifier = CSharpNames.Unique(CSharpNames.ToIdentifier(param.Name, upperFirst: false), used);
             // The source generator binds a {token} to the parameter of exactly its name, so the
             // route's token is rewritten to the identifier. See RewriteRoute.
             if (param.In == ParameterLocation.Path)
@@ -135,7 +134,7 @@ internal static class OpenApiInterfaceGenerator
 
         foreach (var comment in comments)
             sb.AppendLine($"    {comment}");
-        sb.AppendLine($"    [{httpAttr}({Literal(RewriteRoute(path, routeIdentifiers))})]");
+        sb.AppendLine($"    [{httpAttr}({CSharpNames.Literal(RewriteRoute(path, routeIdentifiers))})]");
         var returnType = GetReturnType(operation);
         sb.AppendLine($"    {returnType} {methodName}({string.Join(", ", parameters)});");
         sb.AppendLine();
@@ -147,10 +146,10 @@ internal static class OpenApiInterfaceGenerator
         return param.In switch
         {
             ParameterLocation.Query when string.Equals(identifier, param.Name, StringComparison.Ordinal)
-                => $"[Query] {typeName} {Escape(identifier)}",
-            ParameterLocation.Query => $"[Query(Name = {Literal(param.Name)})] {typeName} {Escape(identifier)}",
-            ParameterLocation.Header => $"[Header({Literal(param.Name)})] string {Escape(identifier)}",
-            _ => $"{typeName} {Escape(identifier)}",
+                => $"[Query] {typeName} {CSharpNames.Escape(identifier)}",
+            ParameterLocation.Query => $"[Query(Name = {CSharpNames.Literal(param.Name)})] {typeName} {CSharpNames.Escape(identifier)}",
+            ParameterLocation.Header => $"[Header({CSharpNames.Literal(param.Name)})] string {CSharpNames.Escape(identifier)}",
+            _ => $"{typeName} {CSharpNames.Escape(identifier)}",
         };
     }
 
@@ -209,59 +208,6 @@ internal static class OpenApiInterfaceGenerator
         return sb.ToString();
     }
 
-    private static string Unique(string identifier, HashSet<string> used)
-    {
-        var candidate = identifier;
-        for (var n = 2; !used.Add(candidate); n++)
-            candidate = identifier + n.ToString(CultureInfo.InvariantCulture);
-        return candidate;
-    }
-
-    // Turns a name from the spec into a C# identifier. The first letter is cased as asked. A
-    // character an identifier cannot hold is dropped and the letter after it upper-cased, and a
-    // leading digit gets an underscore: UserId and user-id both become userId.
-    private static string ToIdentifier(string name, bool upperFirst)
-    {
-        var sb = new StringBuilder(name.Length);
-        var upperNext = false;
-        foreach (var c in name)
-        {
-            if (!char.IsLetterOrDigit(c) && c != '_')
-            {
-                upperNext = sb.Length > 0;
-                continue;
-            }
-            if (sb.Length == 0)
-                sb.Append(upperFirst ? char.ToUpperInvariant(c) : char.ToLowerInvariant(c));
-            else
-                sb.Append(upperNext ? char.ToUpperInvariant(c) : c);
-            upperNext = false;
-        }
-        if (sb.Length == 0)
-            return upperFirst ? "Operation" : "value";
-        if (char.IsDigit(sb[0]))
-            sb.Insert(0, '_');
-        return sb.ToString();
-    }
-
-    // A keyword is escaped with @. The generator matches the {token} against the name without it.
-    private static string Escape(string identifier) => Keywords.Contains(identifier) ? "@" + identifier : identifier;
-
-    private static string Literal(string value)
-        => "\"" + value.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal) + "\"";
-
-    private static readonly HashSet<string> Keywords = new(StringComparer.Ordinal)
-    {
-        "abstract", "as", "base", "bool", "break", "byte", "case", "catch", "char", "checked", "class",
-        "const", "continue", "decimal", "default", "delegate", "do", "double", "else", "enum", "event",
-        "explicit", "extern", "false", "finally", "fixed", "float", "for", "foreach", "goto", "if",
-        "implicit", "in", "int", "interface", "internal", "is", "lock", "long", "namespace", "new",
-        "null", "object", "operator", "out", "override", "params", "private", "protected", "public",
-        "readonly", "ref", "return", "sbyte", "sealed", "short", "sizeof", "stackalloc", "static",
-        "string", "struct", "switch", "this", "throw", "true", "try", "typeof", "uint", "ulong",
-        "unchecked", "unsafe", "ushort", "using", "virtual", "void", "volatile", "while",
-    };
-
     private static string GetReturnType(OpenApiOperation operation)
     {
         foreach (var (statusCode, response) in operation.Responses)
@@ -282,7 +228,7 @@ internal static class OpenApiInterfaceGenerator
         if (string.Equals(schema.Type, "array", StringComparison.Ordinal) && schema.Items != null)
             return $"List<{MapSchemaTypeForReturn(schema.Items)}>";
         if (schema.Reference != null)
-            return ToIdentifier(ToPascalCase(schema.Reference.Id), upperFirst: true);
+            return CSharpNames.ToIdentifier(CSharpNames.ToPascalCase(schema.Reference.Id), upperFirst: true);
         return schema.Type switch
         {
             "integer" => "int",
@@ -300,19 +246,4 @@ internal static class OpenApiInterfaceGenerator
         "boolean" => "bool",
         _ => "string"
     };
-
-    /// <summary>Converts snake_case, kebab-case, or plain strings to PascalCase.</summary>
-    private static string ToPascalCase(string s)
-    {
-        if (string.IsNullOrEmpty(s)) return s;
-        var parts = s.Split('_', '-');
-        var result = new StringBuilder();
-        foreach (var part in parts)
-        {
-            if (part.Length == 0) continue;
-            result.Append(char.ToUpperInvariant(part[0]));
-            result.Append(part.Substring(1));
-        }
-        return result.Length > 0 ? result.ToString() : s;
-    }
 }
