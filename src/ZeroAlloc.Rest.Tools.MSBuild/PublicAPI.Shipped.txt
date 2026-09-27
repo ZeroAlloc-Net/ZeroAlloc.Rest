@@ -1,0 +1,12 @@
+#nullable enable
+override ZeroAlloc.Rest.Tools.MSBuild.GenerateRestClientTask.Execute() -> bool
+ZeroAlloc.Rest.Tools.MSBuild.GenerateRestClientTask
+ZeroAlloc.Rest.Tools.MSBuild.GenerateRestClientTask.GenerateRestClientTask() -> void
+ZeroAlloc.Rest.Tools.MSBuild.GenerateRestClientTask.InterfaceName.get -> string!
+ZeroAlloc.Rest.Tools.MSBuild.GenerateRestClientTask.InterfaceName.set -> void
+ZeroAlloc.Rest.Tools.MSBuild.GenerateRestClientTask.Namespace.get -> string!
+ZeroAlloc.Rest.Tools.MSBuild.GenerateRestClientTask.Namespace.set -> void
+ZeroAlloc.Rest.Tools.MSBuild.GenerateRestClientTask.OutputPath.get -> string!
+ZeroAlloc.Rest.Tools.MSBuild.GenerateRestClientTask.OutputPath.set -> void
+ZeroAlloc.Rest.Tools.MSBuild.GenerateRestClientTask.Spec.get -> string!
+ZeroAlloc.Rest.Tools.MSBuild.GenerateRestClientTask.Spec.set -> void

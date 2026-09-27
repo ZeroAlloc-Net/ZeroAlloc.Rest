@@ -112,6 +112,36 @@ public class GenerateRestClientTaskTests
         }
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void GenerateModels_ControlsTheModels(bool generateModels)
+    {
+        var dir = Directory.CreateTempSubdirectory().FullName;
+        try
+        {
+            var spec = Path.Combine(dir, "openapi.yaml");
+            File.WriteAllText(spec, CommandLineTests.ModelSpec);
+            var output = Path.Combine(dir, "IMyApi.g.cs");
+            var task = new GenerateRestClientTask
+            {
+                BuildEngine = new RecordingBuildEngine(),
+                Spec = spec,
+                OutputPath = output,
+                Namespace = "MyApp",
+                InterfaceName = "IMyApi",
+                GenerateModels = generateModels,
+            };
+
+            Assert.True(task.Execute());
+            Assert.Equal(generateModels, File.ReadAllText(output).Contains("public sealed record Pet", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
     private sealed class RecordingBuildEngine : IBuildEngine
     {
         public List<BuildWarningEventArgs> Warnings { get; } = new();

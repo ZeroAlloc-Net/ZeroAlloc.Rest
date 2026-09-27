@@ -27,10 +27,41 @@ public class CommandLineTests
                   description: OK
         """;
 
+    internal const string ModelSpec = """
+        openapi: 3.0.0
+        info:
+          title: Test
+          version: "1"
+        paths:
+          /pets/{id}:
+            get:
+              operationId: getPet
+              parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: integer
+              responses:
+                '200':
+                  description: OK
+                  content:
+                    application/json:
+                      schema:
+                        $ref: '#/components/schemas/Pet'
+        components:
+          schemas:
+            Pet:
+              type: object
+              properties:
+                name:
+                  type: string
+        """;
+
     [Fact]
     public void CookieParameter_IsReportedAsZrt001()
     {
-        var (exitCode, stderr) = Run();
+        var (exitCode, stderr, _) = Run(CookieSpec);
 
         Assert.Equal(0, exitCode);
         Assert.Contains("warning ZRT001: Operation 'listUsers': cookie parameter 'session' is not emitted", stderr);
@@ -39,32 +70,49 @@ public class CommandLineTests
     [Fact]
     public void NoWarn_SuppressesZrt001()
     {
-        var (exitCode, stderr) = Run("--nowarn", "ZRT001");
+        var (exitCode, stderr, _) = Run(CookieSpec, "--nowarn", "ZRT001");
 
         Assert.Equal(0, exitCode);
         Assert.DoesNotContain("ZRT001", stderr);
     }
 
-    private static (int ExitCode, string Stderr) Run(params string[] extraArgs)
+    [Theory]
+    [InlineData(new string[0], true)]
+    [InlineData(new[] { "--models", "true" }, true)]
+    [InlineData(new[] { "--models", "false" }, false)]
+    public void Models_AreGeneratedUnlessTurnedOff(string[] extraArgs, bool expected)
+    {
+        var (exitCode, _, output) = Run(ModelSpec, extraArgs);
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal(expected, output.Contains("public sealed record Pet", StringComparison.Ordinal));
+    }
+
+    private static (int ExitCode, string Stderr, string Output) Run(string spec, params string[] extraArgs)
     {
         var dir = Directory.CreateTempSubdirectory().FullName;
         var originalError = Console.Error;
         var originalOut = Console.Out;
         try
         {
-            var spec = Path.Combine(dir, "openapi.yaml");
-            File.WriteAllText(spec, CookieSpec);
+            var specFile = Path.Combine(dir, "openapi.yaml");
+            File.WriteAllText(specFile, spec);
+            var outputFile = Path.Combine(dir, "IMyApi.g.cs");
             string[] args =
             [
-                "generate", "--spec", spec, "--namespace", "MyApp",
-                "--output", Path.Combine(dir, "IMyApi.g.cs"), .. extraArgs,
+                "generate", "--spec", specFile, "--namespace", "MyApp",
+                "--output", outputFile, .. extraArgs,
             ];
             using var stderr = new StringWriter();
             Console.SetError(stderr);
             Console.SetOut(TextWriter.Null);
-            var entryPoint = typeof(OpenApiInterfaceGenerator).Assembly.EntryPoint!;
-            var exitCode = (int)entryPoint.Invoke(null, [args])!;
-            return (exitCode, stderr.ToString());
+            var entryPoint = typeof(OpenApiInterfaceGenerator).Assembly.EntryPoint
+                ?? throw new InvalidOperationException("ZeroAlloc.Rest.Tools has no entry point.");
+            var result = entryPoint.Invoke(null, [args])
+                ?? throw new InvalidOperationException("ZeroAlloc.Rest.Tools entry point returned no exit code.");
+            var exitCode = (int)result;
+            var output = File.Exists(outputFile) ? File.ReadAllText(outputFile) : "";
+            return (exitCode, stderr.ToString(), output);
         }
         finally
         {

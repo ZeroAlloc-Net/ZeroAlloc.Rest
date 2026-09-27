@@ -10,6 +10,11 @@ var noWarnOption = new Option<string[]>("--nowarn")
     Description = "Warning codes to suppress, such as ZRT001; repeat the option or separate codes with ',' or ';'",
     AllowMultipleArgumentsPerToken = true,
 };
+var modelsOption = new Option<bool>("--models")
+{
+    Description = "Generate a type for each schema the interface references; false keeps your own DTOs",
+    DefaultValueFactory = _ => true,
+};
 
 specOption.Validators.Add(r => { if (r.GetValueOrDefault<string>() is null) r.AddError("--spec is required"); });
 nsOption.Validators.Add(r => { if (r.GetValueOrDefault<string>() is null) r.AddError("--namespace is required"); });
@@ -21,25 +26,31 @@ generateCommand.Options.Add(nsOption);
 generateCommand.Options.Add(outputOption);
 generateCommand.Options.Add(ifaceOption);
 generateCommand.Options.Add(noWarnOption);
+generateCommand.Options.Add(modelsOption);
 
 generateCommand.SetAction(async (parseResult, ct) =>
 {
-    var spec = parseResult.GetValue(specOption)!;
-    var ns = parseResult.GetValue(nsOption)!;
-    var output = parseResult.GetValue(outputOption)!;
-    var iface = parseResult.GetValue(ifaceOption)!;
+    var spec = parseResult.GetValue(specOption)
+        ?? throw new InvalidOperationException("--spec is required");
+    var ns = parseResult.GetValue(nsOption)
+        ?? throw new InvalidOperationException("--namespace is required");
+    var output = parseResult.GetValue(outputOption)
+        ?? throw new InvalidOperationException("--output is required");
+    var iface = parseResult.GetValue(ifaceOption)
+        ?? throw new InvalidOperationException("--interface has a default value and cannot be null");
     var noWarn = new HashSet<string>(
         (parseResult.GetValue(noWarnOption) ?? [])
             .SelectMany(v => v.Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)),
         StringComparer.OrdinalIgnoreCase);
+    var options = new GenerationOptions(parseResult.GetValue(modelsOption));
 
     string content;
     var warnings = new List<OpenApiWarning>();
     if (spec.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
         spec.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-        content = await OpenApiInterfaceGenerator.GenerateFromUrlAsync(spec, ns, iface, warnings, ct).ConfigureAwait(false);
+        content = await OpenApiInterfaceGenerator.GenerateFromUrlAsync(spec, ns, iface, warnings, options, ct).ConfigureAwait(false);
     else
-        content = await OpenApiInterfaceGenerator.GenerateFromFileAsync(spec, ns, iface, warnings, ct).ConfigureAwait(false);
+        content = await OpenApiInterfaceGenerator.GenerateFromFileAsync(spec, ns, iface, warnings, options, ct).ConfigureAwait(false);
 
     // The canonical "file: warning CODE: message" form, which build logs and IDEs recognise.
     foreach (var warning in warnings.Where(w => !noWarn.Contains(w.Code)))

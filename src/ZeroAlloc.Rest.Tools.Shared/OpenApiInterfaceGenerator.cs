@@ -69,28 +69,28 @@ internal static class OpenApiInterfaceGenerator
     internal static Task<string> GenerateFromFileAsync(
         string filePath, string @namespace, string interfaceName,
         CancellationToken ct = default)
-        => GenerateFromFileAsync(filePath, @namespace, interfaceName, new List<OpenApiWarning>(), ct);
+        => GenerateFromFileAsync(filePath, @namespace, interfaceName, new List<OpenApiWarning>(), GenerationOptions.Default, ct);
 
     internal static async Task<string> GenerateFromFileAsync(
         string filePath, string @namespace, string interfaceName, List<OpenApiWarning> warnings,
-        CancellationToken ct)
+        GenerationOptions options, CancellationToken ct)
     {
         var content = await File.ReadAllTextAsync(filePath, ct).ConfigureAwait(false);
-        return Generate(content, @namespace, interfaceName, warnings);
+        return Generate(content, @namespace, interfaceName, warnings, options);
     }
 
     internal static Task<string> GenerateFromUrlAsync(
         string url, string @namespace, string interfaceName,
         CancellationToken ct = default)
-        => GenerateFromUrlAsync(url, @namespace, interfaceName, new List<OpenApiWarning>(), ct);
+        => GenerateFromUrlAsync(url, @namespace, interfaceName, new List<OpenApiWarning>(), GenerationOptions.Default, ct);
 
     internal static async Task<string> GenerateFromUrlAsync(
         string url, string @namespace, string interfaceName, List<OpenApiWarning> warnings,
-        CancellationToken ct)
+        GenerationOptions options, CancellationToken ct)
     {
         using var http = new HttpClient();
         var content = await http.GetStringAsync(url, ct).ConfigureAwait(false);
-        return Generate(content, @namespace, interfaceName, warnings);
+        return Generate(content, @namespace, interfaceName, warnings, options);
     }
 
 
