@@ -36,6 +36,18 @@ A non-success status, a transport failure, a timeout and a body that cannot be r
 value included, come back as an `HttpError`. Cancellation you asked for and a request body that
 cannot be serialized still throw; see [What still throws](advanced.md#what-still-throws).
 
+## An empty or null success body is no longer a null `T`
+
+In 2.x, a 2xx response with an empty body, such as a 204, or a body of JSON `null` came back as a
+`null` typed as a non-nullable `T`: `Success(null)` from a `Result<T, E>` method, `null` from a
+`Task<T>` method. In 3.0 a method whose `T` does not accept null reports it instead: a `Result`
+method returns a `Deserialization` failure, and a `Task<T>` method throws `InvalidOperationException`.
+An empty body read as a non-nullable value type, such as `int`, is reported the same way instead of
+reading as `0`. Declare `T?` where an empty body is a valid answer; see
+[Empty and null success bodies](advanced.md#empty-and-null-success-bodies). A method generated from an
+OpenAPI spec declares `T?` itself when the operation can also succeed with no body, such as 200 and
+204, or when its response schema is `nullable`.
+
 ## Bodies and parameters are typed
 
 `[Body] object body` becomes `[Body] Pet body` for a JSON body. Parameters follow their schema:
@@ -71,11 +83,16 @@ services.AddIMyApi(o => o.UseSerializer(new SystemTextJsonSerializer(MyApiJsonCo
 Remove the two attributes from your implementation's methods: the trim analyzer reports a mismatch
 otherwise. If your serializer needs reflection, put the attributes on its constructor instead.
 
-## `SystemTextJsonSerializer` reflection constructors are annotated
+## Reflection-based serializer constructors are annotated
 
 `new SystemTextJsonSerializer()` and `new SystemTextJsonSerializer(options)` now carry
 `[RequiresUnreferencedCode]` and `[RequiresDynamicCode]`, so a trimmed or AOT build warns where they
 are called. Use `new SystemTextJsonSerializer(context)` or `new SystemTextJsonSerializer(resolver, options)`.
+
+Both `MessagePackRestSerializer` constructors, `new MessagePackRestSerializer()` and
+`new MessagePackRestSerializer(options)`, carry the same two attributes: the standard resolver builds
+formatters with reflection, and the constructor cannot tell whether your options fall back to it.
+`MemoryPackRestSerializer` carries neither; it needs its types registered, below.
 
 ## MemoryPackRestSerializer needs its types registered
 

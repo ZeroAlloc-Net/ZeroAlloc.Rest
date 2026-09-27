@@ -26,7 +26,7 @@ public interface IRestSerializer
 The interface carries no trim or AOT annotations, so generated clients call it without a
 suppression. An implementation that needs reflection marks its constructor with
 `[RequiresUnreferencedCode]` and `[RequiresDynamicCode]` instead, as the reflection-based
-`SystemTextJsonSerializer` constructors do.
+`SystemTextJsonSerializer` constructors and both `MessagePackRestSerializer` constructors do.
 
 The `ContentType` property controls both the `Content-Type` header on requests and the `Accept` header.
 
@@ -165,6 +165,14 @@ dotnet add package ZeroAlloc.Rest.MessagePack
 ```csharp
 options.UseSerializer<MessagePackRestSerializer>();
 ```
+
+Both constructors carry `[RequiresUnreferencedCode]` and `[RequiresDynamicCode]`.
+`new MessagePackRestSerializer()` uses `MessagePackSerializerOptions.Standard`, which builds
+formatters with reflection and dynamic code, and `new MessagePackRestSerializer(options)` cannot
+tell whether the resolver on your options falls back to it. A trimmed or Native AOT build therefore
+warns wherever one is constructed, `UseSerializer<MessagePackRestSerializer>()` included. For
+Native AOT, use `SystemTextJsonSerializer` with a `JsonSerializerContext`, or `MemoryPackRestSerializer`
+with registered types.
 
 Content-Type: `application/x-msgpack`.
 

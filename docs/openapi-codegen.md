@@ -55,10 +55,13 @@ ZeroAlloc type as `global::`, so a schema named `Task` or `Header` cannot shadow
 
 - `operationId` → method name, PascalCase, suffixed with `Async`.
 - Every method returns `Task<Result<T, HttpError>>`, where `T` comes from the first 2xx response
-  with a schema. An operation with no such response returns `Task<UnitResult<HttpError>>`. A non-success
+  with a schema. It is `T?` when another 2xx response has no schema, such as 200 with a body and 204
+  without one, or when the schema is `nullable`: an empty body is then `Success(null)`. An
+  operation with no such response returns `Task<UnitResult<HttpError>>`. A non-success
   status, a transport failure, a timeout and an unreadable body come back as an `HttpError`; see
   [What still throws](advanced.md#what-still-throws).
-- A JSON request body is `[Body] T body`, `T?` when the body is not `required`. A body with no JSON
+- A JSON request body is `[Body] T body`, `T?` when the body is not `required`. For a value type,
+  such as an enum or `int`, the JSON context registers `T?`, the type the body is written as. A body with no JSON
   media type, such as XML, multipart, form or `application/octet-stream`, stays `[Body] object body`.
 - A success response with no JSON media type is typed `JsonElement` and reported as
   [ZRT002](advanced.md#zrt002-schema-mapped-to-jsonelement). JSON media types are `application/json`,

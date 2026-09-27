@@ -34,6 +34,7 @@ The generated client returns `Result<T, HttpError>.Success(value)` on a 2xx resp
 | The request fails before a response arrives: DNS, connection refused, TLS | `Transport` | `0`, or the status an `HttpRequestException` carries | Empty | The `HttpRequestException` |
 | The request times out, for example through `HttpClient.Timeout` | `Timeout` | `0` | Empty | The `OperationCanceledException` or `TaskCanceledException` |
 | The body of a 2xx response cannot be deserialized | `Deserialization` | The response status | The response and content headers | Whatever the serializer threw: a `JsonException`, a `MemoryPackSerializationException`, a `MessagePackSerializationException` and so on |
+| The body of a 2xx response is empty, as a 204's is, or JSON `null`, and `T` does not accept null | `Deserialization` | The response status | The response and content headers | An `InvalidOperationException` whose message names the method and says to declare `T?` |
 
 `HttpError` exposes:
 
@@ -108,6 +109,22 @@ Only transport, timeout and response-deserialization failures become an `HttpErr
 A method generated from an OpenAPI spec is a `Result` or `UnitResult` method, so these rules apply to every generated operation.
 
 Methods that do not return a `Result` throw in every case, as before.
+
+### Empty and null success bodies
+
+A 2xx body that is empty, as a 204's is, or that is JSON `null`, has no value. What the client does
+with it depends on the success type `T` the method declares:
+
+| `T` | `Result<T, E>` method | `Task<T>` method |
+|---|---|---|
+| Nullable: `User?` or `int?` | `Success(null)` | Returns `null` |
+| A non-nullable reference type: `User` | A `Deserialization` failure | Throws `InvalidOperationException` |
+| A non-nullable value type: `int` | An empty body is a `Deserialization` failure; JSON `null` already fails to deserialize | An empty body throws `InvalidOperationException` |
+
+The failure's `Exception` is an `InvalidOperationException` whose message names the method and says
+to declare `T?` to accept an empty body. A null never reaches the caller as a `T` that denies it. A
+generated method whose operation can also succeed with no body, such as 200 with a schema and 204
+without one, or whose response schema is `nullable`, declares `T?` for this reason.
 
 Failures that become an `HttpError` are still traced as failures: the span status is set to `Error` and the request duration is recorded, as for an exception that propagates.
 

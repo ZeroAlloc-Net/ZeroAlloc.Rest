@@ -192,11 +192,11 @@ Record the counts as **M1**. Expected: IL2026 and IL3050, at least one of each p
 
 - [ ] **Step 4: Measure with an annotation-free `IRestSerializer`**
 
-Delete the four `[RequiresDynamicCode]`/`[RequiresUnreferencedCode]` lines from `src/ZeroAlloc.Rest/IRestSerializer.cs` and from `samples/ZeroAlloc.Rest.AotSmoke/SmokeSerializer.cs`. Publish as in Step 3 and record **M2**. Expected: no IL lines at all.
+Delete the `[RequiresDynamicCode]`/`[RequiresUnreferencedCode]` lines from `src/ZeroAlloc.Rest/IRestSerializer.cs`, from `src/ZeroAlloc.Rest/RestSerializerAdapter.cs` and from `samples/ZeroAlloc.Rest.AotSmoke/SmokeSerializer.cs`. The adapter is in the same assembly as the interface, so its methods must lose the attributes together with the interface's, or the build reports the annotation mismatch IL2046/IL3051 instead of measuring anything. Publish as in Step 3 and record **M2**. Expected: no IL lines at all.
 
 - [ ] **Step 5: Measure the in-repo serializers without annotations**
 
-Delete the same attributes from `src/ZeroAlloc.Rest/RestSerializerAdapter.cs`, `src/ZeroAlloc.Rest.MemoryPack/MemoryPackRestSerializer.cs` and `src/ZeroAlloc.Rest.MessagePack/MessagePackRestSerializer.cs`. Replace `src/ZeroAlloc.Rest.SystemTextJson/SystemTextJsonSerializer.cs` with the Task 2 Step 5 version. Then build each with the trim and AOT analyzers on:
+Delete the same attributes from `src/ZeroAlloc.Rest.MemoryPack/MemoryPackRestSerializer.cs` and `src/ZeroAlloc.Rest.MessagePack/MessagePackRestSerializer.cs`. Replace `src/ZeroAlloc.Rest.SystemTextJson/SystemTextJsonSerializer.cs` with the Task 2 Step 5 version. Then build each with the trim and AOT analyzers on:
 
 ```bash
 for p in ZeroAlloc.Rest ZeroAlloc.Rest.SystemTextJson ZeroAlloc.Rest.MemoryPack ZeroAlloc.Rest.MessagePack; do

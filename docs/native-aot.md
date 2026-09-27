@@ -38,10 +38,12 @@ so what the trimmer sees is exactly what your serializer does. Use one that need
   internal partial class AppJsonContext : JsonSerializerContext;
   ```
 
-- MemoryPack or MessagePack with their source-generated formatters.
+- MemoryPack, with every `[MemoryPackable]` type registered; see [Serialization](serialization.md#memorypack).
 
 The parameterless and options constructors of `SystemTextJsonSerializer` use reflection and are
-marked `[RequiresUnreferencedCode]` and `[RequiresDynamicCode]`, so the build tells you where.
+marked `[RequiresUnreferencedCode]` and `[RequiresDynamicCode]`, so the build tells you where. So
+are both `MessagePackRestSerializer` constructors: MessagePack's standard resolver uses reflection,
+and the constructor cannot tell whether the options you pass fall back to it.
 
 ## Publishing as Native AOT
 
@@ -68,7 +70,7 @@ workload must be installed, and ILC also needs the directory of `vswhere.exe` on
 
 ## AOT checklist
 
-- [ ] Use a source-generated `JsonSerializerContext`, such as the one generated from your OpenAPI spec, or MemoryPack or MessagePack source generators
+- [ ] Use a source-generated `JsonSerializerContext`, such as the one generated from your OpenAPI spec, or MemoryPack with registered types
 - [ ] Construct serializers without reflection: no IL2026 or IL3050 warning should remain; never suppress one
 - [ ] Set `PublishAot=true` in the publish profile
 - [ ] Test the native binary on the target OS — trim analysis may surface missing roots
