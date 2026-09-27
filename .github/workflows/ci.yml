@@ -43,11 +43,16 @@ jobs:
 
       # Read by the tests that build a consumer project against the packages: the duplicate-generator
       # test and the ZeroAlloc.Rest.Tools.MSBuild end-to-end test.
+      #
+      # --no-build and the build's version, as in release-please.yml. A plain `dotnet pack` here
+      # rebuilt these projects at the default 1.0.0 over the Build step's output, so the tests and
+      # the Pack step below ran against assemblies stamped 1.0.0. The version guard in
+      # Directory.Build.props now fails such a pack; see ZeroAlloc-Net/.github#36.
       - name: Pack ZA.Rest packages into local feed (for the package consumer tests)
         run: |
-          dotnet pack src/ZeroAlloc.Rest/ZeroAlloc.Rest.csproj -c Release -o artifacts/local
-          dotnet pack src/ZeroAlloc.Rest.Generator/ZeroAlloc.Rest.Generator.csproj -c Release -o artifacts/local
-          dotnet pack src/ZeroAlloc.Rest.Tools.MSBuild/ZeroAlloc.Rest.Tools.MSBuild.csproj -c Release -o artifacts/local
+          dotnet pack src/ZeroAlloc.Rest/ZeroAlloc.Rest.csproj --no-build -c Release -p:Version=${{ steps.gitversion.outputs.semver }} -o artifacts/local
+          dotnet pack src/ZeroAlloc.Rest.Generator/ZeroAlloc.Rest.Generator.csproj --no-build -c Release -p:Version=${{ steps.gitversion.outputs.semver }} -o artifacts/local
+          dotnet pack src/ZeroAlloc.Rest.Tools.MSBuild/ZeroAlloc.Rest.Tools.MSBuild.csproj --no-build -c Release -p:Version=${{ steps.gitversion.outputs.semver }} -o artifacts/local
 
       - name: Test
         run: dotnet test ZeroAlloc.Rest.slnx --no-build -c Release --logger "trx" --results-directory ./test-results

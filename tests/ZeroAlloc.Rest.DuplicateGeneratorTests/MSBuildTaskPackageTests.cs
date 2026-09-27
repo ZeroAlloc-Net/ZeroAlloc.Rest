@@ -17,7 +17,7 @@ public sealed class MSBuildTaskPackageTests
         var repoRoot = ConsumerProcess.LocateRepoRoot();
         var feed = Path.Combine(repoRoot, "artifacts", "local");
         Assert.True(Directory.Exists(feed),
-            $"Local nupkg feed not found at {feed}. Run `dotnet pack -c Release -o artifacts/local` first.");
+            $"Local nupkg feed not found at {feed}. Run `dotnet pack -c Release -p:Version=0.0.0-dev -o artifacts/local` on src/ZeroAlloc.Rest and src/ZeroAlloc.Rest.Tools.MSBuild first.");
 
         var taskNupkg = Directory.GetFiles(feed, PackageId + ".*.nupkg");
         Assert.NotEmpty(taskNupkg);

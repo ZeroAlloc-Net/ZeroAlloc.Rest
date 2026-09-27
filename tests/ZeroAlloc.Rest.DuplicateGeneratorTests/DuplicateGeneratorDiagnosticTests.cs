@@ -11,7 +11,7 @@ public sealed class DuplicateGeneratorDiagnosticTests
         var repoRoot = ConsumerProcess.LocateRepoRoot();
         var feed = Path.Combine(repoRoot, "artifacts", "local");
         Assert.True(Directory.Exists(feed),
-            $"Local nupkg feed not found at {feed}. Run `dotnet pack -c Release -o artifacts/local` first.");
+            $"Local nupkg feed not found at {feed}. Run `dotnet pack -c Release -p:Version=0.0.0-dev -o artifacts/local` on src/ZeroAlloc.Rest and src/ZeroAlloc.Rest.Generator first.");
 
         // The "ZeroAlloc.Rest.*.nupkg" glob also matches "ZeroAlloc.Rest.Generator.*.nupkg"
         // because `*` greedily eats "Generator.<version>". Filter it out explicitly — relying
