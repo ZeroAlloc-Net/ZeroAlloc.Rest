@@ -36,9 +36,12 @@ string code = await OpenApiInterfaceGenerator.GenerateFromUrlAsync(
 
 The generator maps:
 - `operationId` → method name (PascalCase, suffixed with `Async`)
-- `parameters[in=query]` → `[Query] T name`
+- a name that is not a valid C# identifier is made into one: `user-id` becomes `userId`, a keyword such as `class` is escaped as `@class`, and a name that clashes with another parameter, `body` or `ct` gets a numeric suffix
+- `parameters[in=query]` → `[Query] T name`, or `[Query(Name = "page-size")] T pageSize` when the C# name differs from the wire name
 - `parameters[in=header]` → `[Header("Name")] string name`
-- `parameters[in=path]` → plain `T name` (matched by route template)
+- `parameters[in=path]` → plain `T name`; the route's `{token}` is rewritten to the same C# name, so `/users/{User-Id}` becomes `/users/{userId}` with `int userId`
+- `parameters[in=cookie]` → not emitted. ZeroAlloc.Rest has no cookie binding, so the generated method carries a comment, and the CLI and the MSBuild task report a warning. Send cookies from the `HttpClient`, for example with a `CookieContainer` on its handler.
+- parameters declared on the path item apply to each of its operations, unless the operation overrides them
 - `requestBody` → `[Body] object body`
 - `responses[2xx]` → `Task<ReturnType>` (resolves `$ref`, maps arrays to `List<T>`)
 

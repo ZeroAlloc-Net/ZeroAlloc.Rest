@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using Microsoft.OpenApi.Models;
 using Microsoft.OpenApi.Readers;
@@ -7,6 +8,11 @@ namespace ZeroAlloc.Rest.Tools;
 public static class OpenApiInterfaceGenerator
 {
     public static string Generate(string yamlOrJson, string @namespace, string interfaceName)
+        => Generate(yamlOrJson, @namespace, interfaceName, new List<string>());
+
+    // Adds a message to warnings for each parameter of the spec the emitted interface leaves out,
+    // so that the CLI and the MSBuild task can report it.
+    internal static string Generate(string yamlOrJson, string @namespace, string interfaceName, List<string> warnings)
     {
         var reader = new OpenApiStringReader();
         var document = reader.Read(yamlOrJson, out var diagnostic);
@@ -36,7 +42,7 @@ public static class OpenApiInterfaceGenerator
         {
             foreach (var (path, pathItem) in document.Paths)
                 foreach (var (operationType, operation) in pathItem.Operations)
-                    EmitMethod(sb, path, operationType, operation);
+                    EmitMethod(sb, path, pathItem, operationType, operation, warnings);
         }
 
         sb.AppendLine("}");
@@ -49,25 +55,35 @@ public static class OpenApiInterfaceGenerator
         return Generate(content, @namespace, interfaceName);
     }
 
-    public static async Task<string> GenerateFromFileAsync(
+    public static Task<string> GenerateFromFileAsync(
         string filePath, string @namespace, string interfaceName,
         CancellationToken ct = default)
+        => GenerateFromFileAsync(filePath, @namespace, interfaceName, new List<string>(), ct);
+
+    internal static async Task<string> GenerateFromFileAsync(
+        string filePath, string @namespace, string interfaceName, List<string> warnings,
+        CancellationToken ct)
     {
         var content = await File.ReadAllTextAsync(filePath, ct).ConfigureAwait(false);
-        return Generate(content, @namespace, interfaceName);
+        return Generate(content, @namespace, interfaceName, warnings);
     }
 
-    public static async Task<string> GenerateFromUrlAsync(
+    public static Task<string> GenerateFromUrlAsync(
         string url, string @namespace, string interfaceName,
         CancellationToken ct = default)
+        => GenerateFromUrlAsync(url, @namespace, interfaceName, new List<string>(), ct);
+
+    internal static async Task<string> GenerateFromUrlAsync(
+        string url, string @namespace, string interfaceName, List<string> warnings,
+        CancellationToken ct)
     {
         using var http = new HttpClient();
         var content = await http.GetStringAsync(url, ct).ConfigureAwait(false);
-        return Generate(content, @namespace, interfaceName);
+        return Generate(content, @namespace, interfaceName, warnings);
     }
 
-    private static void EmitMethod(StringBuilder sb, string path,
-        OperationType operationType, OpenApiOperation operation)
+    private static void EmitMethod(StringBuilder sb, string path, OpenApiPathItem pathItem,
+        OperationType operationType, OpenApiOperation operation, List<string> warnings)
     {
         var httpAttr = operationType switch
         {
@@ -80,27 +96,36 @@ public static class OpenApiInterfaceGenerator
         };
         if (httpAttr is null) return;
 
-        sb.AppendLine($"    [{httpAttr}(\"{path}\")]");
+        var methodName = ToIdentifier(ToPascalCase(operation.OperationId
+            ?? $"{httpAttr}{path.Replace("/", "_").Replace("{", "").Replace("}", "")}"), upperFirst: true) + "Async";
+        var operationName = operation.OperationId ?? $"{httpAttr.ToUpperInvariant()} {path}";
 
-        var methodName = ToPascalCase(operation.OperationId
-            ?? $"{httpAttr}{path.Replace("/", "_").Replace("{", "").Replace("}", "")}") + "Async";
+        // The CancellationToken is always ct and the request body always body. A parameter whose
+        // identifier would clash with either, or with an earlier parameter, gets a numeric suffix.
+        var used = new HashSet<string>(StringComparer.Ordinal) { "ct" };
+        if (operation.RequestBody != null)
+            used.Add("body");
 
         var parameters = new List<string>();
+        var comments = new List<string>();
+        var routeIdentifiers = new Dictionary<string, string>(StringComparer.Ordinal);
 
-        if (operation.Parameters != null)
+        foreach (var param in EffectiveParameters(pathItem, operation))
         {
-            foreach (var param in operation.Parameters)
+            if (param.In is not (ParameterLocation.Path or ParameterLocation.Query or ParameterLocation.Header))
             {
-                var typeName = MapSchemaType(param.Schema);
-                var paramName = ToCamelCase(param.Name);
-                var paramStr = param.In switch
-                {
-                    ParameterLocation.Query  => $"[Query] {typeName} {paramName}",
-                    ParameterLocation.Header => $"[Header(\"{param.Name}\")] string {paramName}",
-                    _ => $"{typeName} {paramName}"
-                };
-                parameters.Add(paramStr);
+                var (comment, warning) = Skipped(param, operationName);
+                comments.Add(comment);
+                warnings.Add(warning);
+                continue;
             }
+
+            var identifier = Unique(ToIdentifier(param.Name, upperFirst: false), used);
+            // The source generator binds a {token} to the parameter of exactly its name, so the
+            // route's token is rewritten to the identifier. See RewriteRoute.
+            if (param.In == ParameterLocation.Path)
+                routeIdentifiers[param.Name] = identifier;
+            parameters.Add(Declaration(param, identifier));
         }
 
         if (operation.RequestBody != null)
@@ -108,10 +133,138 @@ public static class OpenApiInterfaceGenerator
 
         parameters.Add("CancellationToken ct = default");
 
+        foreach (var comment in comments)
+            sb.AppendLine($"    {comment}");
+        sb.AppendLine($"    [{httpAttr}({Literal(RewriteRoute(path, routeIdentifiers))})]");
         var returnType = GetReturnType(operation);
         sb.AppendLine($"    {returnType} {methodName}({string.Join(", ", parameters)});");
         sb.AppendLine();
     }
+
+    private static string Declaration(OpenApiParameter param, string identifier)
+    {
+        var typeName = MapSchemaType(param.Schema);
+        return param.In switch
+        {
+            ParameterLocation.Query when string.Equals(identifier, param.Name, StringComparison.Ordinal)
+                => $"[Query] {typeName} {Escape(identifier)}",
+            ParameterLocation.Query => $"[Query(Name = {Literal(param.Name)})] {typeName} {Escape(identifier)}",
+            ParameterLocation.Header => $"[Header({Literal(param.Name)})] string {Escape(identifier)}",
+            _ => $"{typeName} {Escape(identifier)}",
+        };
+    }
+
+    // A parameter the interface cannot bind: a comment for the emitted method, and a warning.
+    private static (string Comment, string Warning) Skipped(OpenApiParameter param, string operationName)
+    {
+        // ZeroAlloc.Rest binds no cookies. Emitted without an attribute, a cookie parameter became
+        // a route parameter with no token, and its value was never sent.
+        if (param.In == ParameterLocation.Cookie)
+        {
+            return ($"// Cookie parameter '{param.Name}' is not emitted: ZeroAlloc.Rest has no cookie binding.",
+                $"Operation '{operationName}': cookie parameter '{param.Name}' is not emitted, because "
+                    + "ZeroAlloc.Rest has no cookie binding. Send the cookie from the HttpClient, for example "
+                    + "with a CookieContainer on its handler.");
+        }
+        return ($"// Parameter '{param.Name}' is not emitted: the spec gives it no location.",
+            $"Operation '{operationName}': parameter '{param.Name}' is not emitted, because the spec gives "
+                + "it no location. Set its \"in\" to path, query or header.");
+    }
+
+    // The operation's parameters, after those its path item declares and the operation does not
+    // override. OpenAPI identifies a parameter by its name and location.
+    private static List<OpenApiParameter> EffectiveParameters(OpenApiPathItem pathItem, OpenApiOperation operation)
+    {
+        var operationParameters = operation.Parameters ?? new List<OpenApiParameter>();
+        var result = new List<OpenApiParameter>();
+        if (pathItem.Parameters != null)
+        {
+            foreach (var shared in pathItem.Parameters)
+            {
+                if (!operationParameters.Any(p => p.In == shared.In && string.Equals(p.Name, shared.Name, StringComparison.Ordinal)))
+                    result.Add(shared);
+            }
+        }
+        result.AddRange(operationParameters);
+        return result;
+    }
+
+    // Replaces the {name} token of each path parameter with the identifier it was emitted under.
+    private static string RewriteRoute(string path, Dictionary<string, string> routeIdentifiers)
+    {
+        var sb = new StringBuilder(path.Length);
+        var i = 0;
+        while (i < path.Length)
+        {
+            var open = path.IndexOf('{', i);
+            var close = open < 0 ? -1 : path.IndexOf('}', open + 1);
+            if (close < 0)
+            {
+                sb.Append(path, i, path.Length - i);
+                break;
+            }
+            var name = path.Substring(open + 1, close - open - 1);
+            sb.Append(path, i, open - i)
+                .Append('{')
+                .Append(routeIdentifiers.TryGetValue(name, out var identifier) ? identifier : name)
+                .Append('}');
+            i = close + 1;
+        }
+        return sb.ToString();
+    }
+
+    private static string Unique(string identifier, HashSet<string> used)
+    {
+        var candidate = identifier;
+        for (var n = 2; !used.Add(candidate); n++)
+            candidate = identifier + n.ToString(CultureInfo.InvariantCulture);
+        return candidate;
+    }
+
+    // Turns a name from the spec into a C# identifier. The first letter is cased as asked. A
+    // character an identifier cannot hold is dropped and the letter after it upper-cased, and a
+    // leading digit gets an underscore: UserId and user-id both become userId.
+    private static string ToIdentifier(string name, bool upperFirst)
+    {
+        var sb = new StringBuilder(name.Length);
+        var upperNext = false;
+        foreach (var c in name)
+        {
+            if (!char.IsLetterOrDigit(c) && c != '_')
+            {
+                upperNext = sb.Length > 0;
+                continue;
+            }
+            if (sb.Length == 0)
+                sb.Append(upperFirst ? char.ToUpperInvariant(c) : char.ToLowerInvariant(c));
+            else
+                sb.Append(upperNext ? char.ToUpperInvariant(c) : c);
+            upperNext = false;
+        }
+        if (sb.Length == 0)
+            return upperFirst ? "Operation" : "value";
+        if (char.IsDigit(sb[0]))
+            sb.Insert(0, '_');
+        return sb.ToString();
+    }
+
+    // A keyword is escaped with @. The generator matches the {token} against the name without it.
+    private static string Escape(string identifier) => Keywords.Contains(identifier) ? "@" + identifier : identifier;
+
+    private static string Literal(string value)
+        => "\"" + value.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal) + "\"";
+
+    private static readonly HashSet<string> Keywords = new(StringComparer.Ordinal)
+    {
+        "abstract", "as", "base", "bool", "break", "byte", "case", "catch", "char", "checked", "class",
+        "const", "continue", "decimal", "default", "delegate", "do", "double", "else", "enum", "event",
+        "explicit", "extern", "false", "finally", "fixed", "float", "for", "foreach", "goto", "if",
+        "implicit", "in", "int", "interface", "internal", "is", "lock", "long", "namespace", "new",
+        "null", "object", "operator", "out", "override", "params", "private", "protected", "public",
+        "readonly", "ref", "return", "sbyte", "sealed", "short", "sizeof", "stackalloc", "static",
+        "string", "struct", "switch", "this", "throw", "true", "try", "typeof", "uint", "ulong",
+        "unchecked", "unsafe", "ushort", "using", "virtual", "void", "volatile", "while",
+    };
 
     private static string GetReturnType(OpenApiOperation operation)
     {
@@ -133,7 +286,7 @@ public static class OpenApiInterfaceGenerator
         if (schema.Type == "array" && schema.Items != null)
             return $"List<{MapSchemaTypeForReturn(schema.Items)}>";
         if (schema.Reference != null)
-            return ToPascalCase(schema.Reference.Id);
+            return ToIdentifier(ToPascalCase(schema.Reference.Id), upperFirst: true);
         return schema.Type switch
         {
             "integer" => "int",
@@ -165,11 +318,5 @@ public static class OpenApiInterfaceGenerator
             result.Append(part.Substring(1));
         }
         return result.Length > 0 ? result.ToString() : s;
-    }
-
-    private static string ToCamelCase(string s)
-    {
-        if (string.IsNullOrEmpty(s)) return s;
-        return char.ToLower(s[0]) + s.Substring(1);
     }
 }

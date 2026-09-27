@@ -24,11 +24,15 @@ generateCommand.SetAction(async (parseResult, ct) =>
     var iface = parseResult.GetValue(ifaceOption)!;
 
     string content;
+    var warnings = new List<string>();
     if (spec.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
         spec.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-        content = await OpenApiInterfaceGenerator.GenerateFromUrlAsync(spec, ns, iface);
+        content = await OpenApiInterfaceGenerator.GenerateFromUrlAsync(spec, ns, iface, warnings, ct);
     else
-        content = await OpenApiInterfaceGenerator.GenerateFromFileAsync(spec, ns, iface);
+        content = await OpenApiInterfaceGenerator.GenerateFromFileAsync(spec, ns, iface, warnings, ct);
+
+    foreach (var warning in warnings)
+        await Console.Error.WriteLineAsync($"{spec}: warning: {warning}");
 
     var dir = Path.GetDirectoryName(output);
     if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
