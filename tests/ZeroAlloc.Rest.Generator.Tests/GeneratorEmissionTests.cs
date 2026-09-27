@@ -701,6 +701,40 @@ public class GeneratorEmissionTests
         Assert.Contains("TryAddWithoutValidation", output);
     }
 
+    // Issue #354: HttpHeaders.TryAddWithoutValidation sends a null value as an empty header,
+    // so a nullable [Header] parameter is only added when it has a value. A non-nullable value
+    // type can never be null and is added unconditionally.
+    [Fact]
+    public void HeaderParam_Nullable_IsAddedOnlyWhenNotNull_AndCompiles()
+    {
+        var source = """
+            #nullable enable
+            using ZeroAlloc.Rest.Attributes;
+            namespace MyApp;
+            [ZeroAllocRestClient]
+            public interface IHeaderApi
+            {
+                [Get("/items")]
+                System.Threading.Tasks.Task<string> GetAsync(
+                    [Header("X-Ref")] string? reference,
+                    [Header("X-Retry")] int? retry,
+                    [Header("X-Count")] int count,
+                    [Header("X-Plain")] string plain,
+                    System.Threading.CancellationToken ct = default);
+            }
+            """;
+        var (output, errors) = CompileGenerated(source, "IHeaderApi.g.cs");
+
+        Assert.Empty(errors);
+        Assert.Contains("if (reference is not null)", output);
+        Assert.Contains("__request.Headers.TryAddWithoutValidation(\"X-Ref\", reference.ToString());", output);
+        Assert.Contains("if (retry is not null)", output);
+        Assert.Contains("__request.Headers.TryAddWithoutValidation(\"X-Retry\", retry.ToString());", output);
+        Assert.Contains("if (plain is not null)", output);
+        Assert.DoesNotContain("if (count is not null)", output);
+        Assert.Contains("__request.Headers.TryAddWithoutValidation(\"X-Count\", count.ToString());", output);
+    }
+
     [Fact]
     public void QueryParam_Collection_EmitsForEachLoop()
     {
