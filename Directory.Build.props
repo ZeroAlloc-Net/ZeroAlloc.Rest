@@ -6,6 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <!--
       Public API surface lock: RS0016 (missing entry) / RS0017 (extra entry) are
       errors even if TreatWarningsAsErrors is locally disabled, so the public API
@@ -50,7 +51,5 @@
   <ItemGroup Condition="'$(IsRoslynComponent)' != 'true'">
     <PackageReference Include="Meziantou.Analyzer" PrivateAssets="all" />
     <PackageReference Include="Roslynator.Analyzers" PrivateAssets="all" />
-    <PackageReference Include="ErrorProne.NET.CoreAnalyzers" PrivateAssets="all" />
-    <PackageReference Include="ErrorProne.NET.Structs" PrivateAssets="all" />
   </ItemGroup>
 </Project>
