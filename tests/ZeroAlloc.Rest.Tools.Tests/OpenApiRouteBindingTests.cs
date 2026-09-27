@@ -36,7 +36,7 @@ public class OpenApiRouteBindingTests
                       description: OK
             """));
 
-        Assert.Contains("[Get(\"/users/{userId}\")]", code);
+        Assert.Contains("[global::ZeroAlloc.Rest.Attributes.Get(\"/users/{userId}\")]", code);
         Assert.Contains("int userId", code);
         AssertCompilesClean(code);
     }
@@ -64,7 +64,7 @@ public class OpenApiRouteBindingTests
                       description: OK
             """));
 
-        Assert.Contains("[Get(\"/orgs/{orgId}/users/{userId}\")]", code);
+        Assert.Contains("[global::ZeroAlloc.Rest.Attributes.Get(\"/orgs/{orgId}/users/{userId}\")]", code);
         Assert.Contains("string orgId, int userId", code);
         AssertCompilesClean(code);
     }
@@ -87,7 +87,7 @@ public class OpenApiRouteBindingTests
                       description: OK
             """));
 
-        Assert.Contains("[Get(\"/types/{class}\")]", code);
+        Assert.Contains("[global::ZeroAlloc.Rest.Attributes.Get(\"/types/{class}\")]", code);
         Assert.Contains("string @class", code);
         AssertCompilesClean(code);
     }
@@ -115,8 +115,8 @@ public class OpenApiRouteBindingTests
                       description: Deleted
             """));
 
-        Assert.Contains("GetUserAsync(int id, CancellationToken ct = default)", code);
-        Assert.Contains("DeleteUserAsync(int id, CancellationToken ct = default)", code);
+        Assert.Contains("GetUserAsync(int id, global::System.Threading.CancellationToken ct = default)", code);
+        Assert.Contains("DeleteUserAsync(int id, global::System.Threading.CancellationToken ct = default)", code);
         AssertCompilesClean(code);
     }
 
@@ -144,7 +144,7 @@ public class OpenApiRouteBindingTests
                       description: OK
             """));
 
-        Assert.Contains("GetUserAsync(string id, CancellationToken ct = default)", code);
+        Assert.Contains("GetUserAsync(string id, global::System.Threading.CancellationToken ct = default)", code);
         AssertCompilesClean(code);
     }
 
@@ -171,7 +171,7 @@ public class OpenApiRouteBindingTests
                       description: OK
             """), "MyApp", "IMyApi", warnings);
 
-        Assert.Contains("GetUserAsync(int id, CancellationToken ct = default)", code);
+        Assert.Contains("GetUserAsync(int id, global::System.Threading.CancellationToken ct = default)", code);
         Assert.DoesNotContain("session)", code);
         Assert.Contains("// Cookie parameter 'session' is not emitted", code);
         var warning = Assert.Single(warnings);
@@ -207,9 +207,9 @@ public class OpenApiRouteBindingTests
                       description: OK
             """));
 
-        Assert.Contains("[Query(Name = \"page-size\")] int pageSize", code);
-        Assert.Contains("[Query(Name = \"PageToken\")] string pageToken", code);
-        Assert.Contains("[Header(\"X-Request-Id\")] string xRequestId", code);
+        Assert.Contains("[global::ZeroAlloc.Rest.Attributes.Query(Name = \"page-size\")] int? pageSize", code);
+        Assert.Contains("[global::ZeroAlloc.Rest.Attributes.Query(Name = \"PageToken\")] string? pageToken", code);
+        Assert.Contains("[global::ZeroAlloc.Rest.Attributes.Header(\"X-Request-Id\")] string? xRequestId", code);
         AssertCompilesClean(code);
     }
 
@@ -248,10 +248,13 @@ public class OpenApiRouteBindingTests
                       description: Updated
             """));
 
-        Assert.Contains("[Put(\"/items/{id2}\")]", code);
+        Assert.Contains("[global::ZeroAlloc.Rest.Attributes.Put(\"/items/{id2}\")]", code);
         Assert.Contains(
-            "PutItemAsync([Query] string id, int id2, [Query(Name = \"ct\")] string ct2, "
-                + "[Header(\"body\")] string body2, [Body] object body, CancellationToken ct = default)",
+            "PutItemAsync([global::ZeroAlloc.Rest.Attributes.Query] string? id, int id2, "
+                + "[global::ZeroAlloc.Rest.Attributes.Query(Name = \"ct\")] string? ct2, "
+                + "[global::ZeroAlloc.Rest.Attributes.Header(\"body\")] string? body2, "
+                + "[global::ZeroAlloc.Rest.Attributes.Body] global::System.Collections.Generic.Dictionary<string, global::System.Text.Json.JsonElement>? body, "
+                + "global::System.Threading.CancellationToken ct = default)",
             code);
         AssertCompilesClean(code);
     }

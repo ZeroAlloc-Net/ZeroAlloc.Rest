@@ -43,6 +43,9 @@ public sealed class MSBuildTaskPackageTests
             var (runExit, runOut, runErr) = await ConsumerProcess.RunDotnetAsync(workDir, "run", "-c", "Release", "--no-build");
             Assert.True(runExit == 0, "Consumer run failed:\n" + runOut + "\n" + runErr);
             Assert.Contains("Consumer.PetsApiClient", runOut, StringComparison.Ordinal);
+            // A whole line: Consumer.Pet is also a prefix of Consumer.PetsApiClient.
+            Assert.Contains("Consumer.Pet", runOut.Split('\n').Select(line => line.Trim()), StringComparer.Ordinal);
+            Assert.Contains("Consumer.PetsApiJsonContext", runOut, StringComparison.Ordinal);
             Assert.Contains("Consumer.Status.ApiClientClient", runOut, StringComparison.Ordinal);
 
             // A rebuild sees the generated files on disk when the project is evaluated. They must still be
@@ -109,6 +112,8 @@ public sealed class MSBuildTaskPackageTests
             """
             System.Console.WriteLine(typeof(Consumer.PetsApiClient).FullName);
             System.Console.WriteLine(typeof(Consumer.Status.ApiClientClient).FullName);
+            System.Console.WriteLine(typeof(Consumer.Pet).FullName);
+            System.Console.WriteLine(typeof(Consumer.PetsApiJsonContext).FullName);
             """);
     }
 
@@ -138,6 +143,19 @@ public sealed class MSBuildTaskPackageTests
                   responses:
                     '200':
                       description: OK
+                      content:
+                        application/json:
+                          schema:
+                            $ref: '#/components/schemas/Pet'
+            components:
+              schemas:
+                Pet:
+                  type: object
+                  required: [id]
+                  properties:
+                    id:
+                      type: integer
+                      format: int64
             """);
 
         File.WriteAllText(Path.Combine(workDir, "status.yaml"),
