@@ -46,7 +46,9 @@ An empty body read as a non-nullable value type, such as `int`, is reported the 
 reading as `0`. Declare `T?` where an empty body is a valid answer; see
 [Empty and null success bodies](advanced.md#empty-and-null-success-bodies). A method generated from an
 OpenAPI spec declares `T?` itself when the operation can also succeed with no body, such as 200 and
-204, or when its response schema is `nullable`.
+204, or when its response schema is `nullable`. An interface compiled without nullable annotations,
+under `#nullable disable`, has no `T?` to declare: its reference types count as non-nullable, so
+enable nullable annotations for it and declare `Pet?` to accept an empty body.
 
 ## Bodies and parameters are typed
 

@@ -126,6 +126,10 @@ to declare `T?` to accept an empty body. A null never reaches the caller as a `T
 generated method whose operation can also succeed with no body, such as 200 with a schema and 204
 without one, or whose response schema is `nullable`, declares `T?` for this reason.
 
+A reference type in a nullable-oblivious context, such as an interface under `#nullable disable`,
+counts as non-nullable: its `Task<Pet>` or `Result<Pet, E>` method rejects an empty body. To accept
+one, enable nullable annotations for the interface and declare `Pet?`.
+
 Failures that become an `HttpError` are still traced as failures: the span status is set to `Error` and the request duration is recorded, as for an exception that propagates.
 
 Consuming the result:
