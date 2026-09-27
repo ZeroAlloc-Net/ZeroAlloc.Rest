@@ -1,0 +1,3 @@
+#nullable enable
+ZeroAlloc.Rest.SystemTextJson.SystemTextJsonSerializer.SystemTextJsonSerializer(System.Text.Json.Serialization.JsonSerializerContext! context) -> void
+ZeroAlloc.Rest.SystemTextJson.SystemTextJsonSerializer.SystemTextJsonSerializer(System.Text.Json.Serialization.Metadata.IJsonTypeInfoResolver! resolver, System.Text.Json.JsonSerializerOptions? options = null) -> void

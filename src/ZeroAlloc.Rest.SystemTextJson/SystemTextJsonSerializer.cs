@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
 using ZeroAlloc.Rest;
 
@@ -35,6 +36,30 @@ public sealed class SystemTextJsonSerializer : IRestSerializer
         if (!options.IsReadOnly)
             options.MakeReadOnly(populateMissingResolver: true);
         _options = options;
+    }
+
+    /// <summary>
+    /// Serializes through the context's source-generated metadata only. A type the context does not
+    /// cover throws <see cref="InvalidOperationException"/>; nothing falls back to reflection.
+    /// </summary>
+    public SystemTextJsonSerializer(JsonSerializerContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        _options = context.Options;
+    }
+
+    /// <summary>
+    /// Serializes through <paramref name="resolver"/> only, with a copy of <paramref name="options"/>,
+    /// or of <see cref="JsonSerializerDefaults.Web"/>, whose resolver is replaced by it.
+    /// </summary>
+    public SystemTextJsonSerializer(IJsonTypeInfoResolver resolver, JsonSerializerOptions? options = null)
+    {
+        ArgumentNullException.ThrowIfNull(resolver);
+        _options = new JsonSerializerOptions(options ?? new JsonSerializerOptions(JsonSerializerDefaults.Web))
+        {
+            TypeInfoResolver = resolver,
+        };
+        _options.MakeReadOnly();
     }
 
     public string ContentType => "application/json";

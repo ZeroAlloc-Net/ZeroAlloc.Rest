@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 using System.Reflection;
 using System.Text.Json;
 using Xunit;
@@ -45,5 +46,16 @@ public class SerializerAotAnnotationTests
         Assert.NotNull(constructor);
         Assert.NotNull(constructor.GetCustomAttribute<RequiresUnreferencedCodeAttribute>());
         Assert.NotNull(constructor.GetCustomAttribute<RequiresDynamicCodeAttribute>());
+    }
+
+    [Theory]
+    [InlineData(typeof(System.Text.Json.Serialization.JsonSerializerContext))]
+    [InlineData(typeof(System.Text.Json.Serialization.Metadata.IJsonTypeInfoResolver))]
+    public void ContextAndResolverConstructors_AreNotAnnotated(Type parameter)
+    {
+        var constructor = typeof(SystemTextJsonSerializer).GetConstructors()
+            .Single(c => c.GetParameters() is [var first, ..] && first.ParameterType == parameter);
+        Assert.Null(constructor.GetCustomAttribute<RequiresUnreferencedCodeAttribute>());
+        Assert.Null(constructor.GetCustomAttribute<RequiresDynamicCodeAttribute>());
     }
 }
