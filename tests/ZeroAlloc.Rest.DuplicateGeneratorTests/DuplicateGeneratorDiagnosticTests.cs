@@ -13,12 +13,14 @@ public sealed class DuplicateGeneratorDiagnosticTests
         Assert.True(Directory.Exists(feed),
             $"Local nupkg feed not found at {feed}. Run `dotnet pack -c Release -p:Version=0.0.0-dev -o artifacts/local` on src/ZeroAlloc.Rest and src/ZeroAlloc.Rest.Generator first.");
 
-        // The "ZeroAlloc.Rest.*.nupkg" glob also matches "ZeroAlloc.Rest.Generator.*.nupkg"
-        // because `*` greedily eats "Generator.<version>". Filter it out explicitly — relying
-        // on enumeration order is unreliable across file systems (worked on Windows NTFS,
-        // returned Generator first on Linux ext4 in CI).
+        // The "ZeroAlloc.Rest.*.nupkg" glob also matches every sibling package in the feed,
+        // "ZeroAlloc.Rest.Generator.<version>" and "ZeroAlloc.Rest.Tools.MSBuild.<version>",
+        // because `*` greedily eats the rest of the id. Keep only the file whose id ends where
+        // the version begins, with a digit. Enumeration order is no help: it differs across
+        // file systems, and on Linux ext4 it changes with the file names, so the version string
+        // alone decides which package comes first.
         var restNupkg = Directory.GetFiles(feed, "ZeroAlloc.Rest.*.nupkg")
-            .Where(f => !Path.GetFileName(f).StartsWith("ZeroAlloc.Rest.Generator.", StringComparison.Ordinal))
+            .Where(f => char.IsAsciiDigit(Path.GetFileName(f)["ZeroAlloc.Rest.".Length]))
             .ToArray();
         var genNupkg = Directory.GetFiles(feed, "ZeroAlloc.Rest.Generator.*.nupkg");
         Assert.NotEmpty(restNupkg);
