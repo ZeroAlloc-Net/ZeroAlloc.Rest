@@ -14,4 +14,7 @@
     <PackageReference Include="Microsoft.Build.Utilities.Core" PrivateAssets="all" />
     <ProjectReference Include="../ZeroAlloc.Rest/ZeroAlloc.Rest.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="ZeroAlloc.Rest.Tools.Tests" />
+  </ItemGroup>
 </Project>
