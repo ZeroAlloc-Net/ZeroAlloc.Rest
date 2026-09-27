@@ -212,4 +212,100 @@ public class SchemaModelBuilderTests
 
         Assert.Equal(Build(Spec).Models, Build(Spec).Models);
     }
+
+    [Fact]
+    public void AllOf_IsFlattened_PartsFirst_RequiredIfAnyPartRequiresIt()
+    {
+        var (models, _) = Build("""
+                NewPet:
+                  type: object
+                  required: [name]
+                  properties:
+                    name:
+                      type: string
+                    tag:
+                      type: string
+                Pet:
+                  allOf:
+                    - $ref: '#/components/schemas/NewPet'
+                    - type: object
+                      required: [id, tag]
+                      properties:
+                        id:
+                          type: integer
+                          format: int64
+            """);
+
+        Assert.Equal(
+            new RecordModel("Pet", null, List(
+                Required("Name", "name", TypeRef.String),
+                Required("Tag", "tag", TypeRef.String),
+                Required("Id", "id", TypeRef.Long))),
+            models[1]);
+    }
+
+    [Fact]
+    public void AllOf_WithConflictingPropertyTypes_IsAGenerationError()
+    {
+        var error = Assert.Throws<InvalidOperationException>(() => Build("""
+                A:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                B:
+                  allOf:
+                    - $ref: '#/components/schemas/A'
+                    - type: object
+                      properties:
+                        id:
+                          type: string
+            """));
+
+        Assert.Equal(
+            "Schema 'B': property 'id' has conflicting types in its allOf parts, 'integer' and 'string'.",
+            error.Message);
+    }
+
+    [Fact]
+    public void AllOf_WithTheSamePropertyTwice_KeepsOne()
+    {
+        var (models, _) = Build("""
+                B:
+                  allOf:
+                    - type: object
+                      properties:
+                        id:
+                          type: integer
+                    - type: object
+                      required: [id]
+                      properties:
+                        id:
+                          type: integer
+            """);
+
+        Assert.Equal(List(Required("Id", "id", TypeRef.Int)), ((RecordModel)models[0]).Properties);
+    }
+
+    [Fact]
+    public void RecursiveAllOf_IsJsonElement_WithZrt002()
+    {
+        var (models, warnings) = Build("""
+                Holder:
+                  type: object
+                  properties:
+                    loop:
+                      $ref: '#/components/schemas/A'
+                A:
+                  allOf:
+                    - $ref: '#/components/schemas/B'
+                B:
+                  allOf:
+                    - $ref: '#/components/schemas/A'
+            """);
+
+        Assert.Equal(TypeRef.JsonElement, ((RecordModel)models[0]).Properties[0].Type);
+        Assert.DoesNotContain(models, m => m.Name is "A" or "B");
+        Assert.Contains(warnings, w => w.Message.Contains("its allOf refers back to itself", StringComparison.Ordinal));
+    }
 }

@@ -33,6 +33,12 @@ internal sealed class SchemaModelBuilder : ISchemaTypeNamer
     {
         if (_types.TryGetValue(schema, out var known))
             return known;
+        if (HasRecursiveAllOf(schema, new HashSet<OpenApiSchema>(ReferenceEqualityComparer.Instance)))
+        {
+            Unsupported(path, "its allOf refers back to itself");
+            _types.Add(schema, TypeRef.JsonElement);
+            return TypeRef.JsonElement;
+        }
         var name = Reserve(schema.Reference?.Id ?? contextName);
         var type = new TypeRef(name, TypeRefKind.Model, IsValueType: TypeMapper.IsEnum(schema));
         _types.Add(schema, type);
@@ -67,15 +73,82 @@ internal sealed class SchemaModelBuilder : ISchemaTypeNamer
 
     private RecordModel BuildRecord(OpenApiSchema schema, string name, string path)
     {
-        var used = new HashSet<string>(RecordMembers, StringComparer.Ordinal) { name };
-        var properties = new List<PropertyModel>(schema.Properties.Count);
+        var collected = new List<CollectedProperty>();
+        var required = new HashSet<string>(StringComparer.Ordinal);
+        Collect(schema, path, name, collected, required, skip: null);
+        return new RecordModel(name, schema.Description, Properties(name, collected, required));
+    }
+
+    private readonly record struct CollectedProperty(string WireName, OpenApiSchema Schema, string Path);
+
+    // Spec §5.4: the properties of a schema and of every allOf part, parts first, in declaration
+    // order. A property is required if any part requires it; the same property with two shapes is a
+    // generation error. skip is an allOf part whose properties the record inherits instead.
+    private static void Collect(
+        OpenApiSchema schema, string path, string recordName,
+        List<CollectedProperty> collected, HashSet<string> required, OpenApiSchema? skip)
+    {
+        for (var i = 0; i < schema.AllOf.Count; i++)
+        {
+            var part = schema.AllOf[i];
+            if (!ReferenceEquals(part, skip))
+                Collect(part, path + "/allOf/" + i.ToString(CultureInfo.InvariantCulture), recordName, collected, required, skip);
+        }
         foreach (var (wireName, propertySchema) in schema.Properties)
         {
-            var identifier = CSharpNames.Unique(CSharpNames.Pascal(wireName, "Property"), used);
-            var type = TypeMapper.Map(propertySchema, name + identifier, path + "/properties/" + wireName, this);
-            properties.Add(new PropertyModel(identifier, wireName, type, schema.Required.Contains(wireName), propertySchema.Nullable, propertySchema.Description));
+            var existing = collected.FindIndex(p => string.Equals(p.WireName, wireName, StringComparison.Ordinal));
+            if (existing < 0)
+            {
+                collected.Add(new CollectedProperty(wireName, propertySchema, path + "/properties/" + wireName));
+                continue;
+            }
+            var before = Shape(collected[existing].Schema);
+            var after = Shape(propertySchema);
+            if (!string.Equals(before, after, StringComparison.Ordinal))
+                throw new InvalidOperationException(
+                    $"Schema '{recordName}': property '{wireName}' has conflicting types in its allOf parts, '{before}' and '{after}'.");
         }
-        return new RecordModel(name, schema.Description, new EquatableList<PropertyModel>(properties));
+        required.UnionWith(schema.Required);
+    }
+
+    // What makes two declarations of a property the same type, without generating anything.
+    private static string Shape(OpenApiSchema schema)
+    {
+        if (schema.Reference?.Id is { } id)
+            return id;
+        var shape = schema.Type ?? "any";
+        if (schema.Format is not null)
+            shape += ":" + schema.Format;
+        if (schema.Items is not null)
+            shape += "[" + Shape(schema.Items) + "]";
+        return shape;
+    }
+
+    private EquatableList<PropertyModel> Properties(string recordName, List<CollectedProperty> collected, HashSet<string> required)
+    {
+        var used = new HashSet<string>(RecordMembers, StringComparer.Ordinal) { recordName };
+        var properties = new List<PropertyModel>(collected.Count);
+        foreach (var (wireName, propertySchema, propertyPath) in collected)
+        {
+            var identifier = CSharpNames.Unique(CSharpNames.Pascal(wireName, "Property"), used);
+            var type = TypeMapper.Map(propertySchema, recordName + identifier, propertyPath, this);
+            properties.Add(new PropertyModel(identifier, wireName, type, required.Contains(wireName), propertySchema.Nullable, propertySchema.Description));
+        }
+        return new EquatableList<PropertyModel>(properties);
+    }
+
+    // Only allOf edges count: a record whose property refers back to it is fine.
+    private static bool HasRecursiveAllOf(OpenApiSchema schema, HashSet<OpenApiSchema> visiting)
+    {
+        if (!visiting.Add(schema))
+            return true;
+        foreach (var part in schema.AllOf)
+        {
+            if (HasRecursiveAllOf(part, visiting))
+                return true;
+        }
+        visiting.Remove(schema);
+        return false;
     }
 
     private static EnumModel BuildEnum(OpenApiSchema schema, string name)
