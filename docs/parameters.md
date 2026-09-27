@@ -66,6 +66,15 @@ Task<ResourceDto> GetSecureAsync([Header("X-Api-Key")] string apiKey, Cancellati
 
 The header name in the attribute is the exact HTTP header name sent over the wire.
 
+A header parameter that is `null` is left out of the request, the way a nullable `[Query]` parameter is. Use a nullable type such as `string?` or `int?` for an optional header:
+
+```csharp
+[Post("/events")]
+Task PublishAsync([Body] Event body, [Header("X-Retry-Count")] int? retryCount, CancellationToken ct = default);
+```
+
+Passing `null` sends no `X-Retry-Count` header at all, not an empty one. An empty string is a value, so `""` still sends the header with an empty value.
+
 ## CancellationToken
 
 Every method should end with `CancellationToken ct = default`. The generator recognises this type by its well-known name and passes it to `HttpClient.SendAsync`.
@@ -77,7 +86,7 @@ Every method should end with `CancellationToken ct = default`. The generator rec
 | `{name}` in route | URL path segment | URL-encoded automatically |
 | `[Query]` | Query string | Nullable → omitted when null |
 | `[Body]` | Request body | Serialized by `IRestSerializer` |
-| `[Header("Name")]` | Request header | Exact header name required |
+| `[Header("Name")]` | Request header | Exact header name required; omitted when null |
 | `CancellationToken` | (automatic) | Recognised by type, no attribute needed |
 | `[Header("Name", Value = "...")]` on method | Static request header | Compile-time constant; silently ignored when `Value` is omitted |
 | `[Query]` on `IEnumerable<T>` | Repeated query keys | Null items skipped; null collection emits nothing |

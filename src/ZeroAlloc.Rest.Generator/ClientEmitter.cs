@@ -367,8 +367,22 @@ internal static class ClientEmitter
         foreach (var (name, value) in method.StaticHeaders)
             sb.AppendLine($"        __request.Headers.TryAddWithoutValidation(\"{name}\", \"{value}\");");
 
+        // TryAddWithoutValidation sends a null value as an empty header, so a parameter that can be
+        // null is added only when it has a value: a null argument means "no header". A non-nullable
+        // value type always has one, and `?.` would not compile on it.
         foreach (var h in headerParams)
-            sb.AppendLine($"        __request.Headers.TryAddWithoutValidation(\"{h.HeaderName}\", {Identifier(h)}?.ToString());");
+        {
+            var addHeader = $"__request.Headers.TryAddWithoutValidation(\"{h.HeaderName}\", {Identifier(h)}.ToString());";
+            if (h.IsNullable)
+            {
+                sb.AppendLine($"        if ({Identifier(h)} is not null)");
+                sb.AppendLine($"            {addHeader}");
+            }
+            else
+            {
+                sb.AppendLine($"        {addHeader}");
+            }
+        }
 
         if (bodyParam != null)
         {
