@@ -17,7 +17,8 @@ internal record MethodModel(
     string? DeclaredErrorTypeName,
     string? MapperErrorTypeName,
     bool MappedErrorNeedsNullCheck,
-    EquatableArray<string> EvaluatedRouteTokens)
+    EquatableArray<string> EvaluatedRouteTokens,
+    bool ReturnsUnitResult)
 {
     // EvaluatedRouteTokens are the {token} names the URL keeps as C# interpolation holes, exactly as
     // before ZRA005; see RouteTokenBinding.
@@ -26,6 +27,8 @@ internal record MethodModel(
     // Result type must repeat. MapperErrorTypeName is E as the mapper declares it, which the injected
     // IHttpErrorMapper<E> must repeat. MappedErrorNeedsNullCheck is set when the mapper may return null
     // but the method's E is not nullable.
+    // ReturnsUnitResult is set for UnitResult<E>: ReturnsResult is also set, so the failure paths are
+    // exactly those of Result<T, E>, and InnerTypeName is null because success reads no body.
     internal const string HttpErrorTypeName = "global::ZeroAlloc.Rest.HttpError";
 
     // Result<T, E> with E other than HttpError: every failure goes through an IHttpErrorMapper<E>.

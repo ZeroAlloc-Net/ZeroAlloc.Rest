@@ -263,10 +263,15 @@ internal static class ClientEmitter
             : "_serializer";
 
         string? errorMapperField = null;
-        if (method.MapsError && !errorMapperFieldMap.TryGetValue(method.ErrorTypeName!, out errorMapperField))
+        if (method.MapsError)
         {
-            EmitUnmappedStub(sb, method);
-            return;
+            var errorTypeName = method.ErrorTypeName
+                ?? throw new global::System.InvalidOperationException("MapsError implies ErrorTypeName is set.");
+            if (!errorMapperFieldMap.TryGetValue(errorTypeName, out errorMapperField))
+            {
+                EmitUnmappedStub(sb, method);
+                return;
+            }
         }
 
         sb.AppendLine($"    public async {method.ReturnTypeName} {method.Name}({BuildParamList(method.Parameters)})");
@@ -480,6 +485,18 @@ internal static class ClientEmitter
         {
             sb.AppendLine($"{indent}__response.EnsureSuccessStatusCode();");
         }
+        else if (method.ReturnsUnitResult)
+        {
+            // No body to read, so nothing can fail to deserialize: success is the status alone.
+            sb.AppendLine($"{indent}if (__response.IsSuccessStatusCode)");
+            sb.AppendLine($"{indent}{{");
+            sb.AppendLine($"{i1}return {ResultTypeName(method)}.Success();");
+            sb.AppendLine($"{indent}}}");
+            sb.AppendLine($"{indent}else");
+            sb.AppendLine($"{indent}{{");
+            EmitStatusFailure(sb, method, i1, ctArg, maxErrorBodyBytes);
+            sb.AppendLine($"{indent}}}");
+        }
         else if (method.ReturnsResult)
         {
             var resultType = ResultTypeName(method);
@@ -517,18 +534,7 @@ internal static class ClientEmitter
             sb.AppendLine($"{indent}}}");
             sb.AppendLine($"{indent}else");
             sb.AppendLine($"{indent}{{");
-            if (maxErrorBodyBytes > 0)
-            {
-                // Read before the response is disposed. The helper caps the body, turns a failed read
-                // into an empty body, and still throws on caller cancellation.
-                var cap = maxErrorBodyBytes.ToString(CultureInfo.InvariantCulture);
-                sb.AppendLine($"{i1}var __errorBody = await global::ZeroAlloc.Rest.GeneratedRestClient.ReadErrorBodyAsync(__response.Content, {cap}, {ctArg}).ConfigureAwait(false);");
-                EmitFailure(sb, i1, method, "__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Status, __response, null, __errorBody.Body, __errorBody.Truncated)");
-            }
-            else
-            {
-                EmitFailure(sb, i1, method, "__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Status, __response, null)");
-            }
+            EmitStatusFailure(sb, method, i1, ctArg, maxErrorBodyBytes);
             sb.AppendLine($"{indent}}}");
         }
         else
@@ -539,12 +545,32 @@ internal static class ClientEmitter
         }
     }
 
-    // A mapped method repeats its E as declared, nullable annotation included: Result<T, E> is a
-    // struct, so Result<T, JevError> does not convert to Result<T, JevError?> without a warning.
+    // A non-success status: read the capped body, when asked, before the response is disposed.
+    private static void EmitStatusFailure(StringBuilder sb, MethodModel method, string indent, string ctArg, int maxErrorBodyBytes)
+    {
+        if (maxErrorBodyBytes > 0)
+        {
+            // The helper caps the body, turns a failed read into an empty body, and still throws on
+            // caller cancellation.
+            var cap = maxErrorBodyBytes.ToString(CultureInfo.InvariantCulture);
+            sb.AppendLine($"{indent}var __errorBody = await global::ZeroAlloc.Rest.GeneratedRestClient.ReadErrorBodyAsync(__response.Content, {cap}, {ctArg}).ConfigureAwait(false);");
+            EmitFailure(sb, indent, method, "__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Status, __response, null, __errorBody.Body, __errorBody.Truncated)");
+        }
+        else
+        {
+            EmitFailure(sb, indent, method, "__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Status, __response, null)");
+        }
+    }
+
+    // A mapped method repeats its E as declared, nullable annotation included: Result<T, E> and
+    // UnitResult<E> are structs, so Result<T, JevError> does not convert to Result<T, JevError?>.
     private static string ResultTypeName(MethodModel method)
-        => method.MapsError
-            ? $"ZeroAlloc.Results.Result<{method.InnerTypeName}, {method.DeclaredErrorTypeName}>"
-            : $"ZeroAlloc.Results.Result<{method.InnerTypeName}, ZeroAlloc.Rest.HttpError>";
+    {
+        var error = method.MapsError ? method.DeclaredErrorTypeName : "ZeroAlloc.Rest.HttpError";
+        return method.ReturnsUnitResult
+            ? $"ZeroAlloc.Results.UnitResult<{error}>"
+            : $"ZeroAlloc.Results.Result<{method.InnerTypeName}, {error}>";
+    }
 
     // How a failure site ends. An HttpError method returns the error from the site, exactly as
     // before. A mapped method stores it in __httpError and maps it once, after the method's try.
@@ -571,8 +597,10 @@ internal static class ClientEmitter
         {
             // The mapper is declared over E? but the method returns a non-nullable E. A null would
             // break the method's contract, so it fails loudly here instead of reaching the caller.
-            var mapperError = StripGlobal(method.MapperErrorTypeName!);
-            var methodError = StripGlobal(method.DeclaredErrorTypeName!);
+            var mapperError = StripGlobal(method.MapperErrorTypeName
+                ?? throw new global::System.InvalidOperationException("MappedErrorNeedsNullCheck requires MapperErrorTypeName."));
+            var methodError = StripGlobal(method.DeclaredErrorTypeName
+                ?? throw new global::System.InvalidOperationException("MappedErrorNeedsNullCheck requires DeclaredErrorTypeName."));
             mapped += $" ?? throw new global::System.InvalidOperationException(\"The IHttpErrorMapper<{mapperError}> returned null, but {method.Name} returns a Result whose error type {methodError} is not nullable.\")";
         }
         sb.AppendLine("        try");
@@ -599,7 +627,8 @@ internal static class ClientEmitter
     // client compiling, so that diagnostic is the only error the user sees.
     private static void EmitUnmappedStub(StringBuilder sb, MethodModel method)
     {
-        var errorType = StripGlobal(method.ErrorTypeName!);
+        var errorType = StripGlobal(method.ErrorTypeName
+            ?? throw new global::System.InvalidOperationException("EmitUnmappedStub requires ErrorTypeName."));
         sb.AppendLine($"    public {method.ReturnTypeName} {method.Name}({BuildParamList(method.Parameters)})");
         sb.AppendLine($"        => throw new global::System.NotSupportedException(\"No usable [ErrorMapper] maps {errorType}; see the ZeroAlloc.Rest diagnostic reported for this method.\");");
         sb.AppendLine();

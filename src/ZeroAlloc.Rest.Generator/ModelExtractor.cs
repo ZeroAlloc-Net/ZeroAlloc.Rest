@@ -24,6 +24,7 @@ internal static class ModelExtractor
     private const string NotConstructibleReason = "it must be a closed, non-abstract class with a public constructor";
     private const string NoMapperInterfaceReason = "it implements no IHttpErrorMapper<TError> interface";
     private const string ResultOpenType = "ZeroAlloc.Results.Result<T, E>";
+    private const string UnitResultOpenType = "ZeroAlloc.Results.UnitResult<E>";
     private const int DefaultMaxErrorBodyBytes = 65536;
 
     internal static ClientModel? Extract(
@@ -357,6 +358,7 @@ internal static class ModelExtractor
 
         bool returnsVoid = false;
         bool returnsResult = false;
+        var returnsUnitResult = false;
         string? innerTypeName = null;
         string? errorTypeName = null;
         string? declaredErrorTypeName = null;
@@ -370,11 +372,24 @@ internal static class ModelExtractor
         {
             var inner = returnType.TypeArguments[0] as INamedTypeSymbol;
             innerTypeName = inner?.ToDisplayString();
-            returnsResult = inner?.OriginalDefinition.ToDisplayString() == ResultOpenType;
-            if (returnsResult && inner?.TypeArguments.Length == 2)
+            var innerDefinition = inner?.OriginalDefinition.ToDisplayString();
+            returnsUnitResult = innerDefinition == UnitResultOpenType;
+            returnsResult = returnsUnitResult || innerDefinition == ResultOpenType;
+
+            ITypeSymbol? errorType = null;
+            if (returnsUnitResult && inner?.TypeArguments.Length == 1)
+            {
+                innerTypeName = null;
+                errorType = inner.TypeArguments[0];
+            }
+            else if (returnsResult && inner?.TypeArguments.Length == 2)
             {
                 innerTypeName = inner.TypeArguments[0].ToDisplayString();
-                var errorType = inner.TypeArguments[1];
+                errorType = inner.TypeArguments[1];
+            }
+
+            if (errorType is not null)
+            {
                 errorTypeName = ErrorTypeKey(errorType);
                 declaredErrorTypeName = AnnotatedErrorTypeName(errorType);
 
@@ -412,7 +427,8 @@ internal static class ModelExtractor
             parameters, methodSerializer, ToEquatable(staticHeaders),
             location, errorTypeName, errorMapperTypeName,
             declaredErrorTypeName, mapperErrorTypeName, mappedErrorNeedsNullCheck,
-            EvaluatedRouteTokens(method, route, clientHasQueryParameter, compilation, ct));
+            EvaluatedRouteTokens(method, route, clientHasQueryParameter, compilation, ct),
+            returnsUnitResult);
     }
 
     private static EquatableArray<string> EvaluatedRouteTokens(

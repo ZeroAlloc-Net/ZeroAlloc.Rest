@@ -123,6 +123,22 @@ else
 }
 ```
 
+### Operations with no response body: `UnitResult<HttpError>`
+
+A method that has nothing to return on success returns `UnitResult<HttpError>`, from
+ZeroAlloc.Results. Any 2xx status is a success, and the body is not read, so a success can never be
+a `Deserialization` failure. Every other failure is exactly as for `Result<T, HttpError>`: a
+non-success status, a transport failure and a timeout come back as an `HttpError`, and what still
+throws is listed above.
+
+```csharp
+[Delete("/users/{id}")]
+Task<UnitResult<HttpError>> DeleteUserAsync(int id, CancellationToken ct = default);
+```
+
+`UnitResult<TError>` works with an `[ErrorMapper]` in the same way as `Result<T, TError>`. The code
+generator returns it for every operation whose 2xx responses have no schema.
+
 ## Your own error type: `[ErrorMapper]`
 
 A client SDK often wants to return its own error type rather than `HttpError`. Declare the method with `Result<T, TError>`, and name a mapper for `TError` on the interface:
@@ -372,6 +388,8 @@ Task DeleteUserAsync(int id, CancellationToken ct = default);
 ```
 
 The generated code calls `EnsureSuccessStatusCode()` and returns.
+
+To get failures as values instead of exceptions, return `UnitResult<HttpError>`; see [Operations with no response body](#operations-with-no-response-body-unitresulthttperror).
 
 ## Long-running clients outside DI
 
