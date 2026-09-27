@@ -80,8 +80,23 @@ public sealed class SystemTextJsonSerializer : IRestSerializer
             return (JsonTypeInfo<T>)typeInfo;
         throw new InvalidOperationException(
             $"{typeof(T)} is not registered with the JSON type info resolver this SystemTextJsonSerializer "
-            + $"was created with. Add [JsonSerializable(typeof({typeof(T).Name}))] to your JsonSerializerContext. "
+            + $"was created with. Add [JsonSerializable(typeof({DisplayName(typeof(T))}))] to your JsonSerializerContext. "
             + "For a client generated from an OpenAPI spec, regenerate it: its generated JsonContext covers "
             + "every request and response type.");
+    }
+
+    // A type as C# writes it, so the hint above can be pasted: List<Pet>, Pet[] and Int32?, where
+    // Type.Name gives List`1 for a generic type.
+    private static string DisplayName(Type type)
+    {
+        if (Nullable.GetUnderlyingType(type) is { } underlying)
+            return DisplayName(underlying) + "?";
+        if (type.IsArray && type.GetElementType() is { } element)
+            return DisplayName(element) + "[" + new string(',', type.GetArrayRank() - 1) + "]";
+        if (!type.IsGenericType)
+            return type.Name;
+        var name = type.Name;
+        var tick = name.IndexOf('`', StringComparison.Ordinal);
+        return (tick < 0 ? name : name[..tick]) + "<" + string.Join(", ", type.GetGenericArguments().Select(DisplayName)) + ">";
     }
 }

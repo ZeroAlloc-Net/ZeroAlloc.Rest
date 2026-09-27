@@ -48,6 +48,20 @@ public class SerializerAotAnnotationTests
         Assert.NotNull(constructor.GetCustomAttribute<RequiresDynamicCodeAttribute>());
     }
 
+    // MessagePackSerializerOptions.Standard builds formatters with reflection and dynamic code, and
+    // caller options may fall back to it: the constructor cannot tell, so both are annotated.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ReflectionCapableMessagePackConstructors_AreAnnotated(bool withOptions)
+    {
+        var constructor = typeof(MessagePackRestSerializer).GetConstructor(
+            withOptions ? [typeof(global::MessagePack.MessagePackSerializerOptions)] : Type.EmptyTypes);
+        Assert.NotNull(constructor);
+        Assert.NotNull(constructor.GetCustomAttribute<RequiresUnreferencedCodeAttribute>());
+        Assert.NotNull(constructor.GetCustomAttribute<RequiresDynamicCodeAttribute>());
+    }
+
     [Theory]
     [InlineData(typeof(System.Text.Json.Serialization.JsonSerializerContext))]
     [InlineData(typeof(System.Text.Json.Serialization.Metadata.IJsonTypeInfoResolver))]

@@ -50,6 +50,25 @@ public class SystemTextJsonContextTests
         Assert.Contains("generated JsonContext", error.Message, StringComparison.Ordinal);
     }
 
+    // The hint is C# a reader can paste: List<Unregistered>, not the CLR name List`1.
+    [Fact]
+    public async Task UnregisteredGenericType_HintRendersItsTypeArguments()
+    {
+        var serializer = new SystemTextJsonSerializer(WidgetJsonContext.Default);
+        using var stream = new MemoryStream();
+
+        var list = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => serializer.SerializeAsync(stream, new List<Unregistered>()).AsTask());
+        var nested = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => serializer.SerializeAsync(stream, new Dictionary<string, List<Unregistered[]>>()).AsTask());
+        var nullable = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => serializer.SerializeAsync<int?>(stream, 1).AsTask());
+
+        Assert.Contains("[JsonSerializable(typeof(List<Unregistered>))]", list.Message, StringComparison.Ordinal);
+        Assert.Contains("[JsonSerializable(typeof(Dictionary<String, List<Unregistered[]>>))]", nested.Message, StringComparison.Ordinal);
+        Assert.Contains("[JsonSerializable(typeof(Int32?))]", nullable.Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task EmptyBody_DeserializesToDefault()
     {
