@@ -663,7 +663,7 @@ internal static class ClientEmitter
         sb.AppendLine();
     }
 
-    private static string BuildParamList(IReadOnlyList<ParameterModel> parameters)
+    private static string BuildParamList(EquatableArray<ParameterModel> parameters)
     {
         var sb = new StringBuilder();
         for (var i = 0; i < parameters.Count; i++)
@@ -727,14 +727,14 @@ internal static class ClientEmitter
             : name;
     }
 
-    private static ParameterModel? FindCancellationToken(IReadOnlyList<ParameterModel> parameters)
+    private static ParameterModel? FindCancellationToken(EquatableArray<ParameterModel> parameters)
     {
         for (var i = 0; i < parameters.Count; i++)
             if (parameters[i].Kind == ParameterKind.CancellationToken) return parameters[i];
         return null;
     }
 
-    private static List<ParameterModel> FilterParameters(IReadOnlyList<ParameterModel> parameters, ParameterKind kind)
+    private static List<ParameterModel> FilterParameters(EquatableArray<ParameterModel> parameters, ParameterKind kind)
     {
         var result = new List<ParameterModel>();
         for (var i = 0; i < parameters.Count; i++)
@@ -742,7 +742,7 @@ internal static class ClientEmitter
         return result;
     }
 
-    private static ParameterModel? FirstOrDefault(IReadOnlyList<ParameterModel> parameters, ParameterKind kind)
+    private static ParameterModel? FirstOrDefault(EquatableArray<ParameterModel> parameters, ParameterKind kind)
     {
         for (var i = 0; i < parameters.Count; i++)
             if (parameters[i].Kind == kind) return parameters[i];

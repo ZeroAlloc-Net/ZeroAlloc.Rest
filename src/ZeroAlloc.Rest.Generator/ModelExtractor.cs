@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 using System.Threading;
 using Microsoft.CodeAnalysis;
@@ -55,9 +56,9 @@ internal static class ModelExtractor
             if (methodModel is not null) methods.Add(methodModel);
         }
 
-        return new ClientModel(ns, interfaceName, className, methods.AsReadOnly(), clientSerializer,
+        return new ClientModel(ns, interfaceName, className, ToEquatable(methods), clientSerializer,
             IsEffectivelyPublic(interfaceSymbol), GetMaxErrorBodyBytes(ctx),
-            mappers.Valid.AsReadOnly(), diagnostics.AsReadOnly());
+            ToEquatable(mappers.Valid), ToEquatable(diagnostics));
     }
 
     private sealed class ErrorMapperResolution
@@ -108,7 +109,7 @@ internal static class ModelExtractor
                     ? other.ToDisplayString()
                     : "null";
                 diagnostics.Add(new DiagnosticInfo(DiagnosticDescriptors.InvalidErrorMapper, location,
-                    new object[] { argumentDisplay, NotConstructibleReason }));
+                    Args(argumentDisplay, NotConstructibleReason)));
                 continue;
             }
 
@@ -129,7 +130,7 @@ internal static class ModelExtractor
             if (!implementsMapper)
             {
                 diagnostics.Add(new DiagnosticInfo(DiagnosticDescriptors.InvalidErrorMapper, location,
-                    new object[] { mapperDisplay, NoMapperInterfaceReason }));
+                    Args(mapperDisplay, NoMapperInterfaceReason)));
                 continue;
             }
 
@@ -137,7 +138,7 @@ internal static class ModelExtractor
             if (!constructible)
             {
                 diagnostics.Add(new DiagnosticInfo(DiagnosticDescriptors.InvalidErrorMapper, location,
-                    new object[] { mapperDisplay, NotConstructibleReason }));
+                    Args(mapperDisplay, NotConstructibleReason)));
             }
 
             var mapperName = mapperType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
@@ -148,7 +149,7 @@ internal static class ModelExtractor
                 if (ownerByError.TryGetValue(errorName, out var owner))
                 {
                     diagnostics.Add(new DiagnosticInfo(DiagnosticDescriptors.DuplicateErrorMapper, location,
-                        new object[] { owner, mapperDisplay, errorType.ToDisplayString() }));
+                        Args(owner, mapperDisplay, errorType.ToDisplayString())));
                     continue;
                 }
 
@@ -165,7 +166,7 @@ internal static class ModelExtractor
             }
 
             if (mapped.Count > 0)
-                resolution.Valid.Add(new ErrorMapperModel(mapperName, mapped.AsReadOnly()));
+                resolution.Valid.Add(new ErrorMapperModel(mapperName, ToEquatable(mapped)));
         }
 
         return resolution;
@@ -338,7 +339,7 @@ internal static class ModelExtractor
                     }
                     else if (!mappers.HasUnresolvedMapper && !mappers.ClaimedByInvalidMapper.Contains(errorTypeName))
                         diagnostics.Add(new DiagnosticInfo(DiagnosticDescriptors.MissingErrorMapper, location,
-                            new object[] { method.Name, errorType.ToDisplayString() }));
+                            Args(method.Name, errorType.ToDisplayString())));
                 }
             }
         }
@@ -353,12 +354,12 @@ internal static class ModelExtractor
         return new MethodModel(
             method.Name, httpMethod, route, returnTypeName,
             innerTypeName, returnsResult, returnsVoid,
-            parameters, methodSerializer, staticHeaders.AsReadOnly(),
+            parameters, methodSerializer, ToEquatable(staticHeaders),
             location, errorTypeName, errorMapperTypeName,
             declaredErrorTypeName, mapperErrorTypeName, mappedErrorNeedsNullCheck);
     }
 
-    private static IReadOnlyList<ParameterModel> ExtractParameters(IMethodSymbol method)
+    private static EquatableArray<ParameterModel> ExtractParameters(IMethodSymbol method)
     {
         var result = new List<ParameterModel>();
         foreach (var param in method.Parameters)
@@ -444,7 +445,7 @@ internal static class ModelExtractor
 
             result.Add(new ParameterModel(param.Name, typeName, kind, headerName, queryName ?? param.Name, isNullable, isCollection));
         }
-        return result.AsReadOnly();
+        return ToEquatable(result);
     }
 
     private static string? GetSerializerType(ISymbol symbol)
@@ -461,4 +462,10 @@ internal static class ModelExtractor
         }
         return null;
     }
+
+    private static EquatableArray<T> ToEquatable<T>(List<T> items)
+        where T : System.IEquatable<T>
+        => new(items.ToImmutableArray());
+
+    private static EquatableArray<string> Args(params string[] args) => new(ImmutableArray.Create(args));
 }

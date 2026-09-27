@@ -17,7 +17,8 @@ public sealed class RestClientGenerator : IIncrementalGenerator
                 predicate: static (node, _) => node is InterfaceDeclarationSyntax,
                 transform: static (ctx, ct) => ModelExtractor.Extract(ctx, ct))
             .Where(static m => m is not null)
-            .Select(static (m, _) => m!);
+            .Select(static (m, _) => m!)
+            .WithTrackingName("ClientModels");
 
         context.RegisterSourceOutput(clientModels, static (ctx, model) =>
         {

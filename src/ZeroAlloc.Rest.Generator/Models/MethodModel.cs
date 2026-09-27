@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-
 namespace ZeroAlloc.Rest.Generator.Models;
 
 internal record MethodModel(
@@ -10,9 +8,9 @@ internal record MethodModel(
     string? InnerTypeName,
     bool ReturnsResult,
     bool ReturnsVoid,
-    IReadOnlyList<ParameterModel> Parameters,
+    EquatableArray<ParameterModel> Parameters,
     string? SerializerTypeName,
-    IReadOnlyList<(string Name, string Value)> StaticHeaders,
+    EquatableArray<(string Name, string Value)> StaticHeaders,
     LocationInfo Location,
     string? ErrorTypeName,
     string? ErrorMapperTypeName,
