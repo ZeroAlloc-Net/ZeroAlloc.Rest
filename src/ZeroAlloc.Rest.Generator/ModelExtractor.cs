@@ -364,6 +364,7 @@ internal static class ModelExtractor
         bool returnsResult = false;
         var returnsUnitResult = false;
         string? innerTypeName = null;
+        ITypeSymbol? innerType = null;
         string? errorTypeName = null;
         string? declaredErrorTypeName = null;
         string? errorMapperTypeName = null;
@@ -374,8 +375,9 @@ internal static class ModelExtractor
 
         if (returnType.TypeArguments.Length == 1)
         {
-            var inner = returnType.TypeArguments[0] as INamedTypeSymbol;
-            innerTypeName = inner?.ToDisplayString();
+            innerType = returnType.TypeArguments[0];
+            var inner = innerType as INamedTypeSymbol;
+            innerTypeName = innerType.ToDisplayString();
             var innerDefinition = inner?.OriginalDefinition.ToDisplayString();
             returnsUnitResult = innerDefinition == UnitResultOpenType;
             returnsResult = returnsUnitResult || innerDefinition == ResultOpenType;
@@ -384,11 +386,13 @@ internal static class ModelExtractor
             if (returnsUnitResult && inner?.TypeArguments.Length == 1)
             {
                 innerTypeName = null;
+                innerType = null;
                 errorType = inner.TypeArguments[0];
             }
             else if (returnsResult && inner?.TypeArguments.Length == 2)
             {
-                innerTypeName = inner.TypeArguments[0].ToDisplayString();
+                innerType = inner.TypeArguments[0];
+                innerTypeName = innerType.ToDisplayString();
                 errorType = inner.TypeArguments[1];
             }
 
@@ -432,8 +436,16 @@ internal static class ModelExtractor
             location, errorTypeName, errorMapperTypeName,
             declaredErrorTypeName, mapperErrorTypeName, mappedErrorNeedsNullCheck,
             EvaluatedRouteTokens(method, route, clientHasQueryParameter, compilation, ct),
-            returnsUnitResult);
+            returnsUnitResult,
+            innerType?.IsValueType == true,
+            innerType is not null && IsNullable(innerType));
     }
+
+    // A nullable reference type, or Nullable<T>.
+    private static bool IsNullable(ITypeSymbol type)
+        => type.IsValueType
+            ? type.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T
+            : type.NullableAnnotation == NullableAnnotation.Annotated;
 
     private static EquatableArray<string> EvaluatedRouteTokens(
         IMethodSymbol method, string route, bool clientHasQueryParameter, Compilation compilation, CancellationToken ct)

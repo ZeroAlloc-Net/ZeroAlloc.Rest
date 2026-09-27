@@ -854,6 +854,7 @@ public class GeneratorEmissionTests
 
         Assert.Contains("PingAsync(", generated);
         Assert.DoesNotContain("UnconditionalSuppressMessage", generated);
+        Assert.DoesNotContain("#pragma", generated);
     }
 
     private static string GetGeneratedSource(string source, string hintName)

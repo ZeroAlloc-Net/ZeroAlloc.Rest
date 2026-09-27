@@ -555,7 +555,6 @@ internal static class ClientEmitter
         sb.AppendLine("                new global::System.Collections.Generic.KeyValuePair<string, object?>(\"rest.method\", __RestMethodTag));");
         EmitResponseHandling(sb, method, ctArg, serializerExpr, maxErrorBodyBytes, indent: "            ");
         sb.AppendLine("        }");
-        sb.AppendLine("#pragma warning disable EPC12");
         if (method.ReturnsResult)
             EmitResultCatches(sb, method, callerToken);
         sb.AppendLine("        catch (global::System.Exception __ex)");
@@ -563,7 +562,6 @@ internal static class ClientEmitter
         sb.AppendLine("            __RecordFailure(__activity, __ex, __sw, __httpMethod, __RestMethodTag);");
         sb.AppendLine("            throw;");
         sb.AppendLine("        }");
-        sb.AppendLine("#pragma warning restore EPC12");
         if (errorMapperField != null)
             EmitMapping(sb, method, errorMapperField);
     }
@@ -629,7 +627,8 @@ internal static class ClientEmitter
                 // through to the single mapping site after the method's try.
                 sb.AppendLine($"{i1}try");
                 sb.AppendLine($"{i1}{{");
-                sb.AppendLine($"{i2}{method.InnerTypeName} __content = (await {serializerExpr}.DeserializeAsync<{method.InnerTypeName}>(__responseStream, {ctArg}).ConfigureAwait(false))!;");
+                EmitEmptyBodyCheck(sb, method, i2);
+                sb.AppendLine($"{i2}{method.InnerTypeName} __content = {ReadBody(method, serializerExpr, ctArg)};");
                 sb.AppendLine($"{i2}return {resultType}.Success(__content);");
                 sb.AppendLine($"{i1}}}");
             }
@@ -638,7 +637,8 @@ internal static class ClientEmitter
                 sb.AppendLine($"{i1}{method.InnerTypeName} __content;");
                 sb.AppendLine($"{i1}try");
                 sb.AppendLine($"{i1}{{");
-                sb.AppendLine($"{i2}__content = (await {serializerExpr}.DeserializeAsync<{method.InnerTypeName}>(__responseStream, {ctArg}).ConfigureAwait(false))!;");
+                EmitEmptyBodyCheck(sb, method, i2);
+                sb.AppendLine($"{i2}__content = {ReadBody(method, serializerExpr, ctArg)};");
                 sb.AppendLine($"{i1}}}");
             }
             sb.AppendLine($"{i1}catch (global::System.Exception __ex) when (__ex is not global::System.OperationCanceledException)");
@@ -658,9 +658,35 @@ internal static class ClientEmitter
         {
             sb.AppendLine($"{indent}__response.EnsureSuccessStatusCode();");
             sb.AppendLine($"{indent}var __responseStream = await __response.Content.ReadAsStreamAsync().ConfigureAwait(false);");
-            sb.AppendLine($"{indent}return (await {serializerExpr}.DeserializeAsync<{method.InnerTypeName}>(__responseStream, {ctArg}).ConfigureAwait(false))!;");
+            EmitEmptyBodyCheck(sb, method, indent);
+            sb.AppendLine($"{indent}return {ReadBody(method, serializerExpr, ctArg)};");
         }
     }
+
+    // A success body of JSON null, or an empty one such as a 204's, has no value. A T that accepts
+    // null gets null. Otherwise the read throws, and a Result method's deserialization catch turns
+    // that into a Deserialization failure: a null never reaches the caller as a T that denies it.
+    // A reference T is checked after the read, which gives null for both. A value T reads an empty
+    // body as default, so the empty body is checked before the read; JSON null already throws.
+    private static string ReadBody(MethodModel method, string serializerExpr, string ctArg)
+    {
+        var read = $"await {serializerExpr}.DeserializeAsync<{method.InnerTypeName}>(__responseStream, {ctArg}).ConfigureAwait(false)";
+        return method.InnerTypeIsNullable || method.InnerTypeIsValueType
+            ? read
+            : $"({read}) ?? throw new global::System.InvalidOperationException({NullBodyMessage(method)})";
+    }
+
+    private static void EmitEmptyBodyCheck(StringBuilder sb, MethodModel method, string indent)
+    {
+        if (method.InnerTypeIsNullable || !method.InnerTypeIsValueType)
+            return;
+        sb.AppendLine($"{indent}if (__responseStream.CanSeek && __responseStream.Position >= __responseStream.Length)");
+        sb.AppendLine($"{indent}    throw new global::System.InvalidOperationException({NullBodyMessage(method)});");
+    }
+
+    private static string NullBodyMessage(MethodModel method)
+        => Literal($"{method.Name} received an empty or null response body, but its success type {method.InnerTypeName} "
+            + $"does not accept null. Declare {method.InnerTypeName}? to accept an empty body.");
 
     // A non-success status: read the capped body, when asked, before the response is disposed.
     private static void EmitStatusFailure(StringBuilder sb, MethodModel method, string indent, string ctArg, int maxErrorBodyBytes)
