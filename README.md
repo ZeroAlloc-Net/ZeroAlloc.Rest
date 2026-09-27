@@ -62,10 +62,13 @@ public interface IUserApi
 **2. Register in DI:**
 
 ```csharp
+[JsonSerializable(typeof(UserDto))]
+internal partial class AppJsonContext : JsonSerializerContext { }
+
 builder.Services.AddIUserApi(options =>
 {
     options.BaseAddress = new Uri("https://api.example.com");
-    options.UseSerializer<SystemTextJsonSerializer>();
+    options.UseSerializer(new SystemTextJsonSerializer(AppJsonContext.Default));
 });
 ```
 
@@ -106,7 +109,7 @@ ZA is **1.7–3.6× faster than Refit** across every call shape with **1.3–1.5
 - **Per-method serializer override** — `[Serializer(typeof(MySerializer))]` for mixed protocols
 - **Path, query, body, and header parameters** — `{id}`, `[Query]`, `[Body]`, `[Header("X-Api-Key")]`
 - **`Result<T, HttpError>`** — typed success/error returns via `ZeroAlloc.Results`; no exception on 4xx/5xx, network failures, timeouts or unreadable response bodies — or your own error type via `[ErrorMapper]`
-- **OpenAPI code generation** — the `zeroalloc generate` CLI (`ZeroAlloc.Rest.Tools`), or `<ZeroAllocApiSpec>` items with the `ZeroAlloc.Rest.Tools.MSBuild` task
+- **OpenAPI code generation** — the `zeroalloc generate` CLI (`ZeroAlloc.Rest.Tools`), or `<ZeroAllocApiSpec>` items with the `ZeroAlloc.Rest.Tools.MSBuild` task, generates the interface, its models and a JSON context
 - **Pluggable serializers** — System.Text.Json, MemoryPack, MessagePack, or bring your own
 - **IHttpClientFactory integration** — `AddI{Interface}` generated extension method
 - **Resilience bridge** — `ZeroAlloc.Rest.Resilience` wraps any client with `[Retry]`, `[Timeout]`, `[CircuitBreaker]`, and `[RateLimit]` via `AddRestResilience<,,>()`

@@ -105,6 +105,8 @@ Only transport, timeout and response-deserialization failures become an `HttpErr
 - **Serializing the request body.** A `[Body]` value the serializer cannot write is a bug in the call, not a failure of the server.
 - **Everything else**, such as an argument the client cannot put in the URL, or an exception from your own `DelegatingHandler` that is not an `HttpRequestException`.
 
+A method generated from an OpenAPI spec is a `Result` or `UnitResult` method, so these rules apply to every generated operation.
+
 Methods that do not return a `Result` throw in every case, as before.
 
 Failures that become an `HttpError` are still traced as failures: the span status is set to `Error` and the request duration is recorded, as for an exception that propagates.
@@ -348,6 +350,38 @@ Message: `Operation 'listUsers': cookie parameter 'session' is not emitted, beca
 
 To suppress it, add the code to `<NoWarn>` in the project that runs the MSBuild task, or pass
 `--nowarn ZRT001` to `zeroalloc generate`.
+
+#### ZRT002: Schema mapped to JsonElement
+
+Severity: Warning.
+
+The spec has a schema the generator cannot give a C# type, so the property, parameter or response
+is typed `System.Text.Json.JsonElement` and you read it yourself. The reasons are:
+
+- the schema uses `not`;
+- its `allOf` refers back to itself;
+- it has neither a `type` nor a composition;
+- a success response has no JSON media type, or is binary: ZeroAlloc.Rest has no raw stream binding yet;
+- `--models false` is set and the schema is an inline object, enum or composition.
+
+Message: `Schema '#/components/schemas/Holder/properties/anything' is mapped to JsonElement, because it has neither a type nor a composition.`
+
+To suppress it, add the code to `<NoWarn>` in the project that runs the MSBuild task, or pass
+`--nowarn ZRT002` to `zeroalloc generate`.
+
+## Value formatting
+
+Every route, query and header value the generated client writes is formatted with
+`CultureInfo.InvariantCulture`, not the current culture: ISO 8601, the `"O"` format, for `DateTime`,
+`DateTimeOffset`, `DateOnly` and `TimeOnly`; `true`/`false` for `bool`; an enum member's
+`[JsonStringEnumMemberName]` or C# name; a `[Flags]` combination as the member names
+System.Text.Json writes for it, joined with `, `; and an enum value that no member or combination
+names as its underlying number. A type implementing `IFormattable`, including one that implements it
+explicitly, is formatted with `value.ToString(null, CultureInfo.InvariantCulture)`; every other type
+uses its own `ToString()`. A `null` nullable `[Header]` parameter sends no header at all. See
+[parameters](parameters.md#value-formatting) for the summary table, and
+[Migrating to 3.0](migrating-to-v3.md#route-query-and-header-values-are-written-invariantly) for what
+changed from 2.x.
 
 ## CancellationToken
 

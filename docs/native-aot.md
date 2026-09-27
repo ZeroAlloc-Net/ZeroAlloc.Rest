@@ -3,7 +3,7 @@ id: native-aot
 title: Native AOT
 slug: /native-aot
 sidebar_position: 6
-description: AOT safety guarantees, RequiresDynamicCode annotations, and publish configuration.
+description: AOT safety guarantees, source-generated serializers, and publish configuration.
 ---
 
 # Native AOT
@@ -20,25 +20,28 @@ The `IsAotCompatible=true` property on `ZeroAlloc.Rest.csproj` enables the SDK's
 
 ## Serialization and AOT
 
-Serializers are the one area where AOT requires care. The `IRestSerializer` interface methods carry `[RequiresDynamicCode]` and `[RequiresUnreferencedCode]` annotations, which the generated client re-emits:
+`IRestSerializer` carries no trim or AOT annotations, and generated clients carry no suppressions,
+so what the trimmer sees is exactly what your serializer does. Use one that needs no reflection:
 
-```csharp
-[RequiresDynamicCode("Serialization of arbitrary types may require dynamic code.")]
-[RequiresUnreferencedCode("Serialization of arbitrary types may require unreferenced code.")]
-public async Task<UserDto> GetUserAsync(int id, CancellationToken ct = default)
-{ ... }
-```
+- `SystemTextJsonSerializer` with a `JsonSerializerContext`. A client generated from an OpenAPI spec
+  comes with one, `{Name}JsonContext`, covering every request and response type:
 
-These are warnings, not errors. To suppress them in an AOT application, use a serializer with source-generated AOT support (e.g. `System.Text.Json` with `[JsonSerializable]`):
+  ```csharp
+  o.UseSerializer(new SystemTextJsonSerializer(PetStoreClientJsonContext.Default));
+  ```
 
-```csharp
-[JsonSerializable(typeof(UserDto))]
-[JsonSerializable(typeof(List<UserDto>))]
-[JsonSerializable(typeof(CreateUserRequest))]
-internal partial class AppJsonContext : JsonSerializerContext { }
-```
+  For a hand-written interface, declare your own:
 
-Then create a serializer adapter that uses the AOT-safe source-generated context instead of the reflection-based default.
+  ```csharp
+  [JsonSerializable(typeof(UserDto))]
+  [JsonSerializable(typeof(List<UserDto>))]
+  internal partial class AppJsonContext : JsonSerializerContext;
+  ```
+
+- MemoryPack or MessagePack with their source-generated formatters.
+
+The parameterless and options constructors of `SystemTextJsonSerializer` use reflection and are
+marked `[RequiresUnreferencedCode]` and `[RequiresDynamicCode]`, so the build tells you where.
 
 ## Publishing as Native AOT
 
@@ -58,9 +61,20 @@ dotnet publish -c Release -r linux-x64
 
 The output is a single self-contained native binary with no .NET runtime dependency.
 
+On win-x64, ILC links with the MSVC toolchain, so the "Desktop development with C++" Visual Studio
+workload must be installed, and ILC also needs the directory of `vswhere.exe` on `PATH`, usually
+`C:\Program Files (x86)\Microsoft Visual Studio\Installer`. Otherwise publish under WSL with
+`-r linux-x64`.
+
 ## AOT checklist
 
-- [ ] Use a source-generated `JsonSerializerContext`, MessagePack's source generator, or MemoryPack with explicit registration: `new MemoryPackRestSerializer(types => types.Add<User>())`. MemoryPack.Core itself reports IL2104 and IL3053 when an app using it is published
-- [ ] Suppress `[RequiresDynamicCode]` / `[RequiresUnreferencedCode]` warnings after verifying your serializer is AOT-safe
+- [ ] Use a source-generated `JsonSerializerContext`, such as the one generated from your OpenAPI spec, or MemoryPack or MessagePack source generators
+- [ ] Construct serializers without reflection: no IL2026 or IL3050 warning should remain; never suppress one
 - [ ] Set `PublishAot=true` in the publish profile
 - [ ] Test the native binary on the target OS — trim analysis may surface missing roots
+
+MemoryPack needs explicit registration: `new MemoryPackRestSerializer(types => types.Add<User>())`;
+see [MemoryPack](serialization.md#memorypack). MemoryPack.Core itself reports IL2104 and IL3053 on
+every AOT publish that references it, regardless of registration; this is tracked upstream in
+[#357](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/357), and the main AOT smoke keeps no
+MemoryPack reference so it stays at 0 IL warnings.

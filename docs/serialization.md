@@ -17,15 +17,16 @@ public interface IRestSerializer
 {
     string ContentType { get; }
 
-    [RequiresDynamicCode("...")]
-    [RequiresUnreferencedCode("...")]
     ValueTask<T?> DeserializeAsync<T>(Stream stream, CancellationToken ct = default);
 
-    [RequiresDynamicCode("...")]
-    [RequiresUnreferencedCode("...")]
     ValueTask SerializeAsync<T>(Stream stream, T value, CancellationToken ct = default);
 }
 ```
+
+The interface carries no trim or AOT annotations, so generated clients call it without a
+suppression. An implementation that needs reflection marks its constructor with
+`[RequiresUnreferencedCode]` and `[RequiresDynamicCode]` instead, as the reflection-based
+`SystemTextJsonSerializer` constructors do.
 
 The `ContentType` property controls both the `Content-Type` header on requests and the `Accept` header.
 
@@ -115,15 +116,27 @@ public interface IJevApi
 dotnet add package ZeroAlloc.Rest.SystemTextJson
 ```
 
+Pass the `JsonSerializerContext` generated from your spec, or your own:
+
 ```csharp
 services.AddIUserApi(options =>
 {
     options.BaseAddress = new Uri("https://api.example.com");
-    options.UseSerializer<SystemTextJsonSerializer>();
+    options.UseSerializer(new SystemTextJsonSerializer(AppJsonContext.Default));
 });
 ```
 
-Uses `JsonSerializerDefaults.Web` (camelCase, case-insensitive). Content-Type: `application/json`.
+| Constructor | Metadata | AOT |
+|---|---|---|
+| `SystemTextJsonSerializer(JsonSerializerContext context)` | The context's, with its options | Safe |
+| `SystemTextJsonSerializer(IJsonTypeInfoResolver resolver, JsonSerializerOptions? options = null)` | The resolver's, with a copy of `options` or `JsonSerializerDefaults.Web` | Safe |
+| `SystemTextJsonSerializer()` | Reflection, `JsonSerializerDefaults.Web` | Warns: `[RequiresUnreferencedCode]` |
+| `SystemTextJsonSerializer(JsonSerializerOptions options)` | Reflection, unless the options already have a resolver | Warns: `[RequiresUnreferencedCode]` |
+
+With a context or resolver, a type it does not cover throws `InvalidOperationException` naming the
+type; nothing falls back to reflection. `UseSerializer<SystemTextJsonSerializer>()` builds the
+serializer from DI with its parameterless constructor, so it uses reflection. Content-Type:
+`application/json`.
 
 ### MemoryPack
 
@@ -164,15 +177,21 @@ public sealed class MySerializer : IRestSerializer
 {
     public string ContentType => "application/json";
 
+    // Reflection-based JsonSerializer.DeserializeAsync<T> and SerializeAsync<T> without a
+    // JsonSerializerContext need members the trimmer may remove and code Native AOT cannot
+    // generate, so the constructor says so. IRestSerializer's own methods carry no annotation:
+    // annotating them here too would mismatch the interface and warn IL2046.
     [RequiresDynamicCode("Serialization may require dynamic code.")]
     [RequiresUnreferencedCode("Serialization may require unreferenced code.")]
+    public MySerializer()
+    {
+    }
+
     public async ValueTask<T?> DeserializeAsync<T>(Stream stream, CancellationToken ct = default)
     {
         return await JsonSerializer.DeserializeAsync<T>(stream, cancellationToken: ct);
     }
 
-    [RequiresDynamicCode("Serialization may require dynamic code.")]
-    [RequiresUnreferencedCode("Serialization may require unreferenced code.")]
     public async ValueTask SerializeAsync<T>(Stream stream, T value, CancellationToken ct = default)
     {
         await JsonSerializer.SerializeAsync(stream, value, cancellationToken: ct);

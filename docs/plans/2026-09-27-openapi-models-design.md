@@ -98,7 +98,7 @@ Parameters (path, query and header) use the same mapper. Headers stay `string` u
 
 ### 5.3 Enums (strict)
 
-- A string enum becomes a C# `enum`. Each member carries `[JsonStringEnumMemberName("wire")]`, and the type carries `[JsonConverter(typeof(JsonStringEnumConverter<T>))]`, which is AOT-safe.
+- A string enum becomes a C# `enum`. Each member carries `[JsonStringEnumMemberName("wire")]`, and the type carries `[JsonConverter(typeof(TConverter))]` naming a generated `{Enum}Converter : JsonConverter<T>`, AOT-safe, that reads and writes only the declared wire names — the stock `JsonStringEnumConverter<T>` would also accept a comma-separated flags combination or another casing, which §5.3's own strictness rule rejects.
 - **Integer enums:** members are named `Value<n>`, or taken from `x-enum-varnames` when present.
 - **Unknown values:** no `Unknown` member is generated. An unknown value throws `JsonException`, and the generated client already maps deserialization exceptions to `HttpErrorKind.Deserialization`. See `ClientEmitter.cs`, around the deserialize guard.
 
