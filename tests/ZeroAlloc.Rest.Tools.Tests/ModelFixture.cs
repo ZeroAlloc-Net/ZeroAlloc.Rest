@@ -52,7 +52,7 @@ internal static class ModelFixture
             .AppendLine("namespace MyApp;")
             .AppendLine();
         ModelEmitter.Emit(sb, models);
-        JsonContextEmitter.Emit(sb, ContextName, ModelEmitter.SerializableTypes(models));
+        JsonContextEmitter.Emit(sb, ContextName, ModelEmitter.SerializableTypes(models), models);
         return sb.ToString();
     }
 

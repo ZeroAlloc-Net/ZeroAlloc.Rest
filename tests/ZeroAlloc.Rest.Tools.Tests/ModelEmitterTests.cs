@@ -243,6 +243,88 @@ public class ModelEmitterTests
         Assert.Equal("rejected", output.RunProbe());
     }
 
+    // The STJ generator names a context property after its type, List<Pet> as ListPet and Guid? as
+    // NullableGuid, and gives the context its own members and per-type helpers such as PetPropInit.
+    // A model named like any of those would clash, so its property is renamed; the type keeps its name.
+    private const string ClashSpec = """
+                Pet:
+                  type: object
+                  properties:
+                    friends:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/Pet'
+                    ownerId:
+                      type: string
+                      format: uuid
+                ListPet:
+                  type: object
+                  properties:
+                    size:
+                      type: integer
+                NullableGuid:
+                  type: object
+                  properties:
+                    size:
+                      type: integer
+                PetPropInit:
+                  type: object
+                  properties:
+                    size:
+                      type: integer
+                Default:
+                  type: object
+                  properties:
+                    size:
+                      type: integer
+                Options:
+                  type: object
+                  properties:
+                    size:
+                      type: integer
+                Guid:
+                  type: object
+                  properties:
+                    size:
+                      type: integer
+                Boolean:
+                  type: object
+                  properties:
+                    size:
+                      type: integer
+            """;
+
+    [Theory]
+    [InlineData("ListPet")]
+    [InlineData("NullableGuid")]
+    [InlineData("PetPropInit")]
+    [InlineData("Default")]
+    [InlineData("Options")]
+    [InlineData("Guid")]
+    public void Context_RenamesTheProperty_OfAModelNamedLikeAnotherContextMember(string model)
+        => Assert.Contains(
+            $"[global::System.Text.Json.Serialization.JsonSerializable(typeof({model}), TypeInfoPropertyName = \"{model}Model\")]",
+            ModelFixture.Emit(ClashSpec));
+
+    // No bool is reachable, so nothing else is named Boolean.
+    [Fact]
+    public void Context_KeepsTheProperty_OfAModelNamedLikeAnUnreachableType()
+        => Assert.Contains("[global::System.Text.Json.Serialization.JsonSerializable(typeof(Boolean))]", ModelFixture.Emit(ClashSpec));
+
+    [Fact]
+    public void ModelsNamedLikeContextMembers_CompileClean_AndRoundTrip()
+    {
+        var output = GeneratedCode.Compile(ModelFixture.Emit(ClashSpec), Probe("""
+            var pet = JsonSerializer.Deserialize("{\"friends\":[{\"ownerId\":\"6f9619ff-8b86-d011-b42d-00c04fc964ff\"}]}", MyApiJsonContext.Default.Pet)!;
+            var list = JsonSerializer.Deserialize("{\"size\":1}", MyApiJsonContext.Default.ListPetModel)!;
+            var @default = JsonSerializer.Deserialize("{\"size\":2}", MyApiJsonContext.Default.DefaultModel)!;
+            var options = JsonSerializer.Deserialize("{\"size\":3}", MyApiJsonContext.Default.OptionsModel)!;
+            return JsonSerializer.Serialize(pet, MyApiJsonContext.Default.Pet) + "|" + list.Size + @default.Size + options.Size;
+            """));
+
+        Assert.Equal("{\"friends\":[{\"ownerId\":\"6f9619ff-8b86-d011-b42d-00c04fc964ff\"}]}|123", output.RunProbe());
+    }
+
     // A probe whose Run() body is the given statements, in namespace MyApp.
     internal static string Probe(string body) => $$"""
         using System;

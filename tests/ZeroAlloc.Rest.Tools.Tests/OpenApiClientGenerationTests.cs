@@ -508,6 +508,177 @@ public class OpenApiClientGenerationTests
         Assert.Equal("a b|http://x/y|/tasks/a%20b", output.RunProbe());
     }
 
+    // Schemas named like members of JsonSerializerContext, and schemas named like the context
+    // property the STJ generator derives for a composite type the file reaches: ListPet for
+    // List<Pet>, DictionaryStringPet for Dictionary<string, Pet>, NullableGuid for Guid?.
+    private const string ClashesSpec = """
+        openapi: 3.0.0
+        info:
+          title: Clashes
+          version: "1"
+        paths:
+          /pets:
+            get:
+              operationId: listPets
+              responses:
+                '200':
+                  description: OK
+                  content:
+                    application/json:
+                      schema:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Pet'
+            put:
+              operationId: replacePets
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      $ref: '#/components/schemas/ListPet'
+              responses:
+                '200':
+                  description: OK
+                  content:
+                    application/json:
+                      schema:
+                        $ref: '#/components/schemas/Default'
+          /settings:
+            get:
+              operationId: getSettings
+              responses:
+                '200':
+                  description: OK
+                  content:
+                    application/json:
+                      schema:
+                        $ref: '#/components/schemas/Options'
+        components:
+          schemas:
+            Pet:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                ownerId:
+                  type: string
+                  format: uuid
+            ListPet:
+              type: object
+              required: [pets]
+              properties:
+                pets:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Pet'
+                byName:
+                  type: object
+                  additionalProperties:
+                    $ref: '#/components/schemas/Pet'
+            Default:
+              type: object
+              properties:
+                count:
+                  type: integer
+            Options:
+              type: object
+              properties:
+                owner:
+                  $ref: '#/components/schemas/NullableGuid'
+                index:
+                  $ref: '#/components/schemas/DictionaryStringPet'
+                typeInfo:
+                  $ref: '#/components/schemas/GetTypeInfo'
+                generated:
+                  $ref: '#/components/schemas/GeneratedSerializerOptions'
+            NullableGuid:
+              type: object
+              properties:
+                value:
+                  type: string
+                  format: uuid
+            DictionaryStringPet:
+              type: object
+              properties:
+                size:
+                  type: integer
+            GetTypeInfo:
+              type: object
+              properties:
+                name:
+                  type: string
+            GeneratedSerializerOptions:
+              type: object
+              properties:
+                name:
+                  type: string
+        """;
+
+    [Fact]
+    public void SchemasNamedLikeContextProperties_CompileClean_AndRoundTrip()
+    {
+        var warnings = new List<OpenApiWarning>();
+        var code = OpenApiInterfaceGenerator.Generate(ClashesSpec, "MyApp", "IClashesApi", warnings, GenerationOptions.Default);
+
+        Assert.Empty(warnings);
+        foreach (var model in new[] { "Pet", "ListPet", "Default", "Options", "NullableGuid", "DictionaryStringPet", "GetTypeInfo", "GeneratedSerializerOptions" })
+            Assert.Contains("public sealed record " + model + "\n", code.ReplaceLineEndings("\n"), StringComparison.Ordinal);
+        var output = GeneratedCode.Compile(code, """
+            using System;
+            using System.Collections.Generic;
+            using System.Net;
+            using System.Net.Http;
+            using System.Text;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using ZeroAlloc.Rest.SystemTextJson;
+
+            public sealed class Stub : HttpMessageHandler
+            {
+                public string? LastBody { get; private set; }
+
+                protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+                {
+                    if (request.Content is not null)
+                        LastBody = await request.Content.ReadAsStringAsync(cancellationToken);
+                    var json = request.RequestUri?.AbsolutePath switch
+                    {
+                        "/settings" => "{\"owner\":{\"value\":\"6f9619ff-8b86-d011-b42d-00c04fc964ff\"},\"index\":{\"size\":3},\"typeInfo\":{\"name\":\"t\"},\"generated\":{\"name\":\"g\"}}",
+                        _ when request.Method == HttpMethod.Put => "{\"count\":2}",
+                        _ => "[{\"name\":\"Rex\",\"ownerId\":\"6f9619ff-8b86-d011-b42d-00c04fc964ff\"},{\"name\":\"Tom\"}]",
+                    };
+                    return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
+                }
+            }
+
+            public static class Probe
+            {
+                public static string Run()
+                {
+                    var stub = new Stub();
+                    MyApp.IClashesApi api = new MyApp.ClashesApiClient(
+                        new HttpClient(stub) { BaseAddress = new Uri("http://stub/") },
+                        new SystemTextJsonSerializer(MyApp.ClashesApiJsonContext.Default));
+                    var pets = api.ListPetsAsync().GetAwaiter().GetResult().Value;
+                    var body = new MyApp.ListPet { Pets = pets, ByName = new Dictionary<string, MyApp.Pet> { ["rex"] = pets[0] } };
+                    var count = api.ReplacePetsAsync(body).GetAwaiter().GetResult().Value.Count;
+                    var settings = api.GetSettingsAsync().GetAwaiter().GetResult().Value;
+                    return string.Join("|", pets.Count, pets[0].OwnerId, pets[1].OwnerId is null, count, stub.LastBody,
+                        settings.Owner?.Value, settings.Index?.Size, settings.TypeInfo?.Name, settings.Generated?.Name);
+                }
+            }
+            """);
+
+        Assert.Equal(
+            "2|6f9619ff-8b86-d011-b42d-00c04fc964ff|True|2|"
+                + "{\"pets\":[{\"name\":\"Rex\",\"ownerId\":\"6f9619ff-8b86-d011-b42d-00c04fc964ff\"},{\"name\":\"Tom\"}],"
+                + "\"byName\":{\"rex\":{\"name\":\"Rex\",\"ownerId\":\"6f9619ff-8b86-d011-b42d-00c04fc964ff\"}}}"
+                + "|6f9619ff-8b86-d011-b42d-00c04fc964ff|3|t|g",
+            output.RunProbe());
+    }
+
     // The reader's default rules reject a discriminator whose property no schema lists in required,
     // which real specs often leave out. The generator reads such a spec anyway.
     [Fact]

@@ -56,7 +56,7 @@ internal static class OpenApiInterfaceGenerator
         // unimplemented, so a spec with no bodies gets none.
         var types = serializable.Concat(ModelEmitter.SerializableTypes(models)).ToList();
         if (types.Count > 0)
-            JsonContextEmitter.Emit(sb, contextName, types);
+            JsonContextEmitter.Emit(sb, contextName, types, models);
         return sb.ToString();
     }
 
