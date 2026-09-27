@@ -70,7 +70,7 @@ internal sealed class SchemaModelBuilder : ISchemaTypeNamer
             _types.Add(schema, TypeRef.JsonElement);
             return TypeRef.JsonElement;
         }
-        var name = Reserve(schema.Reference?.Id ?? contextName);
+        var name = Reserve(schema.Reference?.Id ?? UnionName(schema) ?? contextName);
         var type = new TypeRef(name, TypeRefKind.Model, IsValueType: TypeMapper.IsEnum(schema));
         _types.Add(schema, type);
         _pending.Enqueue((schema, name, schema.Reference is null ? path : "#/components/schemas/" + schema.Reference.Id));
@@ -105,6 +105,8 @@ internal sealed class SchemaModelBuilder : ISchemaTypeNamer
             return BuildEnum(schema, name);
         if (IsPolymorphic(schema))
             return BuildPolymorphic(schema, name, path);
+        if (schema.OneOf.Count > 0 || schema.AnyOf.Count > 0)
+            return BuildUnion(schema, name, path);
         return BuildRecord(schema, name, path);
     }
 
@@ -273,5 +275,109 @@ internal sealed class SchemaModelBuilder : ISchemaTypeNamer
                 names.Add(item is OpenApiString text ? text.Value : "");
         }
         return names;
+    }
+
+    // Design decision 8: an inline union whose variants are all $refs is named after them, PetOrError.
+    private static string? UnionName(OpenApiSchema schema)
+    {
+        if (schema.Discriminator is not null)
+            return null;
+        var parts = schema.OneOf.Count > 0 ? schema.OneOf : schema.AnyOf;
+        if (parts.Count < 2)
+            return null;
+        var names = new List<string>(parts.Count);
+        foreach (var part in parts)
+        {
+            if (part.Reference?.Id is not { } id)
+                return null;
+            names.Add(CSharpNames.Pascal(id, "Variant"));
+        }
+        return string.Join("Or", names);
+    }
+
+    private UnionModel BuildUnion(OpenApiSchema schema, string name, string path)
+    {
+        var isOneOf = schema.OneOf.Count > 0;
+        var parts = isOneOf ? schema.OneOf : schema.AnyOf;
+        var keyword = isOneOf ? "/oneOf/" : "/anyOf/";
+        var used = new HashSet<string>(StringComparer.Ordinal) { name };
+        var variants = new List<UnionVariantModel>(parts.Count);
+        for (var i = 0; i < parts.Count; i++)
+        {
+            var part = parts[i];
+            var contextName = name + "Variant" + (i + 1).ToString(CultureInfo.InvariantCulture);
+            var type = TypeMapper.Map(part, contextName, path + keyword + i.ToString(CultureInfo.InvariantCulture), this);
+            var kind = KindOf(part, type);
+            var required = kind == JsonKind.Object ? RequiredOf(part) : EquatableList<string>.Empty;
+            variants.Add(new UnionVariantModel(CSharpNames.Unique(VariantName(part, type), used), type, kind, required));
+        }
+        return new UnionModel(name, schema.Description, isOneOf, new EquatableList<UnionVariantModel>(variants));
+    }
+
+    private static string VariantName(OpenApiSchema part, TypeRef type)
+        => part.Reference?.Id is { } id ? CSharpNames.Pascal(id, "Variant") : ReadableName(type.Name);
+
+    // A readable name for a type: its CLR name for a keyword, its last segment otherwise, and the
+    // element's name first for a collection: List<string> is StringList.
+    private static string ReadableName(string typeName)
+    {
+        const string List = "global::System.Collections.Generic.List<";
+        const string Dictionary = "global::System.Collections.Generic.Dictionary<string, ";
+        if (typeName.StartsWith(List, StringComparison.Ordinal))
+            return ReadableName(typeName[List.Length..^1]) + "List";
+        if (typeName.StartsWith(Dictionary, StringComparison.Ordinal))
+            return ReadableName(typeName[Dictionary.Length..^1]) + "Map";
+        var name = typeName.TrimEnd('?');
+        return name switch
+        {
+            "string" => "String",
+            "int" => "Int32",
+            "long" => "Int64",
+            "float" => "Single",
+            "double" => "Double",
+            "decimal" => "Decimal",
+            "bool" => "Boolean",
+            "byte[]" => "Bytes",
+            _ => name[(name.LastIndexOf('.') + 1)..],
+        };
+    }
+
+    private static JsonKind KindOf(OpenApiSchema part, TypeRef type) => type.Kind switch
+    {
+        TypeRefKind.List => JsonKind.Array,
+        TypeRefKind.Dictionary => JsonKind.Object,
+        TypeRefKind.JsonElement or TypeRefKind.Stream => JsonKind.Any,
+        TypeRefKind.Model => ModelKind(TypeMapper.Unwrap(part)),
+        _ => type.Name switch
+        {
+            "bool" => JsonKind.Boolean,
+            "int" or "long" or "float" or "double" or "decimal" => JsonKind.Number,
+            _ => JsonKind.String,
+        },
+    };
+
+    private static JsonKind ModelKind(OpenApiSchema schema)
+    {
+        if (TypeMapper.IsEnum(schema))
+            return string.Equals(schema.Type, "integer", StringComparison.Ordinal) ? JsonKind.Number : JsonKind.String;
+        if (IsPolymorphic(schema) || (schema.OneOf.Count == 0 && schema.AnyOf.Count == 0))
+            return JsonKind.Object;
+        return JsonKind.Any;
+    }
+
+    // The required properties of an object variant, its allOf parts included, sorted so the model is
+    // deterministic. A recursive allOf never gets here: Named mapped it to JsonElement, kind Any.
+    private static EquatableList<string> RequiredOf(OpenApiSchema schema)
+    {
+        var required = new SortedSet<string>(StringComparer.Ordinal);
+        AddRequired(TypeMapper.Unwrap(schema), required);
+        return new EquatableList<string>(required);
+    }
+
+    private static void AddRequired(OpenApiSchema schema, SortedSet<string> required)
+    {
+        required.UnionWith(schema.Required);
+        foreach (var part in schema.AllOf)
+            AddRequired(part, required);
     }
 }

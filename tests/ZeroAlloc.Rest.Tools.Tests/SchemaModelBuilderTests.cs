@@ -400,4 +400,116 @@ public class SchemaModelBuilderTests
 
         Assert.Equal("Schema 'V' is a variant of both 'A' and 'B'; a C# record has one base type.", error.Message);
     }
+
+    [Fact]
+    public void OneOfWithoutDiscriminator_IsAUnion_WithKindsAndRequiredProperties()
+    {
+        var (models, _) = Build("""
+                Pet:
+                  type: object
+                  required: [name, id]
+                  properties:
+                    id:
+                      type: integer
+                    name:
+                      type: string
+                Error:
+                  type: object
+                  required: [code]
+                  properties:
+                    code:
+                      type: string
+                Result:
+                  oneOf:
+                    - $ref: '#/components/schemas/Pet'
+                    - $ref: '#/components/schemas/Error'
+                    - type: integer
+                      format: int64
+                    - type: array
+                      items:
+                        type: string
+            """);
+
+        Assert.Equal(
+            new UnionModel("Result", null, IsOneOf: true, List(
+                new UnionVariantModel("Pet", Model("Pet"), JsonKind.Object, List("id", "name")),
+                new UnionVariantModel("Error", Model("Error"), JsonKind.Object, List("code")),
+                new UnionVariantModel("Int64", TypeRef.Long, JsonKind.Number, EquatableList<string>.Empty),
+                new UnionVariantModel("StringList", new TypeRef("global::System.Collections.Generic.List<string>", TypeRefKind.List, false), JsonKind.Array, EquatableList<string>.Empty))),
+            models[2]);
+    }
+
+    [Fact]
+    public void InlineUnionOfRefs_IsNamedAfterItsVariants()
+    {
+        var (models, _) = Build("""
+                Pet:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                Error:
+                  type: object
+                  properties:
+                    code:
+                      type: string
+                Holder:
+                  type: object
+                  properties:
+                    outcome:
+                      anyOf:
+                        - $ref: '#/components/schemas/Pet'
+                        - $ref: '#/components/schemas/Error'
+            """);
+
+        var union = Assert.IsType<UnionModel>(models.Single(m => m is UnionModel));
+        Assert.Equal("PetOrError", union.Name);
+        Assert.False(union.IsOneOf);
+    }
+
+    [Fact]
+    public void UnionVariant_RequiredPropertiesIncludeThoseOfItsAllOfParts()
+    {
+        var (models, _) = Build("""
+                Base:
+                  type: object
+                  required: [id]
+                  properties:
+                    id:
+                      type: integer
+                Derived:
+                  allOf:
+                    - $ref: '#/components/schemas/Base'
+                    - type: object
+                      required: [extra]
+                      properties:
+                        extra:
+                          type: string
+                Either:
+                  oneOf:
+                    - $ref: '#/components/schemas/Derived'
+                    - type: string
+            """);
+
+        var union = Assert.IsType<UnionModel>(models.Single(m => m is UnionModel));
+        Assert.Equal(List("extra", "id"), union.Variants[0].RequiredWireNames);
+        Assert.Equal(new UnionVariantModel("String", TypeRef.String, JsonKind.String, EquatableList<string>.Empty), union.Variants[1]);
+    }
+
+    [Fact]
+    public void EnumVariant_TakesItsJsonKindFromItsType()
+    {
+        var (models, _) = Build("""
+                Code:
+                  type: integer
+                  enum: [1, 2]
+                Either:
+                  oneOf:
+                    - $ref: '#/components/schemas/Code'
+                    - type: boolean
+            """);
+
+        var union = Assert.IsType<UnionModel>(models.Single(m => m is UnionModel));
+        Assert.Equal(new[] { JsonKind.Number, JsonKind.Boolean }, union.Variants.Select(v => v.Kind));
+    }
 }
