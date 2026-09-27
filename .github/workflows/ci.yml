@@ -102,6 +102,55 @@ jobs:
       - name: Run AOT binary
         run: ./aot-out/ZeroAlloc.Rest.AotSmoke
 
+  aot-smoke-memorypack:
+    runs-on: ubuntu-latest
+    # Publishes samples/ZeroAlloc.Rest.MemoryPack.AotSmoke with PublishAot=true and runs it: the
+    # Native AOT proof that MemoryPackRestSerializer's explicit type registration works without
+    # MemoryPack's reflection-based formatter lookup, and that a missing registration is reported.
+    # This job tolerates MemoryPack.Core's own trim and AOT warnings until upstream fixes them; see
+    # the tracking issue for MemoryPack.Core trim warnings. They stay in the log, one line per member,
+    # and any IL warning that does not come from MemoryPack.Core fails the job.
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+          dotnet-version: '10.0.x'
+
+      - name: Install AOT native toolchain
+        run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
+
+      - name: Restore
+        run: dotnet restore samples/ZeroAlloc.Rest.MemoryPack.AotSmoke/ZeroAlloc.Rest.MemoryPack.AotSmoke.csproj
+
+      - name: Publish AOT
+        run: |
+          set -o pipefail
+          dotnet publish samples/ZeroAlloc.Rest.MemoryPack.AotSmoke/ZeroAlloc.Rest.MemoryPack.AotSmoke.csproj \
+            -r linux-x64 -c Release -o ./aot-mp-out 2>&1 | tee aot-mp-publish.log
+
+      - name: Only MemoryPack.Core IL warnings
+        # The project sets TrimmerSingleWarn=false, so each warning names the member it comes from.
+        # A line is MemoryPack.Core's when that member is in the MemoryPack namespace, or when it is
+        # the per-assembly summary IL2104 or IL3053 for MemoryPack.Core.dll.
+        run: |
+          foreign=$(grep -E "(warning|error) IL[0-9]+" aot-mp-publish.log \
+            | grep -vE "(warning|error) IL[0-9]+: MemoryPack\.[A-Za-z]" \
+            | grep -vE "MemoryPack\.Core\.dll : warning IL(2104|3053):" || true)
+          if [ -n "$foreign" ]; then
+            echo "IL warnings that do not come from MemoryPack.Core:"
+            echo "$foreign"
+            exit 1
+          fi
+          echo "Every IL warning comes from MemoryPack.Core."
+
+      - name: Run AOT binary
+        run: ./aot-mp-out/ZeroAlloc.Rest.MemoryPack.AotSmoke
+
   # A release PR must mark everything it releases as shipped: the analyzer rules in
   # AnalyzerReleases.Unshipped.md and the API in every PublicAPI.Unshipped.txt. The
   # ship-release-tracking job in release-please.yml commits that move onto the branch;

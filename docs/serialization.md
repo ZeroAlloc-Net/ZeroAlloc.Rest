@@ -131,9 +131,15 @@ Uses `JsonSerializerDefaults.Web` (camelCase, case-insensitive). Content-Type: `
 dotnet add package ZeroAlloc.Rest.MemoryPack
 ```
 
+Register every `[MemoryPackable]` type the client sends or receives:
+
 ```csharp
-options.UseSerializer<MemoryPackRestSerializer>();
+options.UseSerializer(new MemoryPackRestSerializer(types => types
+    .Add<UserDto>()
+    .Add<OrderDto>()));
 ```
+
+`Add<T>()` registers the type's formatter through its generated static `RegisterFormatter`, and the formatter for arrays of it. MemoryPack would otherwise find the formatter through reflection, which trimming and Native AOT remove. A type MemoryPack serves with a built-in formatter, such as `int`, `string`, `Guid` or an array of one, needs no registration; `new MemoryPackRestSerializer()` serves only those. Any other type, including an unregistered `[MemoryPackable]` type, throws `InvalidOperationException` naming the type and the `types.Add<T>()` call that fixes it, before anything is read or written.
 
 Content-Type: `application/x-memorypack`. Both endpoints must understand MemoryPack encoding.
 
@@ -199,3 +205,12 @@ public interface IUploadApi
 ```
 
 The generated client resolves `MemoryPackRestSerializer` from DI and uses it only for `UploadAsync`. Registration also runs `TryAddSingleton<MemoryPackRestSerializer>` automatically. The override type may be `internal` even when the interface is public.
+
+The instance `TryAddSingleton` activates has no registered types, so it serves only MemoryPack's built-in types, such as the `byte[]` above. When the method sends or receives a `[MemoryPackable]` type, register a configured instance before `AddIUploadApi`; `TryAddSingleton` then leaves it in place:
+
+```csharp
+services.AddSingleton(new MemoryPackRestSerializer(types => types.Add<UploadDto>()));
+services.AddIUploadApi(options => options.BaseAddress = new Uri("https://api.example.com"));
+```
+
+Without it, the first call with an unregistered `[MemoryPackable]` type throws `InvalidOperationException` naming the type and the `types.Add<T>()` call that fixes it.

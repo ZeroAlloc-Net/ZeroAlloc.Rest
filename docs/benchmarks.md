@@ -86,7 +86,7 @@ Measured in isolation — serialize or deserialize a single `{ "id": 42, "name":
 
 **System.Text.Json** has no DTO annotation requirements and produces human-readable JSON — the right default for public APIs. The STJ deserializer is slower than the binary formats but allocates the least during deserialization (248 B) since it can leverage `Utf8JsonReader` spans.
 
-Use `options.UseSerializer<MemoryPackRestSerializer>()` or `options.UseSerializer<MessagePackRestSerializer>()` to switch serializers in your client registration.
+Use `options.UseSerializer(new MemoryPackRestSerializer(types => types.Add<UserDto>()))` or `options.UseSerializer<MessagePackRestSerializer>()` to switch serializers in your client registration. MemoryPack needs each `[MemoryPackable]` type registered; see [Serialization](serialization.md#memorypack).
 
 ---
 

@@ -20,7 +20,7 @@ public class SerializerBenchmarks
     private static readonly JsonSerializerOptions s_jsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly SystemTextJsonSerializer _stj = new();
-    private readonly MemoryPackRestSerializer _mp = new();
+    private readonly MemoryPackRestSerializer _mp = new(types => types.Add<MemoryPackUserDto>());
     private readonly MessagePackRestSerializer _msg = new();
 
     // Pre-serialized payloads — computed once in GlobalSetup so Deserialize_*

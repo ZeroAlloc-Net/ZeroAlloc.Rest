@@ -542,8 +542,10 @@ under Native AOT, since nothing registered the formatter. Explicit registration 
 - Create: `src/ZeroAlloc.Rest.MemoryPack/MemoryPackRestTypes.cs` (the registration builder; the implementer may pick a
   better name that fits the repo), `src/ZeroAlloc.Rest.MemoryPack/PublicAPI.Shipped.txt` and `PublicAPI.Unshipped.txt`
   if the project has no tracking yet, following the pattern of the projects that do
-- Modify: `samples/ZeroAlloc.Rest.AotSmoke/*`: a MemoryPack round trip and a missing-registration check under Native AOT
-- Modify: every caller of the removed constructor: `tests/ZeroAlloc.Rest.Tests/Serializers/MemoryPackSerializerTests.cs`,
+- Create: `samples/ZeroAlloc.Rest.MemoryPack.AotSmoke/*`: a MemoryPack round trip and a missing-registration check
+  under Native AOT, in its own sample and CI job `aot-smoke-memorypack`, because MemoryPack.Core itself reports
+  IL2104 and IL3053 on every AOT publish. The main AOT smoke keeps no MemoryPack reference and 0 IL warnings.
+- Modify: every caller that needs registered types: `tests/ZeroAlloc.Rest.Tests/Serializers/MemoryPackSerializerTests.cs`,
   `tests/ZeroAlloc.Rest.Integration.Tests/ResultTransportErrorTests.cs`, `tests/ZeroAlloc.Rest.Benchmarks/SerializerBenchmarks.cs`
 - Modify: `docs/serialization.md`, `docs/dependency-injection.md`, `docs/advanced.md`, `docs/benchmarks.md` where they
   construct or auto-register `MemoryPackRestSerializer`
@@ -551,7 +553,8 @@ under Native AOT, since nothing registered the formatter. Explicit registration 
 **Interfaces:**
 - Consumes: Task 2's annotation-free `IRestSerializer`.
 - Produces:
-  - `public MemoryPackRestSerializer(Action<MemoryPackRestTypes> configure)`; the parameterless constructor is removed.
+  - `public MemoryPackRestSerializer(Action<MemoryPackRestTypes> configure)`. The parameterless constructor stays,
+    so api-compat passes; it registers no types, so it serves only MemoryPack's built-in types.
   - `public sealed class MemoryPackRestTypes` with `public MemoryPackRestTypes Add<T>() where T : IMemoryPackable<T>`,
     which calls `T.RegisterFormatter()`, MemoryPack's generated static registration, and records `typeof(T)`.
   - Serialize and deserialize go through MemoryPack's unannotated formatter path, such as
@@ -564,27 +567,32 @@ under Native AOT, since nothing registered the formatter. Explicit registration 
   - The project sets `IsAotCompatible` to `true` in a new `<PropertyGroup>` and builds with 0 IL warnings.
 
 **DI.** `[Serializer(typeof(MemoryPackRestSerializer))]` makes the generated client call
-`TryAddSingleton<MemoryPackRestSerializer>()`. With no parameterless constructor, the caller registers a configured instance
-first: `services.AddSingleton(new MemoryPackRestSerializer(types => types.Add<User>()));`, and `TryAddSingleton` then leaves
-it in place. Document it in `docs/dependency-injection.md` and `docs/serialization.md`. Add an integration test in which a
-generated client with a MemoryPack method resolves through DI with a pre-registered instance and round-trips a value.
+`TryAddSingleton<MemoryPackRestSerializer>()`. That activates the parameterless constructor, which serves only built-in
+types, so the caller registers a configured instance first:
+`services.AddSingleton(new MemoryPackRestSerializer(types => types.Add<User>()));`, and `TryAddSingleton` then leaves
+it in place. A caller who forgets gets the registration error at the first call with a `[MemoryPackable]` type.
+Document it in `docs/dependency-injection.md` and `docs/serialization.md`. Add an integration test in which a
+generated client with a MemoryPack method resolves through DI with a pre-registered instance and round-trips a value,
+and one in which the auto-registered instance throws the registration error.
 
 - [ ] **Step 1: Failing tests.** In `MemoryPackSerializerTests`: round trip of a registered `[MemoryPackable]` type;
   `DeserializeAsync` and `SerializeAsync` of an unregistered `[MemoryPackable]` type throw `InvalidOperationException`
   whose message contains the type name and `types.Add<`; a built-in type such as `int` or `string` round-trips without
   registration; `Add<T>()` returns the same builder so calls chain. Watch them fail to compile against the old constructor.
 - [ ] **Step 2: Implement** the builder and the serializer. No `!`, no suppressions of any kind.
-- [ ] **Step 3: PublicAPI.** List every new public member in `PublicAPI.Unshipped.txt`; the removed constructor is recorded
-  the way the repo's analyzer requires for a removal in a major (`*REMOVED*` in Unshipped when it is in Shipped).
-- [ ] **Step 4: Native AOT runtime proof.** Add a `ProjectReference` to `ZeroAlloc.Rest.MemoryPack` in the AOT smoke. Declare a
+- [ ] **Step 3: PublicAPI.** List every new public member in `PublicAPI.Unshipped.txt`; the parameterless constructor
+  stays in `PublicAPI.Shipped.txt`.
+- [ ] **Step 4: Native AOT runtime proof.** In the new `samples/ZeroAlloc.Rest.MemoryPack.AotSmoke`, reference
+  `ZeroAlloc.Rest.MemoryPack`. Declare a
   `[MemoryPackable]` partial record, register it, round-trip it through `IRestSerializer.SerializeAsync` and
   `DeserializeAsync`, and compare field by field. Then call `DeserializeAsync` for a second, unregistered `[MemoryPackable]`
   type and require the `InvalidOperationException` with the type's name. Any mismatch exits non-zero before the PASS line.
-  Run the AOT smoke command from the Global Constraints: `grep -c` prints `0`, and the binary prints `AOT smoke: PASS`.
+  Publish it with `-p:TrimmerSingleWarn=false`: every IL warning line must come from MemoryPack.Core, and the binary
+  prints its PASS line. The main AOT smoke command from the Global Constraints still prints `0` and `AOT smoke: PASS`.
   On win-x64, ILC needs the directory of `vswhere.exe` on `PATH`, usually
   `C:\Program Files (x86)\Microsoft Visual Studio\Installer`.
-- [ ] **Step 5: Callers and docs.** Update every caller of the removed constructor and every doc that shows it or says no
-  registration is needed for MemoryPack.
+- [ ] **Step 5: Callers and docs.** Update every caller that serializes a `[MemoryPackable]` type and every doc that
+  says no registration is needed for MemoryPack.
 - [ ] **Step 6: Full suite**, then commit:
 
 ```bash
@@ -594,17 +602,19 @@ feat: make MemoryPackRestSerializer AOT-safe through explicit type registration
 MemoryPack finds a type's formatter through reflection unless it is registered. The serializer now
 takes the types it serves up front, registers each through its generated static RegisterFormatter,
 and reads through MemoryPack's unannotated formatter path. An unregistered type throws
-InvalidOperationException naming the type. The parameterless constructor is removed; the 3.0
-breaking-change notes list it.
+InvalidOperationException naming the type. The parameterless constructor now serves only
+MemoryPack's built-in types. The Native AOT proof lives in its own sample and CI job, because
+MemoryPack.Core itself reports IL2104 and IL3053.
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 MSG
 )"
 ```
 
-Task 14's `BREAKING CHANGE` footer and Task 16's migration guide both gain an item: `MemoryPackRestSerializer` needs its
-types registered, `new MemoryPackRestSerializer(types => types.Add<User>())`, and a client using
-`[Serializer(typeof(MemoryPackRestSerializer))]` registers that instance in DI before `Add{Interface}`.
+Task 14's `BREAKING CHANGE` footer and Task 16's migration guide both gain an item:
+`MemoryPackRestSerializer` serves only registered types plus MemoryPack built-ins,
+`new MemoryPackRestSerializer(types => types.Add<User>())`, and a client using the Serializer
+attribute for it registers that configured instance in DI before `Add{Interface}`.
 
 ---
 
@@ -5406,9 +5416,9 @@ BREAKING CHANGE: regenerating a client changes its shape, and the runtime change
   RequiresUnreferencedCode, and generated clients no longer carry UnconditionalSuppressMessage.
   A custom serializer must drop those attributes. The parameterless and options
   SystemTextJsonSerializer constructors now carry them; pass a JsonSerializerContext instead.
-- MemoryPackRestSerializer takes no parameterless constructor: pass a delegate that registers
-  every type it serializes, such as types.Add<User>. A client using the Serializer attribute for
-  MemoryPackRestSerializer registers that configured instance in DI before Add{Interface}.
+- MemoryPackRestSerializer serves only registered types plus MemoryPack built-ins: pass a delegate
+  that registers every MemoryPackable type it serializes, such as types.Add<User>. A client using
+  the Serializer attribute for it registers that configured instance in DI before Add{Interface}.
 - Route, query and header values are written invariantly: ISO 8601 dates and times, true and
   false, and enum wire names. A null header value sends no header.
 - docs/migrating-to-v3.md walks through each change.
@@ -5953,9 +5963,10 @@ are called. Use `new SystemTextJsonSerializer(context)` or `new SystemTextJsonSe
 
 ## MemoryPackRestSerializer needs its types registered
 
-`MemoryPackRestSerializer` no longer has a parameterless constructor. Pass a delegate that
-registers every type you serialize with it, through `T.RegisterFormatter()`, MemoryPack's own
-generated method:
+`MemoryPackRestSerializer` serves only the types registered with it plus MemoryPack's built-in
+types; `new MemoryPackRestSerializer()` serves only the built-ins. Pass a delegate that registers
+every `[MemoryPackable]` type you serialize with it, through `T.RegisterFormatter()`, MemoryPack's
+own generated method:
 
 ```csharp
 services.AddSingleton(new MemoryPackRestSerializer(types => types.Add<User>()));

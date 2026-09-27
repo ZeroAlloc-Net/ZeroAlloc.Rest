@@ -250,7 +250,11 @@ public sealed class ResultTransportErrorTests
     }
 
     private static IBinaryUserApi CreateBinaryClient(HttpClient httpClient)
-        => new BinaryUserApiClient(httpClient, new SystemTextJsonSerializer(), new MemoryPackRestSerializer(), new MessagePackRestSerializer());
+        => new BinaryUserApiClient(
+            httpClient,
+            new SystemTextJsonSerializer(),
+            new MemoryPackRestSerializer(types => types.Add<MemoryPackUserDto>()),
+            new MessagePackRestSerializer());
 
     private static async Task<HttpResponseMessage> HangAsync(HttpRequestMessage request, CancellationToken ct)
     {

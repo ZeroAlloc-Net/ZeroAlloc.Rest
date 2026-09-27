@@ -360,6 +360,8 @@ public interface IMixedApi
 
 The generated `AddSerializers`, called by `Add{I}` and `AddRestResilience`, registers each override serializer type as a singleton via `TryAddSingleton<T>()`. The override types may be `internal` even when the interface is public, because they never appear in the client's public constructor.
 
+`MemoryPackRestSerializer` serves only the `[MemoryPackable]` types registered with it, plus MemoryPack's built-in types. The instance `TryAddSingleton` creates has no registered types, so a method that only sends `byte[]`, as above, works with it. For `[MemoryPackable]` types, register a configured instance before `Add{I}`, and `TryAddSingleton` keeps it: `services.AddSingleton(new MemoryPackRestSerializer(types => types.Add<PayloadDto>()));`. See [Dependency Injection](dependency-injection.md#serializer-overrides-in-di).
+
 ## Void methods (no response body)
 
 Return `Task` (not `Task<T>`) for methods where you only care about success/failure:

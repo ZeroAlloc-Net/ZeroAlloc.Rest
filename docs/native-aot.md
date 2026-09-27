@@ -60,7 +60,7 @@ The output is a single self-contained native binary with no .NET runtime depende
 
 ## AOT checklist
 
-- [ ] Use a source-generated `JsonSerializerContext` (or MemoryPack / MessagePack which have AOT-safe source generators)
+- [ ] Use a source-generated `JsonSerializerContext`, MessagePack's source generator, or MemoryPack with explicit registration: `new MemoryPackRestSerializer(types => types.Add<User>())`. MemoryPack.Core itself reports IL2104 and IL3053 when an app using it is published
 - [ ] Suppress `[RequiresDynamicCode]` / `[RequiresUnreferencedCode]` warnings after verifying your serializer is AOT-safe
 - [ ] Set `PublishAot=true` in the publish profile
 - [ ] Test the native binary on the target OS — trim analysis may surface missing roots
