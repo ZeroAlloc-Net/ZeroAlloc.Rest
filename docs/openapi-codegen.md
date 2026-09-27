@@ -36,25 +36,9 @@ zeroalloc generate --spec openapi.yaml --namespace MyApp --interface IMyApi --ou
 
 `--spec` also takes an `http(s)://` URL. `--interface` defaults to `IApiClient`.
 
-## C# API
+## Generation rules
 
-Use `OpenApiInterfaceGenerator` directly in code or in a build script:
-
-```csharp
-using ZeroAlloc.Rest.Tools;
-
-// From a YAML/JSON string
-string code = OpenApiInterfaceGenerator.Generate(yamlOrJson, "MyApp", "IMyApi");
-
-// From a file
-string code = OpenApiInterfaceGenerator.GenerateFromFile("openapi.yaml", "MyApp", "IMyApi");
-
-// From a URL
-string code = await OpenApiInterfaceGenerator.GenerateFromUrlAsync(
-    "https://api.example.com/openapi.json", "MyApp", "IMyApi");
-```
-
-The generator maps:
+The CLI and the MSBuild task share the same generator. It maps:
 - `operationId` → method name (PascalCase, suffixed with `Async`)
 - a name that is not a valid C# identifier is made into one: `user-id` becomes `userId`, a keyword such as `class` is escaped as `@class`, and a name that clashes with another parameter, `body` or `ct` gets a numeric suffix
 - `parameters[in=query]` → `[Query] T name`, or `[Query(Name = "page-size")] T pageSize` when the C# name differs from the wire name

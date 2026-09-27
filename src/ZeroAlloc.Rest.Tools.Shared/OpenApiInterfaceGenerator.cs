@@ -5,9 +5,9 @@ using Microsoft.OpenApi.Readers;
 
 namespace ZeroAlloc.Rest.Tools;
 
-public static class OpenApiInterfaceGenerator
+internal static class OpenApiInterfaceGenerator
 {
-    public static string Generate(string yamlOrJson, string @namespace, string interfaceName)
+    internal static string Generate(string yamlOrJson, string @namespace, string interfaceName)
         => Generate(yamlOrJson, @namespace, interfaceName, new List<OpenApiWarning>());
 
     // Adds a message to warnings for each parameter of the spec the emitted interface leaves out,
@@ -49,13 +49,13 @@ public static class OpenApiInterfaceGenerator
         return sb.ToString();
     }
 
-    public static string GenerateFromFile(string filePath, string @namespace, string interfaceName)
+    internal static string GenerateFromFile(string filePath, string @namespace, string interfaceName)
     {
         var content = File.ReadAllText(filePath);
         return Generate(content, @namespace, interfaceName);
     }
 
-    public static Task<string> GenerateFromFileAsync(
+    internal static Task<string> GenerateFromFileAsync(
         string filePath, string @namespace, string interfaceName,
         CancellationToken ct = default)
         => GenerateFromFileAsync(filePath, @namespace, interfaceName, new List<OpenApiWarning>(), ct);
@@ -68,7 +68,7 @@ public static class OpenApiInterfaceGenerator
         return Generate(content, @namespace, interfaceName, warnings);
     }
 
-    public static Task<string> GenerateFromUrlAsync(
+    internal static Task<string> GenerateFromUrlAsync(
         string url, string @namespace, string interfaceName,
         CancellationToken ct = default)
         => GenerateFromUrlAsync(url, @namespace, interfaceName, new List<OpenApiWarning>(), ct);
