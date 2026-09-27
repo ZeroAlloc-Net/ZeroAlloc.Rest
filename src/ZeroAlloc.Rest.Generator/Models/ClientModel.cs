@@ -6,12 +6,12 @@ internal record ClientModel(
     string Namespace,
     string InterfaceName,
     string ClassName,
-    IReadOnlyList<MethodModel> Methods,
+    EquatableArray<MethodModel> Methods,
     string? SerializerTypeName,
     bool IsPublic,
     int MaxErrorBodyBytes,
-    IReadOnlyList<ErrorMapperModel> ErrorMappers,
-    IReadOnlyList<DiagnosticInfo> Diagnostics)
+    EquatableArray<ErrorMapperModel> ErrorMappers,
+    EquatableArray<DiagnosticInfo> Diagnostics)
 {
     // The generated types follow the interface: a public client over an internal interface
     // would leak it, and fails to compile when the interface uses internal DTOs.
