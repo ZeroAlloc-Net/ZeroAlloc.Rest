@@ -78,7 +78,7 @@ public sealed record CreateUserRequest(string Name);
 The generator emits, for the route segment:
 
 ```csharp
-var url = $"/users/{Uri.EscapeDataString(id.ToString())}";
+var __url = $"/users/{Uri.EscapeDataString(id.ToString())}";
 ```
 
 …and for the nullable `[Query]` parameter:
@@ -86,10 +86,10 @@ var url = $"/users/{Uri.EscapeDataString(id.ToString())}";
 ```csharp
 if (since != null)
 {
-    AppendToUrl(urlBuilder, hasQuery ? '&' : '?');
-    AppendToUrl(urlBuilder, "since=".AsSpan());
-    AppendToUrl(urlBuilder, Uri.EscapeDataString(since!.ToString()!).AsSpan());
-    hasQuery = true;
+    AppendToUrl(__urlBuilder, __hasQuery ? '&' : '?');
+    AppendToUrl(__urlBuilder, "since=".AsSpan());
+    AppendToUrl(__urlBuilder, Uri.EscapeDataString(since!.ToString()!).AsSpan());
+    __hasQuery = true;
 }
 ```
 

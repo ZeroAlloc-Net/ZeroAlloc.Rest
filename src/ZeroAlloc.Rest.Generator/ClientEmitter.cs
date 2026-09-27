@@ -243,7 +243,7 @@ internal static class ClientEmitter
     private static void EmitMethod(SourceProductionContext ctx, StringBuilder sb, string interfaceName, MethodModel method, IReadOnlyDictionary<string, string> serializerFieldMap, IReadOnlyDictionary<string, string> errorMapperFieldMap, int maxErrorBodyBytes)
     {
         var ctParam = FindCancellationToken(method.Parameters);
-        var ctArg = ctParam != null ? ctParam.Name : "default";
+        var ctArg = ctParam != null ? Identifier(ctParam) : "default";
         var pathParams = FilterParameters(method.Parameters, ParameterKind.Path);
         var queryParams = FilterParameters(method.Parameters, ParameterKind.Query);
         var bodyParam = FirstOrDefault(method.Parameters, ParameterKind.Body);
@@ -288,9 +288,11 @@ internal static class ClientEmitter
         sb.AppendLine($"        __activity?.SetTag(\"rest.method\", __RestMethodTag);");
         sb.AppendLine($"        var __sw = global::System.Diagnostics.Stopwatch.GetTimestamp();");
 
+        // Every local the generated method declares starts with "__", and every parameter is emitted
+        // through Identifier, so a parameter named url, request, response or @class still compiles.
         EmitUrlBuilding(sb, method.Route, pathParams, queryParams);
         EmitRequestCreation(sb, method, headerParams, bodyParam, formBodyParam, ctArg, serializerExpr);
-        EmitSendAndResponse(sb, method, ctParam?.Name, serializerExpr, maxErrorBodyBytes, errorMapperField);
+        EmitSendAndResponse(sb, method, ctParam is null ? null : Identifier(ctParam), serializerExpr, maxErrorBodyBytes, errorMapperField);
 
         sb.AppendLine("    }");
         sb.AppendLine();
@@ -301,60 +303,59 @@ internal static class ClientEmitter
     {
         if (pathParams.Count == 0 && queryParams.Count == 0)
         {
-            sb.AppendLine($"        var url = \"{route}\";");
+            var literal = new StringBuilder(route.Length);
+            AppendLiteral(literal, route, interpolated: false);
+            sb.AppendLine($"        var __url = \"{literal}\";");
             return;
         }
 
-        // Build the route with path interpolation
-        var routeExpr = route;
-        foreach (var p in pathParams)
-            routeExpr = routeExpr.Replace("{" + p.Name + "}", $"{{Uri.EscapeDataString({p.Name}.ToString())}}");
+        var routeExpr = RouteExpression(route, pathParams);
 
         if (queryParams.Count == 0)
         {
-            sb.AppendLine($"        var url = $\"{routeExpr}\";");
+            sb.AppendLine($"        var __url = $\"{routeExpr}\";");
         }
         else
         {
-            sb.AppendLine($"        var urlBase = $\"{routeExpr}\";");
-            sb.AppendLine("        using var urlBuilder = new ZeroAlloc.Collections.HeapPooledList<char>(urlBase.Length + 64);");
-            sb.AppendLine("        AppendToUrl(urlBuilder, urlBase.AsSpan());");
-            sb.AppendLine("        var hasQuery = false;");
+            sb.AppendLine($"        var __urlBase = $\"{routeExpr}\";");
+            sb.AppendLine("        using var __urlBuilder = new ZeroAlloc.Collections.HeapPooledList<char>(__urlBase.Length + 64);");
+            sb.AppendLine("        AppendToUrl(__urlBuilder, __urlBase.AsSpan());");
+            sb.AppendLine("        var __hasQuery = false;");
             foreach (var q in queryParams)
             {
                 if (q.IsCollection)
                 {
-                    sb.AppendLine($"        if ({q.Name} != null)");
+                    sb.AppendLine($"        if ({Identifier(q)} != null)");
                     sb.AppendLine("        {");
-                    sb.AppendLine($"            foreach (var __item in {q.Name})");
+                    sb.AppendLine($"            foreach (var __item in {Identifier(q)})");
                     sb.AppendLine("            {");
                     sb.AppendLine($"                if (__item == null) continue;");
-                    sb.AppendLine($"                AppendToUrl(urlBuilder, hasQuery ? '&' : '?');");
-                    sb.AppendLine($"                AppendToUrl(urlBuilder, \"{q.QueryName}=\".AsSpan());");
-                    sb.AppendLine($"                AppendToUrl(urlBuilder, System.Uri.EscapeDataString(__item.ToString()!).AsSpan());");
-                    sb.AppendLine("                hasQuery = true;");
+                    sb.AppendLine($"                AppendToUrl(__urlBuilder, __hasQuery ? '&' : '?');");
+                    sb.AppendLine($"                AppendToUrl(__urlBuilder, \"{q.QueryName}=\".AsSpan());");
+                    sb.AppendLine($"                AppendToUrl(__urlBuilder, System.Uri.EscapeDataString(__item.ToString()!).AsSpan());");
+                    sb.AppendLine("                __hasQuery = true;");
                     sb.AppendLine("            }");
                     sb.AppendLine("        }");
                 }
                 else if (q.IsNullable)
                 {
-                    sb.AppendLine($"        if ({q.Name} != null)");
+                    sb.AppendLine($"        if ({Identifier(q)} != null)");
                     sb.AppendLine("        {");
-                    sb.AppendLine($"            AppendToUrl(urlBuilder, hasQuery ? '&' : '?');");
-                    sb.AppendLine($"            AppendToUrl(urlBuilder, \"{q.QueryName}=\".AsSpan());");
-                    sb.AppendLine($"            AppendToUrl(urlBuilder, System.Uri.EscapeDataString({q.Name}!.ToString()!).AsSpan());");
-                    sb.AppendLine("            hasQuery = true;");
+                    sb.AppendLine($"            AppendToUrl(__urlBuilder, __hasQuery ? '&' : '?');");
+                    sb.AppendLine($"            AppendToUrl(__urlBuilder, \"{q.QueryName}=\".AsSpan());");
+                    sb.AppendLine($"            AppendToUrl(__urlBuilder, System.Uri.EscapeDataString({Identifier(q)}!.ToString()!).AsSpan());");
+                    sb.AppendLine("            __hasQuery = true;");
                     sb.AppendLine("        }");
                 }
                 else
                 {
-                    sb.AppendLine($"        AppendToUrl(urlBuilder, hasQuery ? '&' : '?');");
-                    sb.AppendLine($"        AppendToUrl(urlBuilder, \"{q.QueryName}=\".AsSpan());");
-                    sb.AppendLine($"        AppendToUrl(urlBuilder, System.Uri.EscapeDataString({q.Name}.ToString()!).AsSpan());");
-                    sb.AppendLine("        hasQuery = true;");
+                    sb.AppendLine($"        AppendToUrl(__urlBuilder, __hasQuery ? '&' : '?');");
+                    sb.AppendLine($"        AppendToUrl(__urlBuilder, \"{q.QueryName}=\".AsSpan());");
+                    sb.AppendLine($"        AppendToUrl(__urlBuilder, System.Uri.EscapeDataString({Identifier(q)}.ToString()!).AsSpan());");
+                    sb.AppendLine("        __hasQuery = true;");
                 }
             }
-            sb.AppendLine("        var url = new string(urlBuilder.AsReadOnlySpan());");
+            sb.AppendLine("        var __url = new string(__urlBuilder.AsReadOnlySpan());");
         }
     }
 
@@ -362,41 +363,41 @@ internal static class ClientEmitter
         List<ParameterModel> headerParams, ParameterModel? bodyParam, ParameterModel? formBodyParam,
         string ctArg, string serializerExpr)
     {
-        sb.AppendLine($"        using var request = new System.Net.Http.HttpRequestMessage(");
+        sb.AppendLine($"        using var __request = new System.Net.Http.HttpRequestMessage(");
         sb.AppendLine($"            System.Net.Http.HttpMethod.{Capitalize(method.HttpMethod)},");
-        sb.AppendLine($"            url);");
-        sb.AppendLine($"        request.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue({serializerExpr}.ContentType));");
+        sb.AppendLine($"            __url);");
+        sb.AppendLine($"        __request.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue({serializerExpr}.ContentType));");
 
         // Static headers declared with [Header("Name", Value = "...")] are added additively.
         // For Accept, this means both the serializer's content type and the static value will
         // appear in the header. This is intentional — use ConfigureHttpClient to override
         // the serializer's Accept if exclusive control is needed.
         foreach (var (name, value) in method.StaticHeaders)
-            sb.AppendLine($"        request.Headers.TryAddWithoutValidation(\"{name}\", \"{value}\");");
+            sb.AppendLine($"        __request.Headers.TryAddWithoutValidation(\"{name}\", \"{value}\");");
 
         foreach (var h in headerParams)
-            sb.AppendLine($"        request.Headers.TryAddWithoutValidation(\"{h.HeaderName}\", {h.Name}?.ToString());");
+            sb.AppendLine($"        __request.Headers.TryAddWithoutValidation(\"{h.HeaderName}\", {Identifier(h)}?.ToString());");
 
         if (bodyParam != null)
         {
-            sb.AppendLine("        var bodyStream = new System.IO.MemoryStream();");
+            sb.AppendLine("        var __bodyStream = new System.IO.MemoryStream();");
             sb.AppendLine("        try");
             sb.AppendLine("        {");
-            sb.AppendLine($"            await {serializerExpr}.SerializeAsync(bodyStream, {bodyParam.Name}, {ctArg}).ConfigureAwait(false);");
+            sb.AppendLine($"            await {serializerExpr}.SerializeAsync(__bodyStream, {Identifier(bodyParam)}, {ctArg}).ConfigureAwait(false);");
             sb.AppendLine("        }");
             sb.AppendLine("        catch");
             sb.AppendLine("        {");
-            sb.AppendLine("            bodyStream.Dispose();");
+            sb.AppendLine("            __bodyStream.Dispose();");
             sb.AppendLine("            throw;");
             sb.AppendLine("        }");
-            sb.AppendLine("        bodyStream.Position = 0;");
-            sb.AppendLine("        request.Content = new System.Net.Http.StreamContent(bodyStream);");
-            sb.AppendLine($"        request.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue({serializerExpr}.ContentType);");
+            sb.AppendLine("        __bodyStream.Position = 0;");
+            sb.AppendLine("        __request.Content = new System.Net.Http.StreamContent(__bodyStream);");
+            sb.AppendLine($"        __request.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue({serializerExpr}.ContentType);");
         }
 
         if (formBodyParam != null)
         {
-            sb.AppendLine($"        request.Content = new System.Net.Http.FormUrlEncodedContent({formBodyParam.Name});");
+            sb.AppendLine($"        __request.Content = new System.Net.Http.FormUrlEncodedContent({Identifier(formBodyParam)});");
         }
     }
 
@@ -408,9 +409,9 @@ internal static class ClientEmitter
             sb.AppendLine("        global::ZeroAlloc.Rest.HttpError __httpError;");
         sb.AppendLine("        try");
         sb.AppendLine("        {");
-        sb.AppendLine($"            using var response = await _httpClient.SendAsync(request, {ctArg}).ConfigureAwait(false);");
-        sb.AppendLine("            var __statusCode = (int)response.StatusCode;");
-        sb.AppendLine("            var __serverAddress = request.RequestUri?.Host ?? string.Empty;");
+        sb.AppendLine($"            using var __response = await _httpClient.SendAsync(__request, {ctArg}).ConfigureAwait(false);");
+        sb.AppendLine("            var __statusCode = (int)__response.StatusCode;");
+        sb.AppendLine("            var __serverAddress = __request.RequestUri?.Host ?? string.Empty;");
         sb.AppendLine("            __activity?.SetTag(\"http.status_code\", __statusCode);");
         sb.AppendLine("            __activity?.SetTag(\"server.address\", __serverAddress);");
         sb.AppendLine("            var __elapsedMs = global::System.Diagnostics.Stopwatch.GetElapsedTime(__sw).TotalMilliseconds;");
@@ -471,14 +472,14 @@ internal static class ClientEmitter
         var i2 = i1 + "    ";
         if (method.ReturnsVoid)
         {
-            sb.AppendLine($"{indent}response.EnsureSuccessStatusCode();");
+            sb.AppendLine($"{indent}__response.EnsureSuccessStatusCode();");
         }
         else if (method.ReturnsResult)
         {
             var resultType = ResultTypeName(method);
-            sb.AppendLine($"{indent}if (response.IsSuccessStatusCode)");
+            sb.AppendLine($"{indent}if (__response.IsSuccessStatusCode)");
             sb.AppendLine($"{indent}{{");
-            sb.AppendLine($"{i1}var responseStream = await response.Content.ReadAsStreamAsync({ctArg}).ConfigureAwait(false);");
+            sb.AppendLine($"{i1}var __responseStream = await __response.Content.ReadAsStreamAsync({ctArg}).ConfigureAwait(false);");
             // Only the deserialize call is guarded: whatever the serializer throws, a JsonException or
             // a MemoryPack or MessagePack exception, means the body could not be read. Cancellation
             // is left to the method's cancellation catches.
@@ -488,25 +489,25 @@ internal static class ClientEmitter
                 // through to the single mapping site after the method's try.
                 sb.AppendLine($"{i1}try");
                 sb.AppendLine($"{i1}{{");
-                sb.AppendLine($"{i2}{method.InnerTypeName} content = (await {serializerExpr}.DeserializeAsync<{method.InnerTypeName}>(responseStream, {ctArg}).ConfigureAwait(false))!;");
-                sb.AppendLine($"{i2}return {resultType}.Success(content);");
+                sb.AppendLine($"{i2}{method.InnerTypeName} __content = (await {serializerExpr}.DeserializeAsync<{method.InnerTypeName}>(__responseStream, {ctArg}).ConfigureAwait(false))!;");
+                sb.AppendLine($"{i2}return {resultType}.Success(__content);");
                 sb.AppendLine($"{i1}}}");
             }
             else
             {
-                sb.AppendLine($"{i1}{method.InnerTypeName} content;");
+                sb.AppendLine($"{i1}{method.InnerTypeName} __content;");
                 sb.AppendLine($"{i1}try");
                 sb.AppendLine($"{i1}{{");
-                sb.AppendLine($"{i2}content = (await {serializerExpr}.DeserializeAsync<{method.InnerTypeName}>(responseStream, {ctArg}).ConfigureAwait(false))!;");
+                sb.AppendLine($"{i2}__content = (await {serializerExpr}.DeserializeAsync<{method.InnerTypeName}>(__responseStream, {ctArg}).ConfigureAwait(false))!;");
                 sb.AppendLine($"{i1}}}");
             }
             sb.AppendLine($"{i1}catch (global::System.Exception __ex) when (__ex is not global::System.OperationCanceledException)");
             sb.AppendLine($"{i1}{{");
             sb.AppendLine($"{i2}__RecordFailure(__activity, __ex, __sw, __httpMethod, __RestMethodTag);");
-            EmitFailure(sb, i2, method, "__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Deserialization, response, __ex)");
+            EmitFailure(sb, i2, method, "__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Deserialization, __response, __ex)");
             sb.AppendLine($"{i1}}}");
             if (!method.MapsError)
-                sb.AppendLine($"{i1}return {resultType}.Success(content);");
+                sb.AppendLine($"{i1}return {resultType}.Success(__content);");
             sb.AppendLine($"{indent}}}");
             sb.AppendLine($"{indent}else");
             sb.AppendLine($"{indent}{{");
@@ -515,20 +516,20 @@ internal static class ClientEmitter
                 // Read before the response is disposed. The helper caps the body, turns a failed read
                 // into an empty body, and still throws on caller cancellation.
                 var cap = maxErrorBodyBytes.ToString(CultureInfo.InvariantCulture);
-                sb.AppendLine($"{i1}var __errorBody = await global::ZeroAlloc.Rest.GeneratedRestClient.ReadErrorBodyAsync(response.Content, {cap}, {ctArg}).ConfigureAwait(false);");
-                EmitFailure(sb, i1, method, "__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Status, response, null, __errorBody.Body, __errorBody.Truncated)");
+                sb.AppendLine($"{i1}var __errorBody = await global::ZeroAlloc.Rest.GeneratedRestClient.ReadErrorBodyAsync(__response.Content, {cap}, {ctArg}).ConfigureAwait(false);");
+                EmitFailure(sb, i1, method, "__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Status, __response, null, __errorBody.Body, __errorBody.Truncated)");
             }
             else
             {
-                EmitFailure(sb, i1, method, "__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Status, response, null)");
+                EmitFailure(sb, i1, method, "__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Status, __response, null)");
             }
             sb.AppendLine($"{indent}}}");
         }
         else
         {
-            sb.AppendLine($"{indent}response.EnsureSuccessStatusCode();");
-            sb.AppendLine($"{indent}var responseStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);");
-            sb.AppendLine($"{indent}return (await {serializerExpr}.DeserializeAsync<{method.InnerTypeName}>(responseStream, {ctArg}).ConfigureAwait(false))!;");
+            sb.AppendLine($"{indent}__response.EnsureSuccessStatusCode();");
+            sb.AppendLine($"{indent}var __responseStream = await __response.Content.ReadAsStreamAsync().ConfigureAwait(false);");
+            sb.AppendLine($"{indent}return (await {serializerExpr}.DeserializeAsync<{method.InnerTypeName}>(__responseStream, {ctArg}).ConfigureAwait(false))!;");
         }
     }
 
@@ -673,7 +674,7 @@ internal static class ClientEmitter
         for (var i = 0; i < parameters.Count; i++)
         {
             if (i > 0) sb.Append(", ");
-            sb.Append(parameters[i].TypeName).Append(' ').Append(parameters[i].Name);
+            sb.Append(parameters[i].TypeName).Append(' ').Append(Identifier(parameters[i]));
         }
         return sb.ToString();
     }
@@ -730,6 +731,48 @@ internal static class ClientEmitter
             ? "@" + name
             : name;
     }
+
+    // The route as the contents of an interpolated string: each {token} a route parameter binds
+    // becomes a hole holding its escaped value. Everything else is literal text, braces doubled, so
+    // a token no route parameter binds is sent as written, which ZRA005 reports, and never becomes a
+    // hole that names an undefined variable or, worse, some other parameter or local in scope.
+    private static string RouteExpression(string route, List<ParameterModel> pathParams)
+    {
+        var sb = new StringBuilder(route.Length + 32);
+        var next = 0;
+        foreach (var token in RouteTemplate.Tokens(route))
+        {
+            var parameter = pathParams.Find(p => string.Equals(p.Name, token.Name, System.StringComparison.Ordinal));
+            if (parameter is null) continue;
+            AppendLiteral(sb, route.Substring(next, token.Start - next), interpolated: true);
+            sb.Append("{Uri.EscapeDataString(").Append(Identifier(parameter)).Append(".ToString())}");
+            next = token.Start + token.Length;
+        }
+        AppendLiteral(sb, route.Substring(next), interpolated: true);
+        return sb.ToString();
+    }
+
+    // Literal route text inside a regular string literal, or an interpolated one.
+    private static void AppendLiteral(StringBuilder sb, string text, bool interpolated)
+    {
+        foreach (var c in text)
+        {
+            switch (c)
+            {
+                case '{' when interpolated: sb.Append("{{"); break;
+                case '}' when interpolated: sb.Append("}}"); break;
+                case '"': sb.Append("\\\""); break;
+                case '\\': sb.Append("\\\\"); break;
+                default: sb.Append(c); break;
+            }
+        }
+    }
+
+    // A parameter's name as a C# identifier: a parameter declared as @class is named "class".
+    private static string Identifier(ParameterModel parameter)
+        => Microsoft.CodeAnalysis.CSharp.SyntaxFacts.GetKeywordKind(parameter.Name) != Microsoft.CodeAnalysis.CSharp.SyntaxKind.None
+            ? "@" + parameter.Name
+            : parameter.Name;
 
     private static ParameterModel? FindCancellationToken(EquatableArray<ParameterModel> parameters)
     {

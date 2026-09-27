@@ -10,7 +10,9 @@ description: Query strings, request bodies, headers, and path parameters in Zero
 
 ## Path parameters
 
-Named in the route template with `{name}`. The method parameter with the same name is substituted:
+Named in the route template with `{name}`. The method parameter with the same name is substituted.
+A parameter with no attribute is a path parameter; if the route has no `{name}` token for it, it is
+never sent and [ZRA005](advanced.md#zra005-route-template-and-route-parameters-do-not-match) warns:
 
 ```csharp
 [Get("/users/{id}")]

@@ -6,7 +6,7 @@ namespace ZeroAlloc.Rest.Generator;
 [Generator]
 public sealed class RestClientGenerator : IIncrementalGenerator
 {
-    private const string ZeroAllocRestClientAttributeName =
+    internal const string ZeroAllocRestClientAttributeName =
         "ZeroAlloc.Rest.Attributes.ZeroAllocRestClientAttribute";
 
     public void Initialize(IncrementalGeneratorInitializationContext context)

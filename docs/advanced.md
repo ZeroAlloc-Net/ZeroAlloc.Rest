@@ -189,8 +189,9 @@ internal interface IJevApi
 
 ## Diagnostics
 
-The generator reports these errors. Each points at the method or attribute at fault.
-`#pragma warning disable` does not suppress them; fix the declaration.
+The generator reports these diagnostics. Each points at the method, parameter or attribute at
+fault. ZRA001 to ZRA004 are errors, which `#pragma warning disable` does not suppress; fix the
+declaration. ZRA005 is a warning, so it can be suppressed like any other.
 
 ### ZRA001: Conflicting body attributes
 
@@ -260,6 +261,40 @@ internal interface IJevApi
 ```
 
 Message: `'AnotherJevErrorMapper' maps 'JevError', which 'JevErrorMapper' already maps; declare one [ErrorMapper] per error type`
+
+### ZRA005: Route template and route parameters do not match
+
+Severity: Warning.
+
+A parameter with none of `[Query]`, `[Header]`, `[Body]` or `[FormBody]`, other than the
+`CancellationToken`, is a route parameter: it replaces each `{name}` token in the route with exactly
+its name, case included, and is sent nowhere else. ZRA005 reports a mismatch in either direction:
+
+- **A route parameter with no `{name}` token** is never sent. The warning points at the parameter.
+  This includes a route parameter on a [pathless method](routing.md#no-path), which has no tokens
+  at all. Add the token, or bind the parameter with `[Query]`, `[Header]` or `[Body]`.
+- **A `{token}` that no route parameter matches** is sent as literal text, braces included. The
+  warning points at the HTTP method attribute. Add the parameter, or fix the token's spelling. A
+  token that only a `[Query]` or `[Header]` parameter's name matches is still unmatched.
+
+A typo gets both:
+
+```csharp
+[ZeroAllocRestClient]
+public interface IUserApi
+{
+    [Get("/users/{usrId}")]
+    Task<UserDto> GetUserAsync(int userId, CancellationToken ct = default);
+}
+```
+
+Messages:
+
+- `Parameter 'userId' of method 'GetUserAsync' is a route parameter, but route '/users/{usrId}' has no '{userId}' token, so its value is never sent; add the token, or bind the parameter with [Query], [Header] or [Body]`
+- `Route '/users/{usrId}' of method 'GetUserAsync' has a '{usrId}' token that no route parameter matches, so it is sent as literal text`
+
+ZRA005 comes from an analyzer in the generator package, so `#pragma warning disable ZRA005`,
+`[SuppressMessage]` and an `.editorconfig` severity all apply to it.
 
 ## CancellationToken
 
