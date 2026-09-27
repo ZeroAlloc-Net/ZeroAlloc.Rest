@@ -28,6 +28,10 @@
     <!-- Probes built from generated clients serialize with it -->
     <ProjectReference Include="../../src/ZeroAlloc.Rest.SystemTextJson/ZeroAlloc.Rest.SystemTextJson.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Real-world specs RealWorldSpecTests generates clients from -->
+    <None Include="Specs/*.yaml" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 
   <!--
     GeneratedCode compiles emitted models the way a consumer's build does, with the System.Text.Json
