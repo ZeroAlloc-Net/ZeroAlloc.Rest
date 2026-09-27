@@ -15,6 +15,7 @@ internal static class GeneratorHarness
         .. Basic.Reference.Assemblies.Net100.References.All,
         MetadataReference.CreateFromFile(typeof(ZeroAlloc.Rest.HttpError).Assembly.Location),
         MetadataReference.CreateFromFile(typeof(ZeroAlloc.Results.Result<,>).Assembly.Location),
+        MetadataReference.CreateFromFile(typeof(ZeroAlloc.Collections.HeapPooledList<>).Assembly.Location),
         MetadataReference.CreateFromFile(typeof(Microsoft.Extensions.DependencyInjection.IServiceCollection).Assembly.Location),
         MetadataReference.CreateFromFile(typeof(Microsoft.Extensions.DependencyInjection.HttpClientFactoryServiceCollectionExtensions).Assembly.Location),
     ];
@@ -41,8 +42,11 @@ internal static class GeneratorHarness
             .First(s => string.Equals(s.HintName, hintName, System.StringComparison.Ordinal))
             .SourceText.ToString().Replace("\r\n", "\n", System.StringComparison.Ordinal);
 
+        // Only diagnostics in code count. ZeroAlloc.Collections targets an older runtime, so binding
+        // it reports CS1701 with no source location: a fact about this reference set, which the
+        // SDK's default build never shows, not about the generated code.
         var problems = output.GetDiagnostics()
-            .Where(d => d.Severity >= DiagnosticSeverity.Warning)
+            .Where(d => d.Severity >= DiagnosticSeverity.Warning && d.Location.IsInSource)
             .ToImmutableArray();
 
         return new GeneratorHarnessRun(generatedSource, generatorDiagnostics, problems);

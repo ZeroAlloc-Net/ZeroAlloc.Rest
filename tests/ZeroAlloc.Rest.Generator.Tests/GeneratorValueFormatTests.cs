@@ -1,0 +1,136 @@
+using Xunit;
+
+namespace ZeroAlloc.Rest.Generator.Tests;
+
+// Design decision 3 of the OpenAPI models plan: route, query and header values are written in
+// their wire format through one __FormatValue overload per value type.
+public class GeneratorValueFormatTests
+{
+    private const string Source = """
+        using System;
+        using System.Collections.Generic;
+        using System.Text.Json.Serialization;
+        using System.Threading;
+        using System.Threading.Tasks;
+        using ZeroAlloc.Rest.Attributes;
+        namespace MyApp;
+        public enum Mood { [JsonStringEnumMemberName("very-happy")] VeryHappy, Sad }
+        [ZeroAllocRestClient]
+        public interface IFormatApi
+        {
+            [Get("/at/{when}")]
+            Task<string> AtAsync(DateTimeOffset when, [Query] bool active, [Query] Mood mood,
+                [Query] int? limit, [Query] List<DateOnly> days, [Header("X-Trace")] string? trace,
+                CancellationToken ct = default);
+        }
+        """;
+
+    [Fact]
+    public void EachValueType_GetsOneFormatHelper()
+    {
+        var client = Generate(Source);
+
+        Assert.Contains("private static string __FormatValue(global::System.DateTimeOffset value) => value.ToString(\"O\", global::System.Globalization.CultureInfo.InvariantCulture);", client);
+        Assert.Contains("private static string __FormatValue(bool value) => value ? \"true\" : \"false\";", client);
+        Assert.Contains("global::MyApp.Mood.VeryHappy => \"very-happy\",", client);
+        Assert.Contains("private static string __FormatValue(int? value) => value.HasValue ? __FormatValue(value.GetValueOrDefault()) : string.Empty;", client);
+        Assert.Contains("private static string __FormatValue(global::System.DateOnly value)", client);
+        Assert.Contains("private static string __FormatValue(string value) => value;", client);
+        Assert.Equal(1, Occurrences(client, "__FormatValue(bool value)"));
+    }
+
+    [Fact]
+    public void CallSites_UseTheHelper()
+    {
+        var client = Generate(Source);
+
+        Assert.Contains("{(global::System.Uri.EscapeDataString(__FormatValue(when)))}", client);
+        Assert.Contains("global::System.Uri.EscapeDataString(__FormatValue(__item))", client);
+        Assert.Contains("global::System.Uri.EscapeDataString(__FormatValue(limit))", client);
+        Assert.Contains("global::System.Uri.EscapeDataString(__FormatValue(active))", client);
+        Assert.Contains("if (trace is not null)\n            __request.Headers.TryAddWithoutValidation(\"X-Trace\", __FormatValue(trace));", client);
+        Assert.DoesNotContain(".ToString()!", client);
+    }
+
+    // Ruling F1: a value-type element can never be null, and `__item == null` on it is CS8073 or
+    // CS0472, an error under TreatWarningsAsErrors. Only an element that can hold null is checked.
+    [Fact]
+    public void ValueTypeCollectionElements_GetNoNullCheck_AndCompileWithoutWarnings()
+    {
+        var run = GeneratorHarness.Run("""
+            using System.Collections.Generic;
+            using System.Threading.Tasks;
+            using ZeroAlloc.Rest.Attributes;
+            namespace MyApp;
+            [ZeroAllocRestClient]
+            public interface IListApi
+            {
+                [Get("/a")] Task<string> IntsAsync([Query] List<int> ids);
+                [Get("/b")] Task<string> NullableIntsAsync([Query] int?[] maybe);
+                [Get("/c")] Task<string> StringsAsync([Query] IEnumerable<string?> tags);
+            }
+            """, "IListApi.g.cs");
+
+        Assert.Empty(run.GeneratorDiagnostics);
+        Assert.Empty(run.Problems);
+        var client = run.GeneratedSource;
+        var ints = Section(client, "IntsAsync", "NullableIntsAsync");
+        Assert.DoesNotContain("if (__item == null) continue;", ints);
+        Assert.Contains("if (__item == null) continue;", Section(client, "NullableIntsAsync", "StringsAsync"));
+        Assert.Contains("if (__item == null) continue;", Section(client, "StringsAsync", "__FormatValue("));
+    }
+
+    // Ruling F7: a spec can define a model named Uri in the client's namespace, so the escape call
+    // is fully qualified. Enum members with a keyword name or sharing a value also compile.
+    [Fact]
+    public void ModelNamedUri_KeywordEnumMember_AndAliasedEnumMembers_Compile()
+    {
+        var run = GeneratorHarness.Run("""
+            using System.Text.Json.Serialization;
+            using System.Threading.Tasks;
+            using ZeroAlloc.Rest.Attributes;
+            namespace MyApp;
+            public sealed class Uri { }
+            public enum Kind
+            {
+                [JsonStringEnumMemberName("class")] @class,
+                [JsonStringEnumMemberName("first")] First = 1,
+                [JsonStringEnumMemberName("alias")] Alias = 1,
+            }
+            [ZeroAllocRestClient]
+            public interface IKindApi
+            {
+                [Get("/k/{kind}")] Task<string> GetAsync(Kind kind, [Query] Kind other, [Header("X-Kind")] Kind? header);
+            }
+            """, "IKindApi.g.cs");
+
+        Assert.Empty(run.GeneratorDiagnostics);
+        Assert.Empty(run.Problems);
+        Assert.Contains("global::MyApp.Kind.@class => \"class\",", run.GeneratedSource);
+        Assert.Contains("global::MyApp.Kind.First => \"first\",", run.GeneratedSource);
+        Assert.DoesNotContain("global::MyApp.Kind.Alias", run.GeneratedSource);
+    }
+
+    private static string Generate(string source)
+    {
+        var run = GeneratorHarness.Run(source, "IFormatApi.g.cs");
+        Assert.Empty(run.GeneratorDiagnostics);
+        Assert.Empty(run.Problems);
+        return run.GeneratedSource;
+    }
+
+    private static int Occurrences(string text, string value)
+    {
+        var count = 0;
+        for (var i = text.IndexOf(value, System.StringComparison.Ordinal); i >= 0; i = text.IndexOf(value, i + value.Length, System.StringComparison.Ordinal))
+            count++;
+        return count;
+    }
+
+    private static string Section(string text, string from, string to)
+    {
+        var start = text.IndexOf(from, System.StringComparison.Ordinal);
+        var end = text.IndexOf(to, start + from.Length, System.StringComparison.Ordinal);
+        return text.Substring(start, end - start);
+    }
+}

@@ -719,12 +719,12 @@ public class GeneratorEmissionTests
 
         Assert.Empty(errors);
         Assert.Contains("if (reference is not null)", output);
-        Assert.Contains("__request.Headers.TryAddWithoutValidation(\"X-Ref\", reference.ToString());", output);
+        Assert.Contains("__request.Headers.TryAddWithoutValidation(\"X-Ref\", __FormatValue(reference));", output);
         Assert.Contains("if (retry is not null)", output);
-        Assert.Contains("__request.Headers.TryAddWithoutValidation(\"X-Retry\", retry.ToString());", output);
+        Assert.Contains("__request.Headers.TryAddWithoutValidation(\"X-Retry\", __FormatValue(retry));", output);
         Assert.Contains("if (plain is not null)", output);
         Assert.DoesNotContain("if (count is not null)", output);
-        Assert.Contains("__request.Headers.TryAddWithoutValidation(\"X-Count\", count.ToString());", output);
+        Assert.Contains("__request.Headers.TryAddWithoutValidation(\"X-Count\", __FormatValue(count));", output);
     }
 
     [Fact]

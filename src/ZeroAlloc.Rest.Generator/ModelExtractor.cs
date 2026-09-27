@@ -25,6 +25,8 @@ internal static class ModelExtractor
     private const string NoMapperInterfaceReason = "it implements no IHttpErrorMapper<TError> interface";
     private const string ResultOpenType = "ZeroAlloc.Results.Result<T, E>";
     private const string UnitResultOpenType = "ZeroAlloc.Results.UnitResult<E>";
+    private const string JsonStringEnumMemberNameAttr = "System.Text.Json.Serialization.JsonStringEnumMemberNameAttribute";
+    private const string EnumerableOpenType = "System.Collections.Generic.IEnumerable<T>";
     private const int DefaultMaxErrorBodyBytes = 65536;
 
     internal static ClientModel? Extract(
@@ -485,9 +487,76 @@ internal static class ModelExtractor
                 }
             }
 
-            result.Add(new ParameterModel(param.Name, typeName, kind, headerName, queryName ?? param.Name, isNullable, isCollection));
+            var format = kind is ParameterKind.Path or ParameterKind.Query or ParameterKind.Header
+                ? FormatOf(param.Type, isCollection)
+                : null;
+            result.Add(new ParameterModel(param.Name, typeName, kind, headerName, queryName ?? param.Name, isNullable, isCollection, format));
         }
         return ToEquatable(result);
+    }
+
+    // The format of a value, or of a collection's elements, with Nullable<T> unwrapped. The enum
+    // check comes before IFormattable, which enums also implement.
+    private static ValueFormatModel FormatOf(ITypeSymbol type, bool isCollection)
+    {
+        var elementIsNullable = false;
+        if (isCollection)
+        {
+            type = ElementType(type) ?? type;
+            // A value-type element can never be null, and comparing it with null is CS8073 or
+            // CS0472, errors under TreatWarningsAsErrors.
+            elementIsNullable = !type.IsValueType
+                || type.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T;
+        }
+        if (type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable)
+            type = nullable.TypeArguments[0];
+
+        var name = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        var enumMembers = new List<(string, string)>();
+        var format = type.SpecialType switch
+        {
+            SpecialType.System_String => ValueFormat.String,
+            SpecialType.System_Boolean => ValueFormat.Boolean,
+            SpecialType.System_DateTime => ValueFormat.Iso8601,
+            _ when type.TypeKind == TypeKind.Enum => EnumFormat(type, enumMembers),
+            _ when name is "global::System.DateTimeOffset" or "global::System.DateOnly" or "global::System.TimeOnly" => ValueFormat.Iso8601,
+            _ when type.AllInterfaces.Any(i => i.ToDisplayString() == "System.IFormattable") => ValueFormat.Invariant,
+            _ => ValueFormat.Text,
+        };
+        return new ValueFormatModel(name, type.IsValueType, format, ToEquatable(enumMembers), elementIsNullable);
+    }
+
+    // Pairs each enum member that has a [JsonStringEnumMemberName] with that name. Only the first
+    // member with a given value is kept, since the emitted switch cannot have two arms for one value.
+    private static ValueFormat EnumFormat(ITypeSymbol type, List<(string, string)> members)
+    {
+        var seen = new HashSet<object>();
+        foreach (var member in type.GetMembers().OfType<IFieldSymbol>())
+        {
+            if (!member.HasConstantValue || member.ConstantValue is not { } value) continue;
+            foreach (var attribute in member.GetAttributes())
+            {
+                if (attribute.AttributeClass?.ToDisplayString() == JsonStringEnumMemberNameAttr
+                    && attribute.ConstructorArguments.Length == 1
+                    && attribute.ConstructorArguments[0].Value is string wire
+                    && seen.Add(value))
+                    members.Add((member.Name, wire));
+            }
+        }
+        return ValueFormat.Enum;
+    }
+
+    private static ITypeSymbol? ElementType(ITypeSymbol type)
+    {
+        if (type is IArrayTypeSymbol array) return array.ElementType;
+        if (type is INamedTypeSymbol named && named.OriginalDefinition.ToDisplayString() == EnumerableOpenType)
+            return named.TypeArguments[0];
+        foreach (var iface in type.AllInterfaces)
+        {
+            if (iface.OriginalDefinition.ToDisplayString() == EnumerableOpenType)
+                return iface.TypeArguments[0];
+        }
+        return null;
     }
 
     private static string? GetSerializerType(ISymbol symbol)

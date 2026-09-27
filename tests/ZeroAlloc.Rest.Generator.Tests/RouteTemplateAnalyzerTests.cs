@@ -123,25 +123,25 @@ public class RouteTemplateAnalyzerTests
         },
         {
             """[Get("v{ApiInfo.Version}/users/{id}")] Task A5(int id);""",
-            """        var url = $"v{ApiInfo.Version}/users/{Uri.EscapeDataString(id.ToString())}";""",
+            """        var url = $"v{ApiInfo.Version}/users/{(global::System.Uri.EscapeDataString(__FormatValue(id)))}";""",
             "ApiInfo.Version",
             "the C# expression 'ApiInfo.Version'"
         },
         {
             """[Get("y/{DateTime.UtcNow:yyyy}/{id}")] Task A8(int id);""",
-            """        var url = $"y/{DateTime.UtcNow:yyyy}/{Uri.EscapeDataString(id.ToString())}";""",
+            """        var url = $"y/{DateTime.UtcNow:yyyy}/{(global::System.Uri.EscapeDataString(__FormatValue(id)))}";""",
             "DateTime.UtcNow:yyyy",
             "the C# expression 'DateTime.UtcNow'"
         },
         {
             """[Post("b/{id}/{p}")] Task A9(int id, [Body] Payload p);""",
-            """        var url = $"b/{Uri.EscapeDataString(id.ToString())}/{p}";""",
+            """        var url = $"b/{(global::System.Uri.EscapeDataString(__FormatValue(id)))}/{p}";""",
             "p",
             "the body parameter 'p'"
         },
         {
             """[Get("x/{ct}/{id}")] Task A10(int id, CancellationToken ct);""",
-            """        var url = $"x/{ct}/{Uri.EscapeDataString(id.ToString())}";""",
+            """        var url = $"x/{ct}/{(global::System.Uri.EscapeDataString(__FormatValue(id)))}";""",
             "ct",
             "the cancellation token parameter 'ct'"
         },
@@ -224,9 +224,9 @@ public class RouteTemplateAnalyzerTests
 
     [Theory]
     [InlineData("""[Get("u/{_httpClient}/{__httpMethod}/{__RestMethodTag}/{id}")] Task A6(int id);""",
-        """        var __url = $"u/{{_httpClient}}/{{__httpMethod}}/{{__RestMethodTag}}/{Uri.EscapeDataString(id.ToString())}";""", 3)]
+        """        var __url = $"u/{{_httpClient}}/{{__httpMethod}}/{{__RestMethodTag}}/{(global::System.Uri.EscapeDataString(__FormatValue(id)))}";""", 3)]
     [InlineData("""[Get("t/{this}/{id}")] Task A13(int id);""",
-        """        var __url = $"t/{{this}}/{Uri.EscapeDataString(id.ToString())}";""", 1)]
+        """        var __url = $"t/{{this}}/{(global::System.Uri.EscapeDataString(__FormatValue(id)))}";""", 1)]
     [InlineData("""[Get("users/{id}")] Task A4([Header("X-Id")] string id);""",
         """        var __url = "users/{id}";""", 1)]
     public void TokenThatOnlyReachedTheClientsOwnMembers_OrWasNeverInterpolated_IsLiteral(string member, string line, int reports)
@@ -305,7 +305,7 @@ public class RouteTemplateAnalyzerTests
         Assert.Empty(run.CompileErrors);
         var client = run.Sources["IApi.g.cs"];
         Assert.Contains("""var __url = "a\\b/\"c\"";""", client);
-        Assert.Contains("""var __url = $"a\\b/\"c\"/{Uri.EscapeDataString(id.ToString())}";""", client);
+        Assert.Contains("""var __url = $"a\\b/\"c\"/{(global::System.Uri.EscapeDataString(__FormatValue(id)))}";""", client);
         Assert.Contains("""var __urlBase = $"a\\b/\"c\"";""", client);
     }
 

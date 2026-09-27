@@ -127,6 +127,8 @@ internal static class ClientEmitter
         foreach (var method in model.Methods)
             EmitMethod(ctx, sb, model.InterfaceName, method, serializerFieldMap, errorMapperFieldMap, model.MaxErrorBodyBytes);
 
+        EmitFormatHelpers(sb, model);
+
         EmitRecordFailure(sb);
 
         var anyReturnsResult = false;
@@ -295,6 +297,63 @@ internal static class ClientEmitter
         sb.AppendLine();
     }
 
+    // One __FormatValue overload per type a route, query or header value has, so a value is written
+    // the same wherever it goes: invariant culture, ISO 8601 dates and times, lower-case booleans, and
+    // an enum member's [JsonStringEnumMemberName]. A value type also gets a Nullable<T> overload, which
+    // the null-checked call sites bind to.
+    private static void EmitFormatHelpers(StringBuilder sb, ClientModel model)
+    {
+        var emitted = new HashSet<string>(System.StringComparer.Ordinal);
+        foreach (var method in model.Methods)
+        {
+            foreach (var parameter in method.Parameters)
+            {
+                if (parameter.Format is { } format && emitted.Add(format.TypeName))
+                    EmitFormatHelper(sb, format);
+            }
+        }
+    }
+
+    private static void EmitFormatHelper(StringBuilder sb, ValueFormatModel format)
+    {
+        var type = format.TypeName;
+        sb.Append("    private static string __FormatValue(").Append(type).Append(" value) => ");
+        switch (format.Format)
+        {
+            case ValueFormat.String:
+                sb.AppendLine("value;");
+                break;
+            case ValueFormat.Boolean:
+                sb.AppendLine("value ? \"true\" : \"false\";");
+                break;
+            case ValueFormat.Iso8601:
+                sb.AppendLine("value.ToString(\"O\", global::System.Globalization.CultureInfo.InvariantCulture);");
+                break;
+            case ValueFormat.Invariant:
+                sb.AppendLine("value.ToString(null, global::System.Globalization.CultureInfo.InvariantCulture);");
+                break;
+            case ValueFormat.Enum when format.EnumMembers.Count > 0:
+                sb.AppendLine("value switch");
+                sb.AppendLine("    {");
+                foreach (var (member, wire) in format.EnumMembers)
+                    sb.AppendLine($"        {type}.{EscapeKeyword(member)} => {Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(wire, quote: true)},");
+                sb.AppendLine("        _ => value.ToString(),");
+                sb.AppendLine("    };");
+                break;
+            default:
+                sb.AppendLine(format.IsValueType ? "value.ToString();" : "value.ToString() ?? string.Empty;");
+                break;
+        }
+        if (format.IsValueType)
+            sb.AppendLine($"    private static string __FormatValue({type}? value) => value.HasValue ? __FormatValue(value.GetValueOrDefault()) : string.Empty;");
+        sb.AppendLine();
+    }
+
+    private static string EscapeKeyword(string name)
+        => Microsoft.CodeAnalysis.CSharp.SyntaxFacts.GetKeywordKind(name) != Microsoft.CodeAnalysis.CSharp.SyntaxKind.None
+            ? "@" + name
+            : name;
+
     private static void EmitUrlBuilding(StringBuilder sb, string route,
         List<ParameterModel> pathParams, List<ParameterModel> queryParams, EquatableArray<string> evaluatedTokens)
     {
@@ -326,10 +385,11 @@ internal static class ClientEmitter
                     sb.AppendLine("        {");
                     sb.AppendLine($"            foreach (var __item in {Identifier(q)})");
                     sb.AppendLine("            {");
-                    sb.AppendLine($"                if (__item == null) continue;");
+                    if (q.Format is not { ElementIsNullable: false })
+                        sb.AppendLine("                if (__item == null) continue;");
                     sb.AppendLine($"                AppendToUrl(__urlBuilder, __hasQuery ? '&' : '?');");
                     sb.AppendLine($"                AppendToUrl(__urlBuilder, \"{q.QueryName}=\".AsSpan());");
-                    sb.AppendLine($"                AppendToUrl(__urlBuilder, System.Uri.EscapeDataString(__item.ToString()!).AsSpan());");
+                    sb.AppendLine($"                AppendToUrl(__urlBuilder, global::System.Uri.EscapeDataString(__FormatValue(__item)).AsSpan());");
                     sb.AppendLine("                __hasQuery = true;");
                     sb.AppendLine("            }");
                     sb.AppendLine("        }");
@@ -340,7 +400,7 @@ internal static class ClientEmitter
                     sb.AppendLine("        {");
                     sb.AppendLine($"            AppendToUrl(__urlBuilder, __hasQuery ? '&' : '?');");
                     sb.AppendLine($"            AppendToUrl(__urlBuilder, \"{q.QueryName}=\".AsSpan());");
-                    sb.AppendLine($"            AppendToUrl(__urlBuilder, System.Uri.EscapeDataString({Identifier(q)}!.ToString()!).AsSpan());");
+                    sb.AppendLine($"            AppendToUrl(__urlBuilder, global::System.Uri.EscapeDataString(__FormatValue({Identifier(q)})).AsSpan());");
                     sb.AppendLine("            __hasQuery = true;");
                     sb.AppendLine("        }");
                 }
@@ -348,7 +408,7 @@ internal static class ClientEmitter
                 {
                     sb.AppendLine($"        AppendToUrl(__urlBuilder, __hasQuery ? '&' : '?');");
                     sb.AppendLine($"        AppendToUrl(__urlBuilder, \"{q.QueryName}=\".AsSpan());");
-                    sb.AppendLine($"        AppendToUrl(__urlBuilder, System.Uri.EscapeDataString({Identifier(q)}.ToString()!).AsSpan());");
+                    sb.AppendLine($"        AppendToUrl(__urlBuilder, global::System.Uri.EscapeDataString(__FormatValue({Identifier(q)})).AsSpan());");
                     sb.AppendLine("        __hasQuery = true;");
                 }
             }
@@ -374,10 +434,10 @@ internal static class ClientEmitter
 
         // TryAddWithoutValidation sends a null value as an empty header, so a parameter that can be
         // null is added only when it has a value: a null argument means "no header". A non-nullable
-        // value type always has one, and `?.` would not compile on it.
+        // value type always has one, and comparing it with null would not compile cleanly.
         foreach (var h in headerParams)
         {
-            var addHeader = $"__request.Headers.TryAddWithoutValidation(\"{h.HeaderName}\", {Identifier(h)}.ToString());";
+            var addHeader = $"__request.Headers.TryAddWithoutValidation(\"{h.HeaderName}\", __FormatValue({Identifier(h)}));";
             if (h.IsNullable)
             {
                 sb.AppendLine($"        if ({Identifier(h)} is not null)");
@@ -782,7 +842,8 @@ internal static class ClientEmitter
             if (parameter is null && !Contains(evaluatedTokens, token.Name)) continue;
             AppendLiteral(sb, route.Substring(next, token.Start - next), interpolated: true);
             if (parameter is not null)
-                sb.Append("{Uri.EscapeDataString(").Append(Identifier(parameter)).Append(".ToString())}");
+                // Parenthesized: a bare `global::` would end the hole's expression at its colon.
+                sb.Append("{(global::System.Uri.EscapeDataString(__FormatValue(").Append(Identifier(parameter)).Append(")))}");
             else
                 sb.Append('{').Append(token.Name).Append('}');
             next = token.Start + token.Length;
