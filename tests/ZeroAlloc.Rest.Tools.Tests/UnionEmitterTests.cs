@@ -110,15 +110,14 @@ public class UnionEmitterTests
 
     [Theory]
     [InlineData("{\"other\":1}")]
-    [InlineData("null")]
     [InlineData("1.5")]
     public void NoMatchingVariant_Throws(string json)
     {
         var output = GeneratedCode.Compile(ModelFixture.Emit(Spec("oneOf")), Probe($$"""
             try
             {
-                var result = JsonSerializer.Deserialize({{Quote(json)}}, MyApiJsonContext.Default.Result);
-                return result is null ? "null" : "read";
+                JsonSerializer.Deserialize({{Quote(json)}}, MyApiJsonContext.Default.Result);
+                return "read";
             }
             catch (JsonException)
             {
@@ -126,7 +125,122 @@ public class UnionEmitterTests
             }
             """));
 
-        Assert.Equal(string.Equals(json, "null", StringComparison.Ordinal) ? "null" : "JsonException", output.RunProbe());
+        Assert.Equal("JsonException", output.RunProbe());
+    }
+
+    // No variant accepts JSON null, so the converter would throw on it: STJ reads null itself.
+    [Fact]
+    public void JsonNull_ReadsAsNullWithoutCallingTheConverter()
+    {
+        var output = GeneratedCode.Compile(ModelFixture.Emit(Spec("oneOf")), Probe("""
+            var result = JsonSerializer.Deserialize("null", MyApiJsonContext.Default.Result);
+            return result is null ? "null" : "read";
+            """));
+
+        Assert.Equal("null", output.RunProbe());
+    }
+
+    // An enum variant reads by its JSON kind, a JsonElement variant takes whatever no earlier
+    // variant does, and a union property holding JSON null is null.
+    private const string MixedSpec = """
+                Level:
+                  type: integer
+                  enum: [1, 2]
+                Mixed:
+                  anyOf:
+                    - $ref: '#/components/schemas/Level'
+                    - type: boolean
+                    - {}
+                Holder:
+                  type: object
+                  properties:
+                    outcome:
+                      $ref: '#/components/schemas/Mixed'
+            """;
+
+    [Theory]
+    [InlineData("2", "Level:Value2")]
+    [InlineData("true", "Boolean:True")]
+    [InlineData("\"x\"", "JsonElement:\"x\"")]
+    [InlineData("{\"a\":[1]}", "JsonElement:{\"a\":[1]}")]
+    public void EnumAndJsonElementVariants_ReadAndRoundTrip(string json, string expected)
+    {
+        var output = GeneratedCode.Compile(EmitMixed(), Probe($$"""
+            var mixed = JsonSerializer.Deserialize({{Quote(json)}}, MyApiJsonContext.Default.Mixed)!;
+            var text = mixed.Match(
+                level => "Level:" + level,
+                boolean => "Boolean:" + boolean,
+                jsonElement => "JsonElement:" + jsonElement.GetRawText());
+            var written = JsonSerializer.Serialize(mixed, MyApiJsonContext.Default.Mixed);
+            return written == {{Quote(json)}} ? text : "wrote " + written;
+            """));
+
+        Assert.Equal(expected, output.RunProbe());
+    }
+
+    [Fact]
+    public void UnionProperty_HoldingJsonNull_IsNull()
+    {
+        var output = GeneratedCode.Compile(EmitMixed(), Probe("""
+            var holder = JsonSerializer.Deserialize("{\"outcome\":null}", MyApiJsonContext.Default.Holder)!;
+            return holder.Outcome is null ? "null" : "read";
+            """));
+
+        Assert.Equal("null", output.RunProbe());
+    }
+
+    // The {} variant has no type, so it is a JsonElement, reported as ZRT002.
+    private static string EmitMixed()
+    {
+        var (models, warnings) = ModelFixture.Build(MixedSpec);
+        Assert.Equal("ZRT002", Assert.Single(warnings).Code);
+        var sb = new System.Text.StringBuilder().AppendLine("#nullable enable").AppendLine("namespace MyApp;");
+        ModelEmitter.Emit(sb, models);
+        JsonContextEmitter.Emit(sb, ModelFixture.ContextName, ModelEmitter.SerializableTypes(models), models);
+        return sb.ToString();
+    }
+
+    // Match's type parameter is named so that no model can take its name: a model named TResult
+    // would otherwise be shadowed inside Match.
+    [Fact]
+    public void ModelNamedTResult_IsNotShadowedByMatch()
+    {
+        var code = ModelFixture.Emit("""
+                TResult:
+                  type: object
+                  required: [id]
+                  properties:
+                    id:
+                      type: integer
+                Outcome:
+                  oneOf:
+                    - $ref: '#/components/schemas/TResult'
+                    - type: string
+            """);
+
+        var output = GeneratedCode.Compile(code, Probe("""
+            var outcome = JsonSerializer.Deserialize("{\"id\":3}", MyApiJsonContext.Default.Outcome)!;
+            return outcome.Match(result => "TResult:" + result.Id, text => "String:" + text);
+            """));
+
+        Assert.Equal("TResult:3", output.RunProbe());
+    }
+
+    // A converter whose variants require no properties has no Required arrays, and its body starts
+    // with Read, not with a blank line.
+    [Fact]
+    public void ConverterWithoutRequiredArrays_HasNoLeadingBlankLine()
+    {
+        var code = ModelFixture.Emit("""
+                Scalar:
+                  oneOf:
+                    - type: string
+                    - type: boolean
+            """).ReplaceLineEndings("\n");
+
+        Assert.Contains(
+            "internal sealed class ScalarConverter : global::System.Text.Json.Serialization.JsonConverter<Scalar>\n{\n    public override Scalar Read(",
+            code);
     }
 
     [Fact]

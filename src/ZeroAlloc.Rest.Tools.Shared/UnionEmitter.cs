@@ -37,10 +37,14 @@ internal static class UnionEmitter
         sb.AppendLine("}");
     }
 
+    // Match's type parameter ends in an underscore, which no model name has: CSharpNames.Pascal
+    // drops underscores. A model named TResult is therefore never shadowed inside Match.
+    private const string MatchResult = "TMatch_";
+
     private static void EmitMatch(StringBuilder sb, UnionModel model)
     {
-        sb.Append("    public TResult Match<TResult>(")
-            .Append(string.Join(", ", model.Variants.Select(v => $"global::System.Func<{v.Type.Name}, TResult> {Parameter(v)}")))
+        sb.Append("    public ").Append(MatchResult).Append(" Match<").Append(MatchResult).Append(">(")
+            .Append(string.Join(", ", model.Variants.Select(v => $"global::System.Func<{v.Type.Name}, {MatchResult}> {Parameter(v)}")))
             .AppendLine(")");
         sb.AppendLine("    {");
         foreach (var variant in model.Variants)
@@ -79,6 +83,7 @@ internal static class UnionEmitter
         sb.Append("internal sealed class ").Append(model.Name).Append("Converter : ").Append(Serialization)
             .Append(".JsonConverter<").Append(model.Name).AppendLine(">");
         sb.AppendLine("{");
+        var hasRequired = false;
         for (var i = 0; i < model.Variants.Count; i++)
         {
             var required = model.Variants[i].RequiredWireNames;
@@ -86,8 +91,10 @@ internal static class UnionEmitter
                 continue;
             sb.Append("    private static readonly string[] Required").Append(Index(i)).Append(" = [")
                 .Append(string.Join(", ", required.Select(CSharpNames.Literal))).AppendLine("];");
+            hasRequired = true;
         }
-        sb.AppendLine();
+        if (hasRequired)
+            sb.AppendLine();
         EmitRead(sb, model);
         sb.AppendLine();
         EmitWrite(sb, model);

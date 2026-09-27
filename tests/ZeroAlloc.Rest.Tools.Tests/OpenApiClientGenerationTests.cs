@@ -314,7 +314,8 @@ public class OpenApiClientGenerationTests
     }
 
     // Spec §6: the success type comes from the first 2xx response with a schema. A 2xx response
-    // whose content has no schema is skipped, and is not reported as non-JSON content.
+    // whose content has no schema is skipped, and is not reported as non-JSON content. Its body
+    // is not typed, so the success type of an operation that also has one is T?.
     [Fact]
     public void SuccessResponseWithoutASchema_IsSkipped()
     {
@@ -352,7 +353,7 @@ public class OpenApiClientGenerationTests
         var code = OpenApiInterfaceGenerator.Generate(Spec, "MyApp", "IPingApi", warnings, GenerationOptions.Default);
 
         Assert.Contains($"{Task}<global::ZeroAlloc.Results.UnitResult<{HttpError}>> PingAsync({Ct});", code);
-        Assert.Contains($"{Task}<global::ZeroAlloc.Results.Result<string, {HttpError}>> EchoAsync({Ct});", code);
+        Assert.Contains($"{Task}<global::ZeroAlloc.Results.Result<string?, {HttpError}>> EchoAsync({Ct});", code);
         Assert.Empty(warnings);
         GeneratedCode.Compile(code).AssertClean();
     }
@@ -392,6 +393,300 @@ public class OpenApiClientGenerationTests
             """);
 
         Assert.Equal("2:Tom:Available", output.RunProbe());
+    }
+
+    // Without an operationId the method is named from the verb and the path, and so are the inline
+    // response model and the inline enum of a parameter.
+    [Fact]
+    public void OperationWithoutAnId_IsNamedFromItsVerbAndPath()
+    {
+        const string Spec = """
+            openapi: 3.0.0
+            info:
+              title: Anon
+              version: "1"
+            paths:
+              /pets/{petId}/toys:
+                get:
+                  parameters:
+                    - name: petId
+                      in: path
+                      required: true
+                      schema:
+                        type: integer
+                    - name: kind
+                      in: query
+                      schema:
+                        type: string
+                        enum: [ball, rope]
+                  responses:
+                    '200':
+                      description: OK
+                      content:
+                        application/json:
+                          schema:
+                            type: object
+                            properties:
+                              name:
+                                type: string
+            """;
+
+        var code = OpenApiInterfaceGenerator.Generate(Spec, "MyApp", "IAnonApi");
+
+        Assert.Contains(
+            $"{Task}<global::ZeroAlloc.Results.Result<GetPetsPetIdToysResponse, {HttpError}>> GetPetsPetIdToysAsync("
+                + $"int petId, [{A}Query] GetPetsPetIdToysKind? kind, {Ct});",
+            code);
+        Assert.Contains("public sealed record GetPetsPetIdToysResponse", code);
+        Assert.Contains("public enum GetPetsPetIdToysKind", code);
+        GeneratedCode.Compile(code).AssertClean();
+    }
+
+    // Design decision 5: JSON is application/json and text/json, with parameters or not, any +json
+    // type and */*. Anything else is not typed.
+    [Theory]
+    [InlineData("application/json", "string")]
+    [InlineData("application/json; charset=utf-8", "string")]
+    [InlineData("application/problem+json", "string")]
+    [InlineData("text/json", "string")]
+    [InlineData("*/*", "string")]
+    [InlineData("text/plain", "global::System.Text.Json.JsonElement")]
+    public void ResponseMediaType_IsTypedOnlyWhenJson(string mediaType, string expected)
+    {
+        var spec = $$"""
+            openapi: 3.0.0
+            info:
+              title: Media
+              version: "1"
+            paths:
+              /name:
+                get:
+                  operationId: getName
+                  responses:
+                    '200':
+                      description: OK
+                      content:
+                        '{{mediaType}}':
+                          schema:
+                            type: string
+            """;
+
+        var code = OpenApiInterfaceGenerator.Generate(spec, "MyApp", "IMediaApi");
+
+        Assert.Contains($"{Task}<global::ZeroAlloc.Results.Result<{expected}, {HttpError}>> GetNameAsync({Ct});", code);
+    }
+
+    private const string PaintSpec = """
+        openapi: 3.0.0
+        info:
+          title: Paint
+          version: "1"
+        paths:
+          /color:
+            put:
+              operationId: setColor
+              requestBody:
+                content:
+                  application/json:
+                    schema:
+                      $ref: '#/components/schemas/Color'
+              responses:
+                '204':
+                  description: Stored
+          /count:
+            put:
+              operationId: setCount
+              requestBody:
+                content:
+                  application/json:
+                    schema:
+                      type: integer
+              responses:
+                '204':
+                  description: Stored
+        components:
+          schemas:
+            Color:
+              type: string
+              enum: [red, green]
+        """;
+
+    private const string PaintProbe = """
+        using System;
+        using System.Collections.Generic;
+        using System.Net;
+        using System.Net.Http;
+        using System.Threading;
+        using System.Threading.Tasks;
+        using ZeroAlloc.Rest.SystemTextJson;
+
+        public sealed class Stub : HttpMessageHandler
+        {
+            public List<string> Bodies { get; } = new();
+
+            protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                Bodies.Add(request.Content is null ? "<none>" : await request.Content.ReadAsStringAsync(cancellationToken));
+                return new HttpResponseMessage(HttpStatusCode.NoContent);
+            }
+        }
+
+        public static class Probe
+        {
+            public static string Run()
+            {
+                var stub = new Stub();
+                MyApp.IPaintApi api = new MyApp.PaintApiClient(
+                    new HttpClient(stub) { BaseAddress = new Uri("http://stub/") },
+                    new SystemTextJsonSerializer(MyApp.PaintApiJsonContext.Default));
+                var ok = api.SetColorAsync(MyApp.Color.Green).GetAwaiter().GetResult().IsSuccess
+                    & api.SetColorAsync(null).GetAwaiter().GetResult().IsSuccess
+                    & api.SetCountAsync(3).GetAwaiter().GetResult().IsSuccess
+                    & api.SetCountAsync(null).GetAwaiter().GetResult().IsSuccess;
+                return ok + "|" + string.Join("|", stub.Bodies);
+            }
+        }
+        """;
+
+    // An optional request body is T?. For a value type, T? is Nullable<T>, a type of its own that
+    // the context must register, or the serializer throws on every call.
+    [Fact]
+    public void OptionalValueTypeBodies_AreRegistered_AndRoundTrip()
+    {
+        var code = OpenApiInterfaceGenerator.Generate(PaintSpec, "MyApp", "IPaintApi");
+
+        Assert.Contains($"SetColorAsync([{A}Body] Color? body, {Ct});", code);
+        Assert.Contains($"SetCountAsync([{A}Body] int? body, {Ct});", code);
+        Assert.Contains("[global::System.Text.Json.Serialization.JsonSerializable(typeof(Color?))]", code);
+        Assert.Contains("[global::System.Text.Json.Serialization.JsonSerializable(typeof(int?))]", code);
+        var output = GeneratedCode.Compile(code, PaintProbe);
+
+        Assert.Equal("True|\"green\"|null|3|null", output.RunProbe());
+    }
+
+    private const string MaybeSpec = """
+        openapi: 3.0.0
+        info:
+          title: Maybe
+          version: "1"
+        paths:
+          /pet:
+            get:
+              operationId: findPet
+              responses:
+                '200':
+                  description: Found
+                  content:
+                    application/json:
+                      schema:
+                        $ref: '#/components/schemas/Pet'
+                '204':
+                  description: None
+          /count:
+            get:
+              operationId: findCount
+              responses:
+                '200':
+                  description: Found
+                  content:
+                    application/json:
+                      schema:
+                        type: integer
+                '204':
+                  description: None
+          /tag:
+            get:
+              operationId: findTag
+              responses:
+                '200':
+                  description: Found
+                  content:
+                    application/json:
+                      schema:
+                        type: string
+                        nullable: true
+          /pets:
+            get:
+              operationId: getPet
+              responses:
+                '200':
+                  description: Found
+                  content:
+                    application/json:
+                      schema:
+                        $ref: '#/components/schemas/Pet'
+        components:
+          schemas:
+            Pet:
+              type: object
+              properties:
+                name:
+                  type: string
+        """;
+
+    private const string MaybeProbe = """
+        using System;
+        using System.Net;
+        using System.Net.Http;
+        using System.Text;
+        using System.Threading;
+        using System.Threading.Tasks;
+        using ZeroAlloc.Rest.SystemTextJson;
+
+        public sealed class Stub : HttpMessageHandler
+        {
+            public bool Empty { get; set; }
+
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                if (Empty)
+                    return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NoContent));
+                var json = request.RequestUri?.AbsolutePath switch
+                {
+                    "/count" => "7",
+                    "/tag" => "\"t\"",
+                    _ => "{\"name\":\"Rex\"}",
+                };
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") });
+            }
+        }
+
+        public static class Probe
+        {
+            public static string Run()
+            {
+                var stub = new Stub();
+                MyApp.IMaybeApi api = new MyApp.MaybeApiClient(
+                    new HttpClient(stub) { BaseAddress = new Uri("http://stub/") },
+                    new SystemTextJsonSerializer(MyApp.MaybeApiJsonContext.Default));
+                var full = string.Join(",", api.FindPetAsync().GetAwaiter().GetResult().Value?.Name,
+                    api.FindCountAsync().GetAwaiter().GetResult().Value, api.FindTagAsync().GetAwaiter().GetResult().Value);
+                stub.Empty = true;
+                var pet = api.FindPetAsync().GetAwaiter().GetResult();
+                var count = api.FindCountAsync().GetAwaiter().GetResult();
+                var tag = api.FindTagAsync().GetAwaiter().GetResult();
+                var required = api.GetPetAsync().GetAwaiter().GetResult();
+                return full + "|" + (pet.IsSuccess && pet.Value is null) + "," + (count.IsSuccess && count.Value is null) + ","
+                    + (tag.IsSuccess && tag.Value is null) + "|" + (required.IsFailure ? required.Error.Kind.ToString() : "success");
+            }
+        }
+        """;
+
+    // An operation that answers with a body or with none, 200 and 204, or whose response schema is
+    // nullable, declares T?: an empty body is a success with no value, not a failure.
+    [Fact]
+    public void EmptyOrNullableSuccess_DeclaresNullableT_AndReadsAnEmptyBodyAsNull()
+    {
+        var code = OpenApiInterfaceGenerator.Generate(MaybeSpec, "MyApp", "IMaybeApi");
+
+        Assert.Contains($"{Task}<global::ZeroAlloc.Results.Result<Pet?, {HttpError}>> FindPetAsync({Ct});", code);
+        Assert.Contains($"{Task}<global::ZeroAlloc.Results.Result<int?, {HttpError}>> FindCountAsync({Ct});", code);
+        Assert.Contains($"{Task}<global::ZeroAlloc.Results.Result<string?, {HttpError}>> FindTagAsync({Ct});", code);
+        Assert.Contains($"{Task}<global::ZeroAlloc.Results.Result<Pet, {HttpError}>> GetPetAsync({Ct});", code);
+        Assert.Contains("[global::System.Text.Json.Serialization.JsonSerializable(typeof(int?))]", code);
+        var output = GeneratedCode.Compile(code, MaybeProbe);
+
+        Assert.Equal("Rex,7,t|True,True,True|Deserialization", output.RunProbe());
     }
 
     private const string TasksSpec = """
@@ -510,7 +805,9 @@ public class OpenApiClientGenerationTests
 
     // Schemas named like members of JsonSerializerContext, and schemas named like the context
     // property the STJ generator derives for a composite type the file reaches: ListPet for
-    // List<Pet>, DictionaryStringPet for Dictionary<string, Pet>, NullableGuid for Guid?.
+    // List<Pet>, DictionaryStringPet for Dictionary<string, Pet>, NullableGuid for Guid?,
+    // ByteArray for byte[], ListListPet for List<List<Pet>> and NullableInt32 for int?, and one
+    // named like a method the generator gives a model, PetSerializeHandler.
     private const string ClashesSpec = """
         openapi: 3.0.0
         info:
@@ -593,6 +890,45 @@ public class OpenApiClientGenerationTests
                   $ref: '#/components/schemas/GetTypeInfo'
                 generated:
                   $ref: '#/components/schemas/GeneratedSerializerOptions'
+                photo:
+                  type: string
+                  format: byte
+                grid:
+                  type: array
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Pet'
+                rank:
+                  type: integer
+                byteArray:
+                  $ref: '#/components/schemas/ByteArray'
+                listListPet:
+                  $ref: '#/components/schemas/ListListPet'
+                nullableInt32:
+                  $ref: '#/components/schemas/NullableInt32'
+                petSerializeHandler:
+                  $ref: '#/components/schemas/PetSerializeHandler'
+            ByteArray:
+              type: object
+              properties:
+                name:
+                  type: string
+            ListListPet:
+              type: object
+              properties:
+                name:
+                  type: string
+            NullableInt32:
+              type: object
+              properties:
+                name:
+                  type: string
+            PetSerializeHandler:
+              type: object
+              properties:
+                name:
+                  type: string
             NullableGuid:
               type: object
               properties:
@@ -623,7 +959,7 @@ public class OpenApiClientGenerationTests
         var code = OpenApiInterfaceGenerator.Generate(ClashesSpec, "MyApp", "IClashesApi", warnings, GenerationOptions.Default);
 
         Assert.Empty(warnings);
-        foreach (var model in new[] { "Pet", "ListPet", "Default", "Options", "NullableGuid", "DictionaryStringPet", "GetTypeInfo", "GeneratedSerializerOptions" })
+        foreach (var model in new[] { "Pet", "ListPet", "Default", "Options", "NullableGuid", "DictionaryStringPet", "GetTypeInfo", "GeneratedSerializerOptions", "ByteArray", "ListListPet", "NullableInt32", "PetSerializeHandler" })
             Assert.Contains("public sealed record " + model + "\n", code.ReplaceLineEndings("\n"), StringComparison.Ordinal);
         var output = GeneratedCode.Compile(code, """
             using System;

@@ -105,27 +105,34 @@ internal static class OperationEmitter
         var type = TypeMapper.Map(schema, baseName + "Request", $"{operationName}: request body", namer, isBody: true);
         if (type.Kind == TypeRefKind.Stream)
             return Untyped;
-        serializable.Add(type.Name);
-        return $"[{Attributes}Body] {TypeMapper.Declare(type, body.Required, schema.Nullable)} body";
+        var declared = TypeMapper.Declare(type, body.Required, schema.Nullable);
+        serializable.Add(Registered(type, declared));
+        return $"[{Attributes}Body] {declared} body";
     }
+
+    // The type the serializer is called with is the declared one. For a value type, T? is
+    // Nullable<T>, which the context registers on its own. A reference type is registered bare:
+    // typeof takes no nullable reference type annotation.
+    private static string Registered(TypeRef type, string declared) => type.IsValueType ? declared : type.Name;
 
     // Spec §6: the success type comes from the first 2xx response with a schema; a 2xx response
     // whose content carries no schema is skipped, and none gives UnitResult. Only a schema under a
-    // non-JSON media type is reported as content the client cannot read.
+    // non-JSON media type is reported as content the client cannot read. The success type is T?
+    // when the operation may also succeed with no body, such as 200 with a schema and 204 without,
+    // or when the schema is nullable: the client reads an empty body as a success with no value.
     private static string ReturnType(OpenApiOperation operation, string baseName, string operationName, ISchemaTypeNamer namer, List<string> serializable)
     {
         foreach (var (status, response) in operation.Responses)
         {
-            if (!status.StartsWith('2') || response.Content is null)
-                continue;
-            var withSchema = response.Content.FirstOrDefault(c => c.Value.Schema is not null).Key;
-            if (withSchema is null)
+            if (!IsSuccess(status) || SchemaMediaType(response) is not { } withSchema)
                 continue;
             var where = $"{operationName}: response {status}";
             TypeRef type;
+            var nullable = operation.Responses.Any(r => IsSuccess(r.Key) && SchemaMediaType(r.Value) is null);
             if (JsonSchema(response.Content) is { } schema)
             {
                 type = TypeMapper.Map(schema, baseName + "Response", where, namer, isBody: true);
+                nullable |= schema.Nullable;
                 if (type.Kind == TypeRefKind.Stream)
                 {
                     namer.Unsupported(where, "binary content needs a raw stream response, which ZeroAlloc.Rest does not support yet");
@@ -137,11 +144,19 @@ internal static class OperationEmitter
                 namer.Unsupported(where, $"its content '{withSchema}' is not JSON, which the generated client cannot read yet");
                 type = TypeRef.JsonElement;
             }
-            serializable.Add(type.Name);
-            return $"{ResultOf}{type.Name}, {HttpError}>>";
+            var declared = TypeMapper.Declare(type, required: true, nullable);
+            serializable.Add(Registered(type, declared));
+            return $"{ResultOf}{declared}, {HttpError}>>";
         }
         return UnitResult;
     }
+
+    private static bool IsSuccess(string status) => status.StartsWith('2');
+
+    // The first media type of a response that carries a schema, or null for a response whose
+    // content, if any, has none.
+    private static string? SchemaMediaType(OpenApiResponse response)
+        => response.Content?.FirstOrDefault(c => c.Value.Schema is not null).Key;
 
     private static OpenApiSchema? JsonSchema(IDictionary<string, OpenApiMediaType> content)
     {

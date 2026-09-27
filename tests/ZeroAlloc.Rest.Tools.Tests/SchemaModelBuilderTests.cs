@@ -309,6 +309,85 @@ public class SchemaModelBuilderTests
         Assert.Contains(warnings, w => w.Message.Contains("its allOf refers back to itself", StringComparison.Ordinal));
     }
 
+    // A named schema is reported at its own path, not at the operation or property that first
+    // reaches it.
+    [Fact]
+    public void RecursiveAllOf_IsReportedAtTheNamedSchemasPath()
+    {
+        const string Spec = """
+            openapi: 3.0.0
+            info:
+              title: Loop
+              version: "1"
+            paths:
+              /a:
+                get:
+                  operationId: getA
+                  responses:
+                    '200':
+                      description: OK
+                      content:
+                        application/json:
+                          schema:
+                            $ref: '#/components/schemas/A'
+            components:
+              schemas:
+                A:
+                  allOf:
+                    - $ref: '#/components/schemas/B'
+                B:
+                  allOf:
+                    - $ref: '#/components/schemas/A'
+            """;
+        var warnings = new List<OpenApiWarning>();
+
+        OpenApiInterfaceGenerator.Generate(Spec, "MyApp", "ILoopApi", warnings, GenerationOptions.Default);
+
+        Assert.Equal(
+            "Schema '#/components/schemas/A' is mapped to JsonElement, because its allOf refers back to itself.",
+            Assert.Single(warnings).Message);
+    }
+
+    // A variant inherits every property of its base, those of the base's allOf parts included, so it
+    // never declares one again.
+    [Fact]
+    public void Variant_DoesNotRedeclareAPropertyTheBaseTakesFromAnAllOfPart()
+    {
+        const string Spec = """
+                Pet:
+                  type: object
+                  required: [kind]
+                  allOf:
+                    - $ref: '#/components/schemas/Named'
+                  properties:
+                    kind:
+                      type: string
+                  discriminator:
+                    propertyName: kind
+                  oneOf:
+                    - $ref: '#/components/schemas/Cat'
+                Named:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                Cat:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    meow:
+                      type: boolean
+            """;
+
+        var (models, _) = Build(Spec);
+
+        Assert.Equal(
+            new RecordModel("Cat", null, List(Optional("Meow", "meow", TypeRef.Bool)), BaseName: "Pet"),
+            models.Single(m => string.Equals(m.Name, "Cat", StringComparison.Ordinal)));
+        GeneratedCode.Compile(Emit(Spec)).AssertClean();
+    }
+
     private const string Pets = """
                 Pet:
                   type: object
@@ -437,6 +516,23 @@ public class SchemaModelBuilderTests
                 new UnionVariantModel("Int64", TypeRef.Long, JsonKind.Number, EquatableList<string>.Empty),
                 new UnionVariantModel("StringList", new TypeRef("global::System.Collections.Generic.List<string>", TypeRefKind.List, false), JsonKind.Array, EquatableList<string>.Empty))),
             models[2]);
+    }
+
+    // A map variant is named after its value type, the way a list variant is: Int32Map.
+    [Fact]
+    public void MapVariant_IsNamedAfterItsValueType()
+    {
+        var (models, _) = Build("""
+                Counts:
+                  oneOf:
+                    - type: object
+                      additionalProperties:
+                        type: integer
+                    - type: string
+            """);
+
+        var union = Assert.IsType<UnionModel>(models.Single());
+        Assert.Equal(new[] { "Int32Map", "String" }, union.Variants.Select(v => v.Name), StringComparer.Ordinal);
     }
 
     [Fact]

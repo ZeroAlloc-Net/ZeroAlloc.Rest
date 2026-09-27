@@ -7,8 +7,10 @@ namespace ZeroAlloc.Rest.Tools;
 // only a string with a format maps to its primitive, not to a model.
 internal static class TypeMapper
 {
-    private const string List = "global::System.Collections.Generic.List<";
-    private const string Dictionary = "global::System.Collections.Generic.Dictionary<string, ";
+    // How a list and a map type name start. The JSON context and the union variant names take
+    // such a name apart again, so they read these too.
+    internal const string ListPrefix = "global::System.Collections.Generic.List<";
+    internal const string DictionaryPrefix = "global::System.Collections.Generic.Dictionary<string, ";
 
     internal static TypeRef Map(OpenApiSchema? schema, string contextName, string path, ISchemaTypeNamer namer, bool isBody = false)
     {
@@ -91,7 +93,7 @@ internal static class TypeMapper
     private static TypeRef ListOf(OpenApiSchema schema, string contextName, string path, ISchemaTypeNamer namer)
     {
         var item = Map(schema.Items, contextName + "Item", path + "/items", namer);
-        return new TypeRef(List + Element(item, schema.Items) + ">", TypeRefKind.List, IsValueType: false);
+        return new TypeRef(ListPrefix + Element(item, schema.Items) + ">", TypeRefKind.List, IsValueType: false);
     }
 
     private static TypeRef DictionaryOf(OpenApiSchema schema, string contextName, string path, ISchemaTypeNamer namer)
@@ -99,7 +101,7 @@ internal static class TypeMapper
         var value = schema.AdditionalProperties is null
             ? TypeRef.JsonElement
             : Map(schema.AdditionalProperties, contextName + "Value", path + "/additionalProperties", namer);
-        return new TypeRef(Dictionary + Element(value, schema.AdditionalProperties) + ">", TypeRefKind.Dictionary, IsValueType: false);
+        return new TypeRef(DictionaryPrefix + Element(value, schema.AdditionalProperties) + ">", TypeRefKind.Dictionary, IsValueType: false);
     }
 
     // A nullable element is annotated only when it is a value type: the JSON context registers the

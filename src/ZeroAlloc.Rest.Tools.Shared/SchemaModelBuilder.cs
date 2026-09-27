@@ -64,16 +64,18 @@ internal sealed class SchemaModelBuilder : ISchemaTypeNamer
     {
         if (_types.TryGetValue(schema, out var known))
             return known;
+        // A named schema is reported and built at its own path, not at whatever first reaches it.
+        var schemaPath = schema.Reference is null ? path : "#/components/schemas/" + schema.Reference.Id;
         if (HasRecursiveAllOf(schema, new HashSet<OpenApiSchema>(ReferenceEqualityComparer.Instance)))
         {
-            Unsupported(path, "its allOf refers back to itself");
+            Unsupported(schemaPath, "its allOf refers back to itself");
             _types.Add(schema, TypeRef.JsonElement);
             return TypeRef.JsonElement;
         }
         var name = Reserve(schema.Reference?.Id ?? UnionName(schema) ?? contextName);
         var type = new TypeRef(name, TypeRefKind.Model, IsValueType: TypeMapper.IsEnum(schema));
         _types.Add(schema, type);
-        _pending.Enqueue((schema, name, schema.Reference is null ? path : "#/components/schemas/" + schema.Reference.Id));
+        _pending.Enqueue((schema, name, schemaPath));
         return type;
     }
 
@@ -110,8 +112,8 @@ internal sealed class SchemaModelBuilder : ISchemaTypeNamer
         return BuildRecord(schema, name, path);
     }
 
-    // A variant derives from its base, and inherits the base's properties and the discriminator,
-    // which STJ writes itself and rejects as a declared property.
+    // A variant derives from its base, and inherits the base's properties, those of its allOf parts
+    // included, and the discriminator, which STJ writes itself and rejects as a declared property.
     private RecordModel BuildRecord(OpenApiSchema schema, string name, string path)
     {
         string? baseName = null;
@@ -121,7 +123,9 @@ internal sealed class SchemaModelBuilder : ISchemaTypeNamer
         {
             baseName = Named(baseSchema, name + "Base", path).Name;
             inherited.Add(baseSchema.Discriminator.PropertyName);
-            inherited.UnionWith(baseSchema.Properties.Keys);
+            var baseProperties = new List<CollectedProperty>();
+            Collect(baseSchema, path, baseName, baseProperties, new HashSet<string>(StringComparer.Ordinal), skip: null);
+            inherited.UnionWith(baseProperties.Select(p => p.WireName));
         }
         var collected = new List<CollectedProperty>();
         var required = new HashSet<string>(StringComparer.Ordinal);
@@ -321,25 +325,14 @@ internal sealed class SchemaModelBuilder : ISchemaTypeNamer
     // element's name first for a collection: List<string> is StringList.
     private static string ReadableName(string typeName)
     {
-        const string List = "global::System.Collections.Generic.List<";
-        const string Dictionary = "global::System.Collections.Generic.Dictionary<string, ";
-        if (typeName.StartsWith(List, StringComparison.Ordinal))
-            return ReadableName(typeName[List.Length..^1]) + "List";
-        if (typeName.StartsWith(Dictionary, StringComparison.Ordinal))
-            return ReadableName(typeName[Dictionary.Length..^1]) + "Map";
+        if (typeName.StartsWith(TypeMapper.ListPrefix, StringComparison.Ordinal))
+            return ReadableName(typeName[TypeMapper.ListPrefix.Length..^1]) + "List";
+        if (typeName.StartsWith(TypeMapper.DictionaryPrefix, StringComparison.Ordinal))
+            return ReadableName(typeName[TypeMapper.DictionaryPrefix.Length..^1]) + "Map";
         var name = typeName.TrimEnd('?');
-        return name switch
-        {
-            "string" => "String",
-            "int" => "Int32",
-            "long" => "Int64",
-            "float" => "Single",
-            "double" => "Double",
-            "decimal" => "Decimal",
-            "bool" => "Boolean",
-            "byte[]" => "Bytes",
-            _ => name[(name.LastIndexOf('.') + 1)..],
-        };
+        if (string.Equals(name, TypeRef.Bytes.Name, StringComparison.Ordinal))
+            return "Bytes";
+        return TypeRef.ClrName(name) ?? name[(name.LastIndexOf('.') + 1)..];
     }
 
     private static JsonKind KindOf(OpenApiSchema part, TypeRef type) => type.Kind switch
@@ -348,12 +341,10 @@ internal sealed class SchemaModelBuilder : ISchemaTypeNamer
         TypeRefKind.Dictionary => JsonKind.Object,
         TypeRefKind.JsonElement or TypeRefKind.Stream => JsonKind.Any,
         TypeRefKind.Model => ModelKind(TypeMapper.Unwrap(part)),
-        _ => type.Name switch
-        {
-            "bool" => JsonKind.Boolean,
-            "int" or "long" or "float" or "double" or "decimal" => JsonKind.Number,
-            _ => JsonKind.String,
-        },
+        _ when type == TypeRef.Bool => JsonKind.Boolean,
+        _ when type == TypeRef.Int || type == TypeRef.Long || type == TypeRef.Float || type == TypeRef.Double || type == TypeRef.Decimal
+            => JsonKind.Number,
+        _ => JsonKind.String,
     };
 
     private static JsonKind ModelKind(OpenApiSchema schema)

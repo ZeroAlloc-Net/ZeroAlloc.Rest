@@ -37,7 +37,7 @@ public sealed record PetOrError
 
     public Error? AsError { get; init; }
 
-    public TResult Match<TResult>(global::System.Func<Pet, TResult> pet, global::System.Func<Error, TResult> error)
+    public TMatch_ Match<TMatch_>(global::System.Func<Pet, TMatch_> pet, global::System.Func<Error, TMatch_> error)
     {
         global::System.ArgumentNullException.ThrowIfNull(pet);
         global::System.ArgumentNullException.ThrowIfNull(error);

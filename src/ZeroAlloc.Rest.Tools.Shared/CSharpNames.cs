@@ -53,24 +53,32 @@ internal static class CSharpNames
     // A keyword is escaped with @. The source generator matches a {token} against the name without it.
     internal static string Escape(string identifier) => Keywords.Contains(identifier) ? "@" + identifier : identifier;
 
+    // A control character, or a character C# also ends a line at, U+0085, U+2028 or U+2029, would
+    // end the literal or hide in it, so each is written as an escape.
     internal static string Literal(string value)
     {
         var sb = new StringBuilder(value.Length + 2).Append('"');
         foreach (var c in value)
         {
-            sb.Append(c switch
+            switch (c)
             {
-                '\\' => "\\\\",
-                '"' => "\\\"",
-                '\n' => "\\n",
-                '\r' => "\\r",
-                '\t' => "\\t",
-                '\0' => "\\0",
-                _ => c.ToString(),
-            });
+                case '\\': sb.Append("\\\\"); break;
+                case '"': sb.Append("\\\""); break;
+                case '\n': sb.Append("\\n"); break;
+                case '\r': sb.Append("\\r"); break;
+                case '\t': sb.Append("\\t"); break;
+                case '\0': sb.Append("\\0"); break;
+                case var _ when char.IsControl(c) || IsCSharpLineBreak(c):
+                    sb.Append("\\u").Append(((int)c).ToString("X4", CultureInfo.InvariantCulture));
+                    break;
+                default: sb.Append(c); break;
+            }
         }
         return sb.Append('"').ToString();
     }
+
+    // The characters, besides \r and \n, that the C# lexer ends a line at.
+    private static bool IsCSharpLineBreak(char c) => c is '\u0085' or '\u2028' or '\u2029';
 
     internal static string Unique(string identifier, HashSet<string> used)
     {
@@ -93,13 +101,15 @@ internal static class CSharpNames
         return result.Length > 0 ? result.ToString() : s;
     }
 
-    // A description from the spec as a <summary>, one /// line per line, XML-escaped.
+    // A description from the spec as a <summary>, one /// line per line, XML-escaped. A line ends
+    // wherever C# ends one, so no part of the text escapes the comment.
     internal static void AppendDocComment(StringBuilder sb, string indent, string? text)
     {
         if (string.IsNullOrWhiteSpace(text)) return;
         sb.Append(indent).AppendLine("/// <summary>");
-        foreach (var line in text.Trim().Split('\n'))
-            sb.Append(indent).Append("/// ").AppendLine(XmlEscape(line.TrimEnd('\r')));
+        var lines = text.Trim().Replace("\r\n", "\n", StringComparison.Ordinal).Split('\r', '\n', '\u0085', '\u2028', '\u2029');
+        foreach (var line in lines)
+            sb.Append(indent).Append("/// ").AppendLine(XmlEscape(line));
         sb.Append(indent).AppendLine("/// </summary>");
     }
 

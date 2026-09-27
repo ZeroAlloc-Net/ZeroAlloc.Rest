@@ -6,8 +6,8 @@ namespace ZeroAlloc.Rest.Tools;
 // type, spec §4. AllowOutOfOrderMetadataProperties lets a discriminator appear anywhere in an object.
 internal static class JsonContextEmitter
 {
-    private const string List = "global::System.Collections.Generic.List<";
-    private const string Dictionary = "global::System.Collections.Generic.Dictionary<string, ";
+    private const string List = TypeMapper.ListPrefix;
+    private const string Dictionary = TypeMapper.DictionaryPrefix;
 
     // The members the STJ source generator gives every context besides one property per type, and
     // those it inherits from JsonSerializerContext and object. A model's name never contains an
@@ -133,17 +133,6 @@ internal static class JsonContextEmitter
             return "DictionaryString" + PropertyName(typeName[Dictionary.Length..^1]);
         if (typeName.EndsWith("[]", StringComparison.Ordinal))
             return PropertyName(typeName[..^2]) + "Array";
-        return typeName switch
-        {
-            "string" => "String",
-            "int" => "Int32",
-            "long" => "Int64",
-            "float" => "Single",
-            "double" => "Double",
-            "decimal" => "Decimal",
-            "bool" => "Boolean",
-            "byte" => "Byte",
-            _ => typeName[(typeName.LastIndexOf('.') + 1)..],
-        };
+        return TypeRef.ClrName(typeName) ?? typeName[(typeName.LastIndexOf('.') + 1)..];
     }
 }
