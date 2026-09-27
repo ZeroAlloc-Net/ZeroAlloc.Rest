@@ -273,9 +273,17 @@ its name, case included, and is sent nowhere else. ZRA005 reports a mismatch in 
 - **A route parameter with no `{name}` token** is never sent. The warning points at the parameter.
   This includes a route parameter on a [pathless method](routing.md#no-path), which has no tokens
   at all. Add the token, or bind the parameter with `[Query]`, `[Header]` or `[Body]`.
-- **A `{token}` that no route parameter matches** is sent as literal text, braces included. The
-  warning points at the HTTP method attribute. Add the parameter, or fix the token's spelling. A
-  token that only a `[Query]` or `[Header]` parameter's name matches is still unmatched.
+- **A `{token}` that no route parameter matches** gets a warning at the HTTP method attribute. What
+  the URL contains depends on the method, and is what it has always been:
+  - **The token compiles as C#.** A method with at least one route or `[Query]` parameter builds its
+    URL as an interpolated string, and such a token is a hole in it: `users/{id}` with a
+    `[Query] int id`, `{id:D4}`, `{page + 1}`, or `{ApiInfo.Version}` naming a constant. The value is
+    inserted without URL escaping. The message names where it comes from. Make it a route parameter
+    with a matching token, so the value is escaped and the intent is clear.
+  - **Otherwise** the token is sent as literal text, braces included. That covers a typo, which
+    would not compile as C#, any token on a method with neither route nor `[Query]` parameters, and
+    a token that could only reach the generated client's own fields and locals, or `this`. Add the
+    parameter, or fix the token's spelling.
 
 A typo gets both:
 
@@ -292,6 +300,16 @@ Messages:
 
 - `Parameter 'userId' of method 'GetUserAsync' is a route parameter, but route '/users/{usrId}' has no '{userId}' token, so its value is never sent; add the token, or bind the parameter with [Query], [Header] or [Body]`
 - `Route '/users/{usrId}' of method 'GetUserAsync' has a '{usrId}' token that no route parameter matches, so it is sent as literal text`
+
+A token that a `[Query]` parameter fills:
+
+```csharp
+[Get("/users/{id}")]
+Task<UserDto> GetUserAsync([Query] int id, CancellationToken ct = default);
+// GET /users/5?id=5
+```
+
+Message: `Route '/users/{id}' of method 'GetUserAsync' has a '{id}' token that no route parameter matches; it is compiled as C# and takes its value from the query parameter 'id', without URL escaping; make that value a route parameter with a matching token`
 
 ZRA005 comes from an analyzer in the generator package, so `#pragma warning disable ZRA005`,
 `[SuppressMessage]` and an `.editorconfig` severity all apply to it.

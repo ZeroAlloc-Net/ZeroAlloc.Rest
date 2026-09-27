@@ -290,7 +290,7 @@ internal static class ClientEmitter
 
         // Every local the generated method declares starts with "__", and every parameter is emitted
         // through Identifier, so a parameter named url, request, response or @class still compiles.
-        EmitUrlBuilding(sb, method.Route, pathParams, queryParams);
+        EmitUrlBuilding(sb, method.Route, pathParams, queryParams, method.EvaluatedRouteTokens);
         EmitRequestCreation(sb, method, headerParams, bodyParam, formBodyParam, ctArg, serializerExpr);
         EmitSendAndResponse(sb, method, ctParam is null ? null : Identifier(ctParam), serializerExpr, maxErrorBodyBytes, errorMapperField);
 
@@ -299,7 +299,7 @@ internal static class ClientEmitter
     }
 
     private static void EmitUrlBuilding(StringBuilder sb, string route,
-        List<ParameterModel> pathParams, List<ParameterModel> queryParams)
+        List<ParameterModel> pathParams, List<ParameterModel> queryParams, EquatableArray<string> evaluatedTokens)
     {
         if (pathParams.Count == 0 && queryParams.Count == 0)
         {
@@ -309,7 +309,7 @@ internal static class ClientEmitter
             return;
         }
 
-        var routeExpr = RouteExpression(route, pathParams);
+        var routeExpr = RouteExpression(route, pathParams, evaluatedTokens);
 
         if (queryParams.Count == 0)
         {
@@ -733,23 +733,37 @@ internal static class ClientEmitter
     }
 
     // The route as the contents of an interpolated string: each {token} a route parameter binds
-    // becomes a hole holding its escaped value. Everything else is literal text, braces doubled, so
-    // a token no route parameter binds is sent as written, which ZRA005 reports, and never becomes a
-    // hole that names an undefined variable or, worse, some other parameter or local in scope.
-    private static string RouteExpression(string route, List<ParameterModel> pathParams)
+    // becomes a hole holding its escaped value. An evaluated token stays the hole it has always
+    // been, its text unchanged, so a URL that worked before ZRA005 is sent the same. Everything else
+    // is literal text, braces doubled, so a token that would name an undefined variable, or the
+    // client's own fields and locals, is sent as written. ZRA005 reports both.
+    private static string RouteExpression(string route, List<ParameterModel> pathParams, EquatableArray<string> evaluatedTokens)
     {
         var sb = new StringBuilder(route.Length + 32);
         var next = 0;
         foreach (var token in RouteTemplate.Tokens(route))
         {
             var parameter = pathParams.Find(p => string.Equals(p.Name, token.Name, System.StringComparison.Ordinal));
-            if (parameter is null) continue;
+            if (parameter is null && !Contains(evaluatedTokens, token.Name)) continue;
             AppendLiteral(sb, route.Substring(next, token.Start - next), interpolated: true);
-            sb.Append("{Uri.EscapeDataString(").Append(Identifier(parameter)).Append(".ToString())}");
+            if (parameter is not null)
+                sb.Append("{Uri.EscapeDataString(").Append(Identifier(parameter)).Append(".ToString())}");
+            else
+                sb.Append('{').Append(token.Name).Append('}');
             next = token.Start + token.Length;
         }
         AppendLiteral(sb, route.Substring(next), interpolated: true);
         return sb.ToString();
+    }
+
+    private static bool Contains(EquatableArray<string> values, string value)
+    {
+        foreach (var v in values)
+        {
+            if (string.Equals(v, value, System.StringComparison.Ordinal))
+                return true;
+        }
+        return false;
     }
 
     // Literal route text inside a regular string literal, or an interpolated one.

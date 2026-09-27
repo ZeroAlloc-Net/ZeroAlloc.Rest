@@ -22,7 +22,10 @@ public sealed class RouteTemplateAnalyzer : DiagnosticAnalyzer
 {
     /// <inheritdoc />
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
-        ImmutableArray.Create(DiagnosticDescriptors.RouteParameterWithoutToken, DiagnosticDescriptors.RouteTokenWithoutParameter);
+        ImmutableArray.Create(
+            DiagnosticDescriptors.RouteParameterWithoutToken,
+            DiagnosticDescriptors.RouteTokenWithoutParameter,
+            DiagnosticDescriptors.RouteTokenEvaluated);
 
     /// <inheritdoc />
     public override void Initialize(AnalysisContext context)
@@ -44,20 +47,25 @@ public sealed class RouteTemplateAnalyzer : DiagnosticAnalyzer
             return;
 
         var route = ModelExtractor.RouteOf(httpAttr);
-        var tokens = RouteTemplate.Tokens(route);
-        var tokenNames = new HashSet<string>(System.StringComparer.Ordinal);
-        foreach (var token in tokens)
-            tokenNames.Add(token.Name);
+        var tokens = RouteTokenBinding.Bind(method, route,
+            RouteTokenBinding.ClientHasQueryParameter(method.ContainingType), context.Compilation, context.CancellationToken);
 
-        // Parameters bound as [Query], [Header], [Body] or [FormBody], and the CancellationToken, are
-        // sent elsewhere: they never bind a token, and are never reported.
-        var routeParameterNames = new HashSet<string>(System.StringComparer.Ordinal);
+        // A route parameter reaches the URL through a token of exactly its name, or through an
+        // evaluated token that reads it, such as {id:D4}. Parameters bound as [Query], [Header],
+        // [Body] or [FormBody], and the CancellationToken, are sent elsewhere and never reported.
+        var usedNames = new HashSet<string>(System.StringComparer.Ordinal);
+        foreach (var token in tokens)
+        {
+            if (token.TokenKind == RouteTokenBinding.Kind.RouteParameter)
+                usedNames.Add(token.Name);
+            foreach (var name in token.ReferencedParameters)
+                usedNames.Add(name);
+        }
+
         foreach (var parameter in method.Parameters)
         {
-            if (ModelExtractor.ClassifyParameter(parameter, out _, out _) != ParameterKind.Path)
-                continue;
-            routeParameterNames.Add(parameter.Name);
-            if (!tokenNames.Contains(parameter.Name))
+            if (ModelExtractor.ClassifyParameter(parameter, out _, out _) == ParameterKind.Path
+                && !usedNames.Contains(parameter.Name))
             {
                 context.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.RouteParameterWithoutToken,
                     parameter.Locations[0], parameter.Name, method.Name, route));
@@ -66,10 +74,14 @@ public sealed class RouteTemplateAnalyzer : DiagnosticAnalyzer
 
         var attributeLocation = httpAttr.ApplicationSyntaxReference?.GetSyntax(context.CancellationToken).GetLocation()
             ?? method.Locations[0];
-        var reported = new HashSet<string>(System.StringComparer.Ordinal);
         foreach (var token in tokens)
         {
-            if (!routeParameterNames.Contains(token.Name) && reported.Add(token.Name))
+            if (token.TokenKind == RouteTokenBinding.Kind.Evaluated)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.RouteTokenEvaluated,
+                    attributeLocation, route, method.Name, token.Name, token.Source));
+            }
+            else if (token.TokenKind == RouteTokenBinding.Kind.Literal)
             {
                 context.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.RouteTokenWithoutParameter,
                     attributeLocation, route, method.Name, token.Name));

@@ -47,12 +47,14 @@ internal static class ModelExtractor
         var diagnostics = new List<DiagnosticInfo>();
         var mappers = ResolveErrorMappers(interfaceSymbol, diagnostics, ct);
 
+        var compilation = ctx.SemanticModel.Compilation;
+        var clientHasQueryParameter = RouteTokenBinding.ClientHasQueryParameter(interfaceSymbol);
         var methods = new List<MethodModel>();
         foreach (var member in interfaceSymbol.GetMembers())
         {
             ct.ThrowIfCancellationRequested();
             if (member is not IMethodSymbol method) continue;
-            var methodModel = ExtractMethod(method, mappers, diagnostics);
+            var methodModel = ExtractMethod(method, mappers, diagnostics, clientHasQueryParameter, compilation, ct);
             if (methodModel is not null) methods.Add(methodModel);
         }
 
@@ -319,7 +321,9 @@ internal static class ModelExtractor
         return ParameterKind.Path;
     }
 
-    private static MethodModel? ExtractMethod(IMethodSymbol method, ErrorMapperResolution mappers, List<DiagnosticInfo> diagnostics)
+    private static MethodModel? ExtractMethod(
+        IMethodSymbol method, ErrorMapperResolution mappers, List<DiagnosticInfo> diagnostics,
+        bool clientHasQueryParameter, Compilation compilation, CancellationToken ct)
     {
         var httpAttr = FindHttpAttribute(method, out var httpMethod);
         var route = httpAttr is null ? null : RouteOf(httpAttr);
@@ -407,7 +411,20 @@ internal static class ModelExtractor
             innerTypeName, returnsResult, returnsVoid,
             parameters, methodSerializer, ToEquatable(staticHeaders),
             location, errorTypeName, errorMapperTypeName,
-            declaredErrorTypeName, mapperErrorTypeName, mappedErrorNeedsNullCheck);
+            declaredErrorTypeName, mapperErrorTypeName, mappedErrorNeedsNullCheck,
+            EvaluatedRouteTokens(method, route, clientHasQueryParameter, compilation, ct));
+    }
+
+    private static EquatableArray<string> EvaluatedRouteTokens(
+        IMethodSymbol method, string route, bool clientHasQueryParameter, Compilation compilation, CancellationToken ct)
+    {
+        var evaluated = new List<string>();
+        foreach (var token in RouteTokenBinding.Bind(method, route, clientHasQueryParameter, compilation, ct))
+        {
+            if (token.TokenKind == RouteTokenBinding.Kind.Evaluated)
+                evaluated.Add(token.Name);
+        }
+        return ToEquatable(evaluated);
     }
 
     private static EquatableArray<ParameterModel> ExtractParameters(IMethodSymbol method)
