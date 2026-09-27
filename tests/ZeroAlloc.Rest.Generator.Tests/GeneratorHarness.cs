@@ -21,15 +21,16 @@ internal static class GeneratorHarness
     ];
 
     // Compiles `source` with the Rest client generator and returns the generated text for
-    // `hintName` (e.g. "IThingApi.g.cs"), the generator's own diagnostics, and every diagnostic at
-    // or above Warning severity from the resulting compilation. Consumers build with
-    // TreatWarningsAsErrors, so a warning in generated code is a problem worth asserting on.
-    internal static GeneratorHarnessRun Run(string source, string hintName, bool nullableEnabled = true)
+    // `hintName` (e.g. "IThingApi.g.cs"), the generator's own diagnostics, and the problems in the
+    // resulting compilation. Consumers build with TreatWarningsAsErrors, so a warning in generated
+    // code is a problem worth asserting on. `extraReferences` are added to the reference set.
+    internal static GeneratorHarnessRun Run(string source, string hintName, bool nullableEnabled = true,
+        MetadataReference[]? extraReferences = null)
     {
         var compilation = CSharpCompilation.Create(
             "TestAssembly",
             [CSharpSyntaxTree.ParseText(source, path: "Api.cs")],
-            References,
+            [.. References, .. extraReferences ?? []],
             new CSharpCompilationOptions(
                 OutputKind.DynamicallyLinkedLibrary,
                 nullableContextOptions: nullableEnabled ? NullableContextOptions.Enable : NullableContextOptions.Disable));
@@ -42,11 +43,13 @@ internal static class GeneratorHarness
             .First(s => string.Equals(s.HintName, hintName, System.StringComparison.Ordinal))
             .SourceText.ToString().Replace("\r\n", "\n", System.StringComparison.Ordinal);
 
-        // Only diagnostics in code count. ZeroAlloc.Collections targets an older runtime, so binding
-        // it reports CS1701 with no source location: a fact about this reference set, which the
-        // SDK's default build never shows, not about the generated code.
+        // Every error counts, wherever it is. A warning counts when it has a source location: a
+        // diagnostic about code, generated code included, always carries one. A location-less warning
+        // describes this reference set instead. ZeroAlloc.Collections ships no net10.0 asset, so
+        // binding its net9.0 one reports CS1701, which the SDK's default compile hides for consumers too.
         var problems = output.GetDiagnostics()
-            .Where(d => d.Severity >= DiagnosticSeverity.Warning && d.Location.IsInSource)
+            .Where(d => d.Severity == DiagnosticSeverity.Error
+                || (d.Severity == DiagnosticSeverity.Warning && d.Location.IsInSource))
             .ToImmutableArray();
 
         return new GeneratorHarnessRun(generatedSource, generatorDiagnostics, problems);
