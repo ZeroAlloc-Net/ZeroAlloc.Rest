@@ -41,10 +41,13 @@ jobs:
       - name: Build
         run: dotnet build ZeroAlloc.Rest.slnx --no-restore -c Release -p:Version=${{ steps.gitversion.outputs.semver }}
 
-      - name: Pack ZA.Rest packages into local feed (for duplicate-generator test)
+      # Read by the tests that build a consumer project against the packages: the duplicate-generator
+      # test and the ZeroAlloc.Rest.Tools.MSBuild end-to-end test.
+      - name: Pack ZA.Rest packages into local feed (for the package consumer tests)
         run: |
           dotnet pack src/ZeroAlloc.Rest/ZeroAlloc.Rest.csproj -c Release -o artifacts/local
           dotnet pack src/ZeroAlloc.Rest.Generator/ZeroAlloc.Rest.Generator.csproj -c Release -o artifacts/local
+          dotnet pack src/ZeroAlloc.Rest.Tools.MSBuild/ZeroAlloc.Rest.Tools.MSBuild.csproj -c Release -o artifacts/local
 
       - name: Test
         run: dotnet test ZeroAlloc.Rest.slnx --no-build -c Release --logger "trx" --results-directory ./test-results

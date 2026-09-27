@@ -317,8 +317,8 @@ ZRA005 comes from an analyzer in the generator package, so `#pragma warning disa
 ### OpenAPI code generation: ZRT diagnostics
 
 [OpenAPI code generation](openapi-codegen.md) reports its own warnings with a `ZRT` prefix. They
-come from the `ZeroAlloc.Rest.Tools` CLI and MSBuild task, not the compiler, so they point at the
-spec file. `#pragma` and `.editorconfig` do not apply to them.
+come from the `ZeroAlloc.Rest.Tools` CLI and the `ZeroAlloc.Rest.Tools.MSBuild` task, not the
+compiler, so they point at the spec file. `#pragma` and `.editorconfig` do not apply to them.
 
 #### ZRT001: Cookie parameter not emitted
 

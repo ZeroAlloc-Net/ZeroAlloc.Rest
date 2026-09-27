@@ -1,0 +1,57 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    The <ZeroAllocApiSpec> MSBuild integration. ZeroAlloc.Rest.Tools stays the zeroalloc dotnet
+    tool: NuGet refuses a DotnetTool package in a PackageReference, so the task and its targets
+    cannot ship in it. Layout of the package:
+
+      build/ZeroAlloc.Rest.Tools.MSBuild.targets   imported by NuGet into the referencing project
+      tools/net10.0/                               the task assembly, its .deps.json and every
+                                                   dependency it loads, except Microsoft.Build.*,
+                                                   which the MSBuild host supplies
+
+    The task goes under tools/, as in GitVersion.MsBuild, rather than tasks/: NuGet accepts
+    assemblies under tools/ but warns about any under tasks/ with NU5100.
+
+    It is a development dependency, so it never flows to the consumer's own consumers.
+  -->
+  <PropertyGroup>
+    <PackageId>ZeroAlloc.Rest.Tools.MSBuild</PackageId>
+    <Description>MSBuild task for ZeroAlloc.Rest: generates a [ZeroAllocRestClient] interface from an OpenAPI 3.x spec for each &lt;ZeroAllocApiSpec&gt; item, as part of the build.</Description>
+    <PackageTags>$(PackageTags);openapi;msbuild;codegen</PackageTags>
+    <DevelopmentDependency>true</DevelopmentDependency>
+    <!-- The task assembly goes under tools/, not lib/: nothing in the consuming project references it. -->
+    <BuildOutputTargetFolder>tools</BuildOutputTargetFolder>
+    <!-- Its dependencies ship next to it in tools/, so the package declares none. -->
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <GenerateDependencyFile>true</GenerateDependencyFile>
+    <TargetsForTfmSpecificBuildOutput>$(TargetsForTfmSpecificBuildOutput);IncludeTaskDependenciesInPackage</TargetsForTfmSpecificBuildOutput>
+  </PropertyGroup>
+  <Import Project="../ZeroAlloc.Rest.Tools.Shared/ZeroAlloc.Rest.Tools.Shared.projitems" Label="Shared" />
+  <ItemGroup>
+    <!-- The MSBuild host loads its own Microsoft.Build assemblies; shipping copies would conflict. -->
+    <PackageReference Include="Microsoft.Build.Framework" PrivateAssets="all" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.Build.Utilities.Core" PrivateAssets="all" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.OpenApi.Readers" PrivateAssets="all" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="build/ZeroAlloc.Rest.Tools.MSBuild.targets" Pack="true" PackagePath="build/" />
+  </ItemGroup>
+
+  <!-- Packs the task's runtime dependencies, Microsoft.OpenApi.Readers and what it depends on, next to it. -->
+  <Target Name="IncludeTaskDependenciesInPackage" DependsOnTargets="ResolveReferences">
+    <ItemGroup>
+      <BuildOutputInPackage Include="@(ReferenceCopyLocalPaths)"
+                            TargetPath="%(ReferenceCopyLocalPaths.DestinationSubPath)" />
+    </ItemGroup>
+  </Target>
+
+  <!-- Packs the .deps.json, which MSBuild reads to resolve the task's dependencies from tools/. -->
+  <Target Name="IncludeTaskDepsFileInPackage" BeforeTargets="BuiltProjectOutputGroup">
+    <ItemGroup>
+      <BuiltProjectOutputGroupOutput Include="$(ProjectDepsFilePath)"
+                                     TargetPath="$(ProjectDepsFileName)"
+                                     FinalOutputPath="$(ProjectDepsFilePath)" />
+    </ItemGroup>
+  </Target>
+</Project>

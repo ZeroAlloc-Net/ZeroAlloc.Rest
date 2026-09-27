@@ -3,18 +3,38 @@ id: openapi-codegen
 title: OpenAPI Code Generation
 slug: /openapi-codegen
 sidebar_position: 7
-description: Generate ZeroAllocRestClient interfaces from OpenAPI 3.x specs via API or MSBuild task.
+description: Generate ZeroAllocRestClient interfaces from OpenAPI 3.x specs with the CLI or the MSBuild task.
 ---
 
 # OpenAPI Code Generation
 
-`ZeroAlloc.Rest.Tools` provides two ways to generate a `[ZeroAllocRestClient]` interface from an OpenAPI 3.x specification.
+Two packages generate a `[ZeroAllocRestClient]` interface from an OpenAPI 3.x specification, and share
+the same generator:
+
+| Package | Kind | Use it for |
+|---|---|---|
+| `ZeroAlloc.Rest.Tools` | .NET tool, command `zeroalloc` | Generating from the command line or a script |
+| `ZeroAlloc.Rest.Tools.MSBuild` | MSBuild task, development dependency | Generating on every build from `<ZeroAllocApiSpec>` items |
 
 ## Installation
 
 ```sh
-dotnet add package ZeroAlloc.Rest.Tools
+# The CLI
+dotnet tool install --global ZeroAlloc.Rest.Tools
+
+# The MSBuild task, in the project that uses the generated interface
+dotnet add package ZeroAlloc.Rest.Tools.MSBuild
 ```
+
+`ZeroAlloc.Rest.Tools` is a .NET tool, so NuGet does not accept it as a `PackageReference`.
+
+## CLI
+
+```sh
+zeroalloc generate --spec openapi.yaml --namespace MyApp --interface IMyApi --output Generated/IMyApi.g.cs
+```
+
+`--spec` also takes an `http(s)://` URL. `--interface` defaults to `IApiClient`.
 
 ## C# API
 
@@ -47,28 +67,38 @@ The generator maps:
 
 ## MSBuild task
 
-For automatic generation as part of your build, add `<ZeroAllocApiSpec>` items to your project:
+For automatic generation as part of your build, reference `ZeroAlloc.Rest.Tools.MSBuild` and add
+`<ZeroAllocApiSpec>` items to your project:
 
 ```xml
+<ItemGroup>
+  <PackageReference Include="ZeroAlloc.Rest.Tools.MSBuild" Version="x.y.z" />
+</ItemGroup>
 <ItemGroup>
   <ZeroAllocApiSpec
       Include="openapi.yaml"
       Namespace="MyApp"
       InterfaceName="IMyApi"
-      Output="$(MSBuildProjectDirectory)/Generated/IMyApi.g.cs" />
+      OutputPath="$(MSBuildProjectDirectory)/Generated/IMyApi.g.cs" />
 </ItemGroup>
 ```
 
-The `GenerateZeroAllocRestClients` target runs before `BeforeBuild`. Supported properties:
+The package imports its targets through NuGet's MSBuild integration. Its
+`GenerateZeroAllocRestClients` target runs before `CoreCompile`, writes each interface and adds it to
+the compilation, so the ZeroAlloc.Rest source generator emits the client for it in the same build.
+The file is rewritten only when its content changes. Supported metadata:
 
-| Property | Required | Description |
+| Metadata | Required | Description |
 |---|---|---|
 | `Include` | Yes | Path to a `.yaml`/`.json` file, or an `http(s)://` URL |
 | `Namespace` | Yes | C# namespace for the generated interface |
-| `Output` | Yes | Path to write the generated `.cs` file |
+| `OutputPath` | Yes | Path to write the generated `.cs` file, relative to the project directory or absolute |
 | `InterfaceName` | No | Interface name (default: `IApiClient`) |
 
-The targets file is automatically imported via NuGet's MSBuild integration when you reference `ZeroAlloc.Rest.Tools`.
+The metadata is `OutputPath`, not `Output`: MSBuild reserves `Output` as an item metadata name.
+
+The package is a development dependency, so it does not flow to projects that reference yours. The
+task runs under the .NET MSBuild that `dotnet build` uses.
 
 ## Warnings
 

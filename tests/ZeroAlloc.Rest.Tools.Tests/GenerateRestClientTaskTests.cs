@@ -1,7 +1,9 @@
+extern alias MSBuildTask;
+
 using System.Collections;
 using Microsoft.Build.Framework;
 using Xunit;
-using ZeroAlloc.Rest.Tools.MSBuild;
+using MSBuildTask::ZeroAlloc.Rest.Tools.MSBuild;
 
 namespace ZeroAlloc.Rest.Tools.Tests;
 
@@ -39,7 +41,7 @@ public class GenerateRestClientTaskTests
             {
                 BuildEngine = engine,
                 Spec = spec,
-                Output = Path.Combine(dir, "IMyApi.g.cs"),
+                OutputPath = Path.Combine(dir, "IMyApi.g.cs"),
                 Namespace = "MyApp",
                 InterfaceName = "IMyApi",
             };
@@ -51,6 +53,58 @@ public class GenerateRestClientTaskTests
             Assert.Contains("cookie parameter 'session'", warning.Message);
             Assert.Equal(spec, warning.File);
             Assert.Empty(engine.Errors);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    // Issue #347: the task runs before every compile. Rewriting an unchanged file would bump its
+    // timestamp and make CoreCompile rerun on every build, so an up-to-date output is left alone.
+    [Fact]
+    public void UnchangedOutput_IsNotRewritten()
+    {
+        var dir = Directory.CreateTempSubdirectory().FullName;
+        try
+        {
+            var spec = Path.Combine(dir, "openapi.yaml");
+            File.WriteAllText(spec, """
+                openapi: 3.0.0
+                info:
+                  title: Test
+                  version: "1"
+                paths:
+                  /status:
+                    get:
+                      operationId: getStatus
+                      responses:
+                        '200':
+                          description: OK
+                """);
+            var output = Path.Combine(dir, "IMyApi.g.cs");
+            GenerateRestClientTask NewTask() => new()
+            {
+                BuildEngine = new RecordingBuildEngine(),
+                Spec = spec,
+                OutputPath = output,
+                Namespace = "MyApp",
+                InterfaceName = "IMyApi",
+            };
+
+            Assert.True(NewTask().Execute());
+            var earlier = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            File.SetLastWriteTimeUtc(output, earlier);
+
+            Assert.True(NewTask().Execute());
+            Assert.Equal(earlier, File.GetLastWriteTimeUtc(output));
+
+            // A changed output is still rewritten.
+            File.WriteAllText(output, "// stale");
+            File.SetLastWriteTimeUtc(output, earlier);
+            Assert.True(NewTask().Execute());
+            Assert.Contains("public interface IMyApi", File.ReadAllText(output));
+            Assert.NotEqual(earlier, File.GetLastWriteTimeUtc(output));
         }
         finally
         {
