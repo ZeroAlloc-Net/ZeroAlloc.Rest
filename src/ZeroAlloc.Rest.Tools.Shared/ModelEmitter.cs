@@ -21,6 +21,9 @@ internal static class ModelEmitter
                 case EnumModel enumModel:
                     EmitEnum(sb, enumModel);
                     break;
+                case PolymorphicModel polymorphic:
+                    EmitPolymorphic(sb, polymorphic);
+                    break;
                 default:
                     throw new InvalidOperationException($"No emitter for {model.GetType().Name} '{model.Name}'.");
             }
@@ -34,6 +37,24 @@ internal static class ModelEmitter
     {
         foreach (var model in models)
             yield return model.Name;
+    }
+
+    // Spec §5.5. The variants are ordinary records deriving from this base; STJ writes and reads the
+    // discriminator, which is why neither the base nor a variant declares it.
+    private static void EmitPolymorphic(StringBuilder sb, PolymorphicModel model)
+    {
+        CSharpNames.AppendDocComment(sb, "", model.Description);
+        sb.Append('[').Append(Serialization).Append(".JsonPolymorphic(TypeDiscriminatorPropertyName = ")
+            .Append(CSharpNames.Literal(model.DiscriminatorWireName)).AppendLine(")]");
+        foreach (var variant in model.Variants)
+        {
+            sb.Append('[').Append(Serialization).Append(".JsonDerivedType(typeof(").Append(variant.TypeName).Append("), ")
+                .Append(CSharpNames.Literal(variant.DiscriminatorValue)).AppendLine(")]");
+        }
+        sb.Append("public abstract record ").AppendLine(model.Name);
+        sb.AppendLine("{");
+        EmitProperties(sb, model.Properties);
+        sb.AppendLine("}");
     }
 
     private static void EmitRecord(StringBuilder sb, RecordModel record)

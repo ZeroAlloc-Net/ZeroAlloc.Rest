@@ -162,6 +162,87 @@ public class ModelEmitterTests
         Assert.Equal("JsonException", output.RunProbe());
     }
 
+    private const string PetsSpec = """
+                Pet:
+                  type: object
+                  required: [petType, name]
+                  properties:
+                    petType:
+                      type: string
+                    name:
+                      type: string
+                  discriminator:
+                    propertyName: petType
+                    mapping:
+                      cat: '#/components/schemas/Cat'
+                  oneOf:
+                    - $ref: '#/components/schemas/Cat'
+                    - $ref: '#/components/schemas/Dog'
+                Cat:
+                  allOf:
+                    - $ref: '#/components/schemas/Pet'
+                    - type: object
+                      properties:
+                        lives:
+                          type: integer
+                Dog:
+                  type: object
+                  properties:
+                    bark:
+                      type: boolean
+            """;
+
+    [Fact]
+    public void Polymorphic_IsAnAbstractBase_WithDerivedTypes()
+    {
+        var code = ModelFixture.Emit(PetsSpec);
+
+        Assert.Contains("[global::System.Text.Json.Serialization.JsonPolymorphic(TypeDiscriminatorPropertyName = \"petType\")]", code);
+        Assert.Contains("[global::System.Text.Json.Serialization.JsonDerivedType(typeof(Cat), \"cat\")]", code);
+        Assert.Contains("[global::System.Text.Json.Serialization.JsonDerivedType(typeof(Dog), \"Dog\")]", code);
+        Assert.Contains("public abstract record Pet", code);
+        Assert.Contains("public sealed record Cat : Pet", code);
+        GeneratedCode.Compile(code).AssertClean();
+    }
+
+    [Theory]
+    [InlineData("{\"petType\":\"cat\",\"name\":\"Tom\",\"lives\":9}", "Cat:Tom:9")]
+    [InlineData("{\"name\":\"Rex\",\"bark\":true,\"petType\":\"Dog\"}", "Dog:Rex:True")]
+    public void Polymorphic_RoundTrips_WithTheDiscriminatorAnywhere(string json, string expected)
+    {
+        var output = GeneratedCode.Compile(ModelFixture.Emit(PetsSpec), Probe($$"""
+            var pet = JsonSerializer.Deserialize({{Quote(json)}}, MyApiJsonContext.Default.Pet);
+            var text = pet switch
+            {
+                Cat cat => "Cat:" + cat.Name + ":" + cat.Lives,
+                Dog dog => "Dog:" + dog.Name + ":" + dog.Bark,
+                _ => "none",
+            };
+            var again = JsonSerializer.Deserialize(JsonSerializer.Serialize(pet, MyApiJsonContext.Default.Pet), MyApiJsonContext.Default.Pet);
+            return Equals(pet, again) ? text : "round trip changed it";
+            """));
+
+        Assert.Equal(expected, output.RunProbe());
+    }
+
+    [Fact]
+    public void Polymorphic_WithAnUnknownDiscriminator_Throws()
+    {
+        var output = GeneratedCode.Compile(ModelFixture.Emit(PetsSpec), Probe("""
+            try
+            {
+                JsonSerializer.Deserialize("{\"petType\":\"bird\",\"name\":\"Tweety\"}", MyApiJsonContext.Default.Pet);
+                return "read";
+            }
+            catch (Exception exception) when (exception is JsonException or NotSupportedException)
+            {
+                return "rejected";
+            }
+            """));
+
+        Assert.Equal("rejected", output.RunProbe());
+    }
+
     // A probe whose Run() body is the given statements, in namespace MyApp.
     internal static string Probe(string body) => $$"""
         using System;
