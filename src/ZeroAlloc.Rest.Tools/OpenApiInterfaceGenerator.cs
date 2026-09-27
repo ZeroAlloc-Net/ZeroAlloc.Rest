@@ -8,11 +8,11 @@ namespace ZeroAlloc.Rest.Tools;
 public static class OpenApiInterfaceGenerator
 {
     public static string Generate(string yamlOrJson, string @namespace, string interfaceName)
-        => Generate(yamlOrJson, @namespace, interfaceName, new List<string>());
+        => Generate(yamlOrJson, @namespace, interfaceName, new List<OpenApiWarning>());
 
     // Adds a message to warnings for each parameter of the spec the emitted interface leaves out,
     // so that the CLI and the MSBuild task can report it.
-    internal static string Generate(string yamlOrJson, string @namespace, string interfaceName, List<string> warnings)
+    internal static string Generate(string yamlOrJson, string @namespace, string interfaceName, List<OpenApiWarning> warnings)
     {
         var reader = new OpenApiStringReader();
         var document = reader.Read(yamlOrJson, out var diagnostic);
@@ -58,10 +58,10 @@ public static class OpenApiInterfaceGenerator
     public static Task<string> GenerateFromFileAsync(
         string filePath, string @namespace, string interfaceName,
         CancellationToken ct = default)
-        => GenerateFromFileAsync(filePath, @namespace, interfaceName, new List<string>(), ct);
+        => GenerateFromFileAsync(filePath, @namespace, interfaceName, new List<OpenApiWarning>(), ct);
 
     internal static async Task<string> GenerateFromFileAsync(
-        string filePath, string @namespace, string interfaceName, List<string> warnings,
+        string filePath, string @namespace, string interfaceName, List<OpenApiWarning> warnings,
         CancellationToken ct)
     {
         var content = await File.ReadAllTextAsync(filePath, ct).ConfigureAwait(false);
@@ -71,10 +71,10 @@ public static class OpenApiInterfaceGenerator
     public static Task<string> GenerateFromUrlAsync(
         string url, string @namespace, string interfaceName,
         CancellationToken ct = default)
-        => GenerateFromUrlAsync(url, @namespace, interfaceName, new List<string>(), ct);
+        => GenerateFromUrlAsync(url, @namespace, interfaceName, new List<OpenApiWarning>(), ct);
 
     internal static async Task<string> GenerateFromUrlAsync(
-        string url, string @namespace, string interfaceName, List<string> warnings,
+        string url, string @namespace, string interfaceName, List<OpenApiWarning> warnings,
         CancellationToken ct)
     {
         using var http = new HttpClient();
@@ -83,7 +83,7 @@ public static class OpenApiInterfaceGenerator
     }
 
     private static void EmitMethod(StringBuilder sb, string path, OpenApiPathItem pathItem,
-        OperationType operationType, OpenApiOperation operation, List<string> warnings)
+        OperationType operationType, OpenApiOperation operation, List<OpenApiWarning> warnings)
     {
         var httpAttr = operationType switch
         {
@@ -155,20 +155,16 @@ public static class OpenApiInterfaceGenerator
     }
 
     // A parameter the interface cannot bind: a comment for the emitted method, and a warning.
-    private static (string Comment, string Warning) Skipped(OpenApiParameter param, string operationName)
+    // Only a cookie parameter gets here; the OpenAPI reader rejects a parameter with no location.
+    private static (string Comment, OpenApiWarning Warning) Skipped(OpenApiParameter param, string operationName)
     {
         // ZeroAlloc.Rest binds no cookies. Emitted without an attribute, a cookie parameter became
         // a route parameter with no token, and its value was never sent.
-        if (param.In == ParameterLocation.Cookie)
-        {
-            return ($"// Cookie parameter '{param.Name}' is not emitted: ZeroAlloc.Rest has no cookie binding.",
+        return ($"// Cookie parameter '{param.Name}' is not emitted: ZeroAlloc.Rest has no cookie binding.",
+            new OpenApiWarning(OpenApiWarning.CookieParameterNotEmitted,
                 $"Operation '{operationName}': cookie parameter '{param.Name}' is not emitted, because "
                     + "ZeroAlloc.Rest has no cookie binding. Send the cookie from the HttpClient, for example "
-                    + "with a CookieContainer on its handler.");
-        }
-        return ($"// Parameter '{param.Name}' is not emitted: the spec gives it no location.",
-            $"Operation '{operationName}': parameter '{param.Name}' is not emitted, because the spec gives "
-                + "it no location. Set its \"in\" to path, query or header.");
+                    + "with a CookieContainer on its handler."));
     }
 
     // The operation's parameters, after those its path item declares and the operation does not

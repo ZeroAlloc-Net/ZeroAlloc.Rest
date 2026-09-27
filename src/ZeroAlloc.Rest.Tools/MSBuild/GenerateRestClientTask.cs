@@ -32,7 +32,7 @@ public sealed class GenerateRestClientTask : Task
         try
         {
             string content;
-            var warnings = new List<string>();
+            var warnings = new List<OpenApiWarning>();
             if (Spec.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || Spec.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
                 content = System.Threading.Tasks.Task.Run(() => OpenApiInterfaceGenerator.GenerateFromUrlAsync(Spec, Namespace, InterfaceName, warnings, CancellationToken.None))
                     .GetAwaiter().GetResult();
@@ -40,9 +40,10 @@ public sealed class GenerateRestClientTask : Task
                 content = System.Threading.Tasks.Task.Run(() => OpenApiInterfaceGenerator.GenerateFromFileAsync(Spec, Namespace, InterfaceName, warnings, CancellationToken.None))
                     .GetAwaiter().GetResult();
 
-            // Reported against the spec, the file to change to resolve them.
+            // Reported against the spec, the file to change to resolve them, under their ZRT code,
+            // which NoWarn suppresses.
             foreach (var warning in warnings)
-                Log.LogWarning(null, null, null, Spec, 0, 0, 0, 0, "ZeroAlloc.Rest: " + warning);
+                Log.LogWarning(null, warning.Code, null, Spec, 0, 0, 0, 0, warning.Message);
 
             var dir = Path.GetDirectoryName(Output);
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);

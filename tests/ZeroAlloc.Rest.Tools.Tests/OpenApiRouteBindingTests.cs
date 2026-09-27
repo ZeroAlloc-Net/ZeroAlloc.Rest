@@ -165,7 +165,7 @@ public class OpenApiRouteBindingTests
     [Fact]
     public void CookieParameter_IsSkipped_WithAWarning_InsteadOfBecomingARouteParameter()
     {
-        var warnings = new List<string>();
+        var warnings = new List<OpenApiWarning>();
         var code = OpenApiInterfaceGenerator.Generate(Spec("""
               /users/{id}:
                 get:
@@ -189,9 +189,10 @@ public class OpenApiRouteBindingTests
         Assert.DoesNotContain("session)", code);
         Assert.Contains("// Cookie parameter 'session' is not emitted", code);
         var warning = Assert.Single(warnings);
-        Assert.Contains("'session'", warning);
-        Assert.Contains("getUser", warning);
-        Assert.Contains("no cookie binding", warning);
+        Assert.Equal("ZRT001", warning.Code);
+        Assert.Contains("'session'", warning.Message);
+        Assert.Contains("getUser", warning.Message);
+        Assert.Contains("no cookie binding", warning.Message);
         AssertCompilesClean(code);
     }
 
@@ -294,7 +295,7 @@ public class OpenApiRouteBindingTests
 
     private static string Generate(string spec)
     {
-        var warnings = new List<string>();
+        var warnings = new List<OpenApiWarning>();
         var code = OpenApiInterfaceGenerator.Generate(spec, "MyApp", "IMyApi", warnings);
         Assert.Empty(warnings);
         return code;

@@ -40,7 +40,7 @@ The generator maps:
 - `parameters[in=query]` → `[Query] T name`, or `[Query(Name = "page-size")] T pageSize` when the C# name differs from the wire name
 - `parameters[in=header]` → `[Header("Name")] string name`
 - `parameters[in=path]` → plain `T name`; the route's `{token}` is rewritten to the same C# name, so `/users/{User-Id}` becomes `/users/{userId}` with `int userId`
-- `parameters[in=cookie]` → not emitted. ZeroAlloc.Rest has no cookie binding, so the generated method carries a comment, and the CLI and the MSBuild task report a warning. Send cookies from the `HttpClient`, for example with a `CookieContainer` on its handler.
+- `parameters[in=cookie]` → not emitted. ZeroAlloc.Rest has no cookie binding, so the generated method carries a comment, and the CLI and the MSBuild task report warning [ZRT001](advanced.md#zrt001-cookie-parameter-not-emitted). Send cookies from the `HttpClient`, for example with a `CookieContainer` on its handler.
 - parameters declared on the path item apply to each of its operations, unless the operation overrides them
 - `requestBody` → `[Body] object body`
 - `responses[2xx]` → `Task<ReturnType>` (resolves `$ref`, maps arrays to `List<T>`)
@@ -69,6 +69,13 @@ The `GenerateZeroAllocRestClients` target runs before `BeforeBuild`. Supported p
 | `InterfaceName` | No | Interface name (default: `IApiClient`) |
 
 The targets file is automatically imported via NuGet's MSBuild integration when you reference `ZeroAlloc.Rest.Tools`.
+
+## Warnings
+
+When the spec has something the interface cannot express, generation still succeeds and reports a
+warning with a `ZRT` code, listed under [Diagnostics](advanced.md#openapi-code-generation-zrt-diagnostics).
+The MSBuild task logs it against the spec file, and `<NoWarn>` in the project suppresses it. The
+`zeroalloc generate` CLI writes it to stderr, and `--nowarn ZRT001` suppresses it there.
 
 ## Workflow recommendation
 
