@@ -17,6 +17,42 @@ public enum Mood
     Sad,
 }
 
+[Flags]
+public enum Access
+{
+    [JsonStringEnumMemberName("none")] None = 0,
+    [JsonStringEnumMemberName("exec")] Exec = 4,
+    [JsonStringEnumMemberName("r")] Read = 1,
+    Write = 2,
+    [JsonStringEnumMemberName("wx")] WriteExec = 6,
+}
+
+public struct PlainPoint
+{
+    public int X;
+
+    public override readonly string ToString() => "pt" + X.ToString(CultureInfo.InvariantCulture);
+}
+
+public readonly struct ExplicitCode : IFormattable
+{
+    string IFormattable.ToString(string? format, IFormatProvider? formatProvider)
+        => 1.5.ToString(formatProvider);
+}
+
+[ZeroAllocRestClient]
+public interface IFormatMixApi
+{
+    [Get("/n/{when}")]
+    Task<Result<string, HttpError>> NullableAsync(DateTimeOffset? when, [Query] bool? flag, CancellationToken ct = default);
+
+    [Get("/f")]
+    Task<Result<string, HttpError>> FlagsAsync([Query] Access access, CancellationToken ct = default);
+
+    [Get("/s/{point}")]
+    Task<Result<string, HttpError>> StructAsync(PlainPoint point, [Query] ExplicitCode code, CancellationToken ct = default);
+}
+
 [ZeroAllocRestClient]
 public interface IFormatApi
 {
@@ -78,5 +114,70 @@ public sealed class ValueFormatTests
             sent.RequestUri?.PathAndQuery);
         Assert.Equal("3", Assert.Single(sent.Headers.GetValues("X-Retry")));
         Assert.False(sent.Headers.Contains("X-Trace"));
+    }
+
+    [Fact]
+    public async Task NullableRouteAndQueryValues_AreWrittenInvariantly()
+    {
+        var (api, sent) = CreateMixClient();
+        using var culture = new CultureScope("de-DE");
+
+        await api.NullableAsync(new DateTimeOffset(2026, 9, 27, 10, 30, 0, TimeSpan.Zero), flag: false);
+        Assert.Equal("/n/2026-09-27T10%3A30%3A00.0000000%2B00%3A00?flag=false", sent()?.RequestUri?.PathAndQuery);
+
+        await api.NullableAsync(when: null, flag: null);
+        Assert.Equal("/n/", sent()?.RequestUri?.PathAndQuery);
+    }
+
+    // Every value from 0 to 15, named members, combinations and values no member combination covers,
+    // is written exactly as System.Text.Json's JsonStringEnumConverter writes it.
+    [Fact]
+    public async Task FlagsValues_AreWrittenAsSystemTextJsonWritesThem()
+    {
+        var (api, sent) = CreateMixClient();
+        var options = new System.Text.Json.JsonSerializerOptions { Converters = { new JsonStringEnumConverter() } };
+        for (var i = 0; i < 16; i++)
+        {
+            var access = (Access)i;
+            await api.FlagsAsync(access);
+
+            var expected = System.Text.Json.JsonSerializer.Serialize(access, options).Trim('"');
+            Assert.Equal("/f?access=" + Uri.EscapeDataString(expected), sent()?.RequestUri?.PathAndQuery);
+        }
+    }
+
+    [Fact]
+    public async Task PlainStruct_UsesItsToString_AndExplicitFormattable_IsInvariant()
+    {
+        var (api, sent) = CreateMixClient();
+        using var culture = new CultureScope("de-DE");
+
+        await api.StructAsync(new PlainPoint { X = 7 }, default);
+
+        Assert.Equal("/s/pt7?code=1.5", sent()?.RequestUri?.PathAndQuery);
+    }
+
+    private static (IFormatMixApi Api, Func<HttpRequestMessage?> Sent) CreateMixClient()
+    {
+        HttpRequestMessage? sent = null;
+        var http = new HttpClient(new StubHandler((request, _) =>
+        {
+            sent = request;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("\"ok\"", Encoding.UTF8, "application/json"),
+            });
+        }))
+        { BaseAddress = ResultErrorMapperTests.BaseAddress };
+        return (new FormatMixApiClient(http, new SystemTextJsonSerializer()), () => sent);
+    }
+
+    private sealed class CultureScope : IDisposable
+    {
+        private readonly CultureInfo _previous = CultureInfo.CurrentCulture;
+
+        public CultureScope(string name) => CultureInfo.CurrentCulture = new CultureInfo(name);
+
+        public void Dispose() => CultureInfo.CurrentCulture = _previous;
     }
 }

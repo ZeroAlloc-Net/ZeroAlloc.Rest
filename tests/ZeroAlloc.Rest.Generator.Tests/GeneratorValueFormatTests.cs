@@ -111,6 +111,53 @@ public class GeneratorValueFormatTests
         Assert.DoesNotContain("global::MyApp.Kind.Alias", run.GeneratedSource);
     }
 
+    // Fix round 1: a plain struct binds ValueType.ToString, annotated string?, so the helper
+    // coalesces; an explicit IFormattable is called through the interface; a [Flags] combination is
+    // built from the member names; nullable route and query values bind the Nullable<T> overload.
+    [Fact]
+    public void PlainStruct_ExplicitFormattable_FlagsEnum_AndNullableValues_CompileWithoutWarnings()
+    {
+        var run = GeneratorHarness.Run("""
+            using System;
+            using System.Text.Json.Serialization;
+            using System.Threading.Tasks;
+            using ZeroAlloc.Rest.Attributes;
+            namespace MyApp;
+            public struct Plain { public int X; }
+            public struct Code : IFormattable
+            {
+                string IFormattable.ToString(string? format, IFormatProvider? provider) => "code";
+            }
+            public sealed class Ref : IFormattable
+            {
+                string IFormattable.ToString(string? format, IFormatProvider? provider) => "ref";
+            }
+            [Flags]
+            public enum Perm : byte { None = 0, [JsonStringEnumMemberName("r")] Read = 1, Write = 2, [JsonStringEnumMemberName("rw")] ReadWrite = 3, Exec = 4 }
+            [ZeroAllocRestClient]
+            public interface IMixApi
+            {
+                [Get("/p/{plain}")] Task<string> PlainAsync(Plain plain, [Query] Plain other);
+                [Get("/c/{code}")] Task<string> CodeAsync(Code code, [Query] Code? maybe, [Header("X-Ref")] Ref? reference);
+                [Get("/f")] Task<string> FlagsAsync([Query] Perm perm, [Query] Perm[] perms);
+                [Get("/n/{when}")] Task<string> NullableAsync(DateTimeOffset? when, [Query] bool? flag);
+            }
+            """, "IMixApi.g.cs");
+
+        Assert.Empty(run.GeneratorDiagnostics);
+        Assert.Empty(run.Problems);
+        var client = run.GeneratedSource;
+        Assert.Contains("private static string __FormatValue(global::MyApp.Plain value) => value.ToString() ?? string.Empty;", client);
+        Assert.Contains("private static string __FormatValue(global::MyApp.Code value) => __FormatFormattable(value);", client);
+        Assert.Contains("private static string __FormatValue(global::MyApp.Ref value) => __FormatFormattable(value);", client);
+        Assert.Contains("private static string __FormatFormattable<T>(T value) where T : global::System.IFormattable", client);
+        Assert.Contains("private static string __FormatValue(global::MyApp.Perm value) => __FormatFlags(value);", client);
+        Assert.Contains("case global::MyApp.Perm.ReadWrite: return \"rw\";", client);
+        Assert.Contains("return __bits == 0 && __text is not null ? __text : ((byte)value).ToString(global::System.Globalization.CultureInfo.InvariantCulture);", client);
+        Assert.Contains("{(global::System.Uri.EscapeDataString(__FormatValue(when)))}", client);
+        Assert.Contains("private static string __FormatValue(bool? value)", client);
+    }
+
     private static string Generate(string source)
     {
         var run = GeneratorHarness.Run(source, "IFormatApi.g.cs");

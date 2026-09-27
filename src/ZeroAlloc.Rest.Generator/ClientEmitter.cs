@@ -304,13 +304,26 @@ internal static class ClientEmitter
     private static void EmitFormatHelpers(StringBuilder sb, ClientModel model)
     {
         var emitted = new HashSet<string>(System.StringComparer.Ordinal);
+        var anyExplicit = false;
         foreach (var method in model.Methods)
         {
             foreach (var parameter in method.Parameters)
             {
                 if (parameter.Format is { } format && emitted.Add(format.TypeName))
+                {
                     EmitFormatHelper(sb, format);
+                    anyExplicit |= format.Format == ValueFormat.ExplicitInvariant;
+                }
             }
+        }
+
+        // A type that implements IFormattable explicitly has no public ToString(format, provider), so
+        // it is called through the interface; the constraint keeps a struct from being boxed.
+        if (anyExplicit)
+        {
+            sb.AppendLine("    private static string __FormatFormattable<T>(T value) where T : global::System.IFormattable");
+            sb.AppendLine("        => value.ToString(null, global::System.Globalization.CultureInfo.InvariantCulture);");
+            sb.AppendLine();
         }
     }
 
@@ -332,22 +345,66 @@ internal static class ClientEmitter
             case ValueFormat.Invariant:
                 sb.AppendLine("value.ToString(null, global::System.Globalization.CultureInfo.InvariantCulture);");
                 break;
-            case ValueFormat.Enum when format.EnumMembers.Count > 0:
-                sb.AppendLine("value switch");
-                sb.AppendLine("    {");
-                foreach (var (member, wire) in format.EnumMembers)
-                    sb.AppendLine($"        {type}.{EscapeKeyword(member)} => {Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(wire, quote: true)},");
-                sb.AppendLine("        _ => value.ToString(),");
-                sb.AppendLine("    };");
+            case ValueFormat.ExplicitInvariant:
+                sb.AppendLine("__FormatFormattable(value);");
+                break;
+            case ValueFormat.Enum:
+                EmitEnumFormat(sb, format);
                 break;
             default:
-                sb.AppendLine(format.IsValueType ? "value.ToString();" : "value.ToString() ?? string.Empty;");
+                // object.ToString and ValueType.ToString are annotated as returning string?.
+                sb.AppendLine("value.ToString() ?? string.Empty;");
                 break;
         }
         if (format.IsValueType)
             sb.AppendLine($"    private static string __FormatValue({type}? value) => value.HasValue ? __FormatValue(value.GetValueOrDefault()) : string.Empty;");
         sb.AppendLine();
     }
+
+    // An enum is written as System.Text.Json's JsonStringEnumConverter writes it: a member's
+    // [JsonStringEnumMemberName] or C# name; for a [Flags] combination, the names of the members it
+    // consumes, walked in STJ's order and joined with ", "; and anything else as its number.
+    private static void EmitEnumFormat(StringBuilder sb, ValueFormatModel format)
+    {
+        var type = format.TypeName;
+        var number = $"(({format.EnumUnderlyingType})value).ToString(global::System.Globalization.CultureInfo.InvariantCulture)";
+        if (!format.IsFlags)
+        {
+            sb.AppendLine("value switch");
+            sb.AppendLine("    {");
+            foreach (var member in format.EnumMembers)
+                sb.AppendLine($"        {type}.{EscapeKeyword(member.Member)} => {Literal(member.Wire)},");
+            sb.AppendLine($"        _ => {number},");
+            sb.AppendLine("    };");
+            return;
+        }
+
+        sb.AppendLine("__FormatFlags(value);");
+        sb.AppendLine($"    private static string __FormatFlags({type} value)");
+        sb.AppendLine("    {");
+        if (format.EnumMembers.Count > 0)
+        {
+            sb.AppendLine("        switch (value)");
+            sb.AppendLine("        {");
+            foreach (var member in format.EnumMembers)
+                sb.AppendLine($"            case {type}.{EscapeKeyword(member.Member)}: return {Literal(member.Wire)};");
+            sb.AppendLine("        }");
+        }
+        sb.AppendLine($"        var __bits = unchecked((ulong)({format.EnumUnderlyingType})value);");
+        sb.AppendLine("        string? __text = null;");
+        foreach (var member in format.EnumMembers)
+        {
+            if (member.Key == 0) continue;
+            var key = "0x" + member.Key.ToString("X", CultureInfo.InvariantCulture) + "UL";
+            var wire = Literal(member.Wire);
+            sb.AppendLine($"        if ((__bits & {key}) == {key}) {{ __bits &= ~{key}; __text = __text is null ? {wire} : __text + \", \" + {wire}; }}");
+        }
+        sb.AppendLine($"        return __bits == 0 && __text is not null ? __text : {number};");
+        sb.AppendLine("    }");
+    }
+
+    private static string Literal(string value)
+        => Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(value, quote: true);
 
     private static string EscapeKeyword(string name)
         => Microsoft.CodeAnalysis.CSharp.SyntaxFacts.GetKeywordKind(name) != Microsoft.CodeAnalysis.CSharp.SyntaxKind.None
