@@ -4,12 +4,11 @@ using ZeroAlloc.Rest;
 using ZeroAlloc.Rest.AotSmoke;
 using ZeroAlloc.Rest.Resilience;
 
-// Verify that the generator-emitted UserApiClient type (emitted for the
-// [ZeroAllocRestClient] interface) compiles and publishes cleanly under
-// PublishAot=true. We don't fire an actual HTTP request — that path requires
-// an IRestSerializer + HttpClient setup that duplicates the integration tests.
-// The compile-time guarantee (ILC analyses the emitted proxy) is the AOT signal
-// we want from this smoke.
+// Verify that generator-emitted clients compile, publish and run under PublishAot=true with no
+// trim or AOT warning. ILC analyses every emitted proxy; the smoke also resolves clients through
+// DI, drives the Result paths through in-process handlers, and fires real HTTP requests over a
+// loopback socket through a client generated from petstore.yaml, serializing through its
+// generated System.Text.Json context.
 
 if (typeof(IUserApi) is null)
 {
@@ -147,6 +146,54 @@ using (var refusingHttp = new System.Net.Http.HttpClient(new RefusingHandler()) 
     if (capturingHandler.CapturedUri != baseAddress)
     {
         Console.Error.WriteLine("AOT smoke: FAIL — a pathless [Get] should request the BaseAddress itself");
+        return 1;
+    }
+}
+
+// Spec §10.5: a client generated from petstore.yaml, serializing through its generated context
+// over a real loopback connection, with no reflection anywhere under ILC.
+{
+    using var server = new StubServer();
+    using var http = new System.Net.Http.HttpClient { BaseAddress = server.BaseAddress };
+    ZeroAlloc.Rest.AotSmoke.PetStore.IPetStoreClient pets = new ZeroAlloc.Rest.AotSmoke.PetStore.PetStoreClientClient(
+        http, new ZeroAlloc.Rest.SystemTextJson.SystemTextJsonSerializer(ZeroAlloc.Rest.AotSmoke.PetStore.PetStoreClientJsonContext.Default));
+    using var timeout = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(30));
+
+    var serving = server.ServeAsync(200, "{\"id\":7,\"name\":\"Rex\",\"status\":\"sold\"}", timeout.Token);
+    var pet = await pets.GetPetAsync(7).ConfigureAwait(false);
+    await serving.ConfigureAwait(false);
+    if (!pet.IsSuccess || !string.Equals(pet.Value.Name, "Rex", StringComparison.Ordinal) || pet.Value.Status != ZeroAlloc.Rest.AotSmoke.PetStore.PetStatus.Sold
+        || !server.LastRequest.StartsWith("GET /pets/7 ", StringComparison.Ordinal))
+    {
+        Console.Error.WriteLine("AOT smoke: FAIL — the generated client should read a Pet over a real connection");
+        return 1;
+    }
+
+    serving = server.ServeAsync(201, "{\"code\":\"duplicate\"}", timeout.Token);
+    var added = await pets.AddPetAsync(new ZeroAlloc.Rest.AotSmoke.PetStore.Pet { Id = 8, Name = "Tom" }).ConfigureAwait(false);
+    await serving.ConfigureAwait(false);
+    if (!added.IsSuccess || !string.Equals(added.Value.AsError?.Code, "duplicate", StringComparison.Ordinal)
+        || !server.LastRequest.EndsWith("{\"id\":8,\"name\":\"Tom\"}", StringComparison.Ordinal))
+    {
+        Console.Error.WriteLine("AOT smoke: FAIL — the body and the oneOf response should round-trip through the context");
+        return 1;
+    }
+
+    serving = server.ServeAsync(200, "{\"id\":7,\"name\":\"Rex\",\"status\":\"lost\"}", timeout.Token);
+    var unknown = await pets.GetPetAsync(7).ConfigureAwait(false);
+    await serving.ConfigureAwait(false);
+    if (!unknown.IsFailure || unknown.Error.Kind != HttpErrorKind.Deserialization)
+    {
+        Console.Error.WriteLine("AOT smoke: FAIL — an unknown enum value should be a Deserialization error");
+        return 1;
+    }
+
+    serving = server.ServeAsync(204, "", timeout.Token);
+    var deleted = await pets.DeletePetAsync(7).ConfigureAwait(false);
+    await serving.ConfigureAwait(false);
+    if (!deleted.IsSuccess)
+    {
+        Console.Error.WriteLine("AOT smoke: FAIL — a 204 should be a UnitResult success");
         return 1;
     }
 }

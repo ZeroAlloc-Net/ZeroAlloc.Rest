@@ -72,10 +72,10 @@ jobs:
 
   aot-smoke:
     runs-on: ubuntu-latest
-    # Publishes samples/ZeroAlloc.Rest.AotSmoke with PublishAot=true. Verifies the
-    # generator-emitted REST client type survives ILC, and resolves clients through
-    # both the generated Add{I} and the Resilience bridge. End-to-end HTTP + serializer
-    # flow is covered by the integration tests; this smoke is the AOT guarantee.
+    # Publishes samples/ZeroAlloc.Rest.AotSmoke with PublishAot=true and fails on any trim or AOT
+    # warning. Verifies the generator-emitted REST client types survive ILC, resolves clients
+    # through both the generated Add{I} and the Resilience bridge, and sends real requests over a
+    # loopback socket through a client generated from petstore.yaml and its generated JSON context.
     steps:
       - uses: actions/checkout@v7
         with:
@@ -97,7 +97,14 @@ jobs:
         run: dotnet restore samples/ZeroAlloc.Rest.AotSmoke/ZeroAlloc.Rest.AotSmoke.csproj
 
       - name: Publish AOT
-        run: dotnet publish samples/ZeroAlloc.Rest.AotSmoke/ZeroAlloc.Rest.AotSmoke.csproj -r linux-x64 -c Release -o ./aot-out
+        # The smoke must publish with no trim or AOT warning at all; see #351.
+        run: |
+          set -o pipefail
+          dotnet publish samples/ZeroAlloc.Rest.AotSmoke/ZeroAlloc.Rest.AotSmoke.csproj -r linux-x64 -c Release -o ./aot-out 2>&1 | tee publish.log
+          if grep -E "warning IL[0-9]+" publish.log; then
+            echo "::error::The AOT smoke has trim or AOT warnings."
+            exit 1
+          fi
 
       - name: Run AOT binary
         run: ./aot-out/ZeroAlloc.Rest.AotSmoke
