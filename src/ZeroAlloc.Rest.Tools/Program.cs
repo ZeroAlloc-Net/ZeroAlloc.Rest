@@ -37,17 +37,17 @@ generateCommand.SetAction(async (parseResult, ct) =>
     var warnings = new List<OpenApiWarning>();
     if (spec.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
         spec.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-        content = await OpenApiInterfaceGenerator.GenerateFromUrlAsync(spec, ns, iface, warnings, ct);
+        content = await OpenApiInterfaceGenerator.GenerateFromUrlAsync(spec, ns, iface, warnings, ct).ConfigureAwait(false);
     else
-        content = await OpenApiInterfaceGenerator.GenerateFromFileAsync(spec, ns, iface, warnings, ct);
+        content = await OpenApiInterfaceGenerator.GenerateFromFileAsync(spec, ns, iface, warnings, ct).ConfigureAwait(false);
 
     // The canonical "file: warning CODE: message" form, which build logs and IDEs recognise.
     foreach (var warning in warnings.Where(w => !noWarn.Contains(w.Code)))
-        await Console.Error.WriteLineAsync($"{spec}: warning {warning.Code}: {warning.Message}");
+        await Console.Error.WriteLineAsync($"{spec}: warning {warning.Code}: {warning.Message}").ConfigureAwait(false);
 
     var dir = Path.GetDirectoryName(output);
     if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-    await File.WriteAllTextAsync(output, content, ct);
+    await File.WriteAllTextAsync(output, content, ct).ConfigureAwait(false);
     Console.WriteLine($"Generated: {output}");
 });
 

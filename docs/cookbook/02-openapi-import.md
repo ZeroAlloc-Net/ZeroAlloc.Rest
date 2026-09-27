@@ -10,10 +10,10 @@ description: Generate a ZeroAllocRestClient interface from an existing OpenAPI 3
 
 **Goal:** Generate a typed `IMyApi` interface from an existing OpenAPI 3.x spec and use it in a project.
 
-## 1. Install tools package
+## 1. Install the MSBuild task package
 
 ```sh
-dotnet add package ZeroAlloc.Rest.Tools
+dotnet add package ZeroAlloc.Rest.Tools.MSBuild
 ```
 
 ## 2. Add the spec to your project
@@ -26,7 +26,7 @@ Place your OpenAPI spec in the project root (e.g., `openapi.yaml`) and add an MS
       Include="openapi.yaml"
       Namespace="MyApp"
       InterfaceName="IMyApi"
-      Output="$(MSBuildProjectDirectory)/Generated/IMyApi.g.cs" />
+      OutputPath="$(MSBuildProjectDirectory)/Generated/IMyApi.g.cs" />
 </ItemGroup>
 ```
 
@@ -42,7 +42,7 @@ Generated/IMyApi.g.cs
 dotnet build
 ```
 
-The `GenerateZeroAllocRestClients` MSBuild target runs before `BeforeBuild` and writes `Generated/IMyApi.g.cs`.
+The `GenerateZeroAllocRestClients` MSBuild target runs before `CoreCompile`, writes `Generated/IMyApi.g.cs` and compiles it.
 
 ## 4. Inspect the generated interface
 
@@ -88,7 +88,7 @@ To pull the spec from a live endpoint at build time:
       Include="https://api.example.com/openapi.json"
       Namespace="MyApp"
       InterfaceName="IMyApi"
-      Output="$(MSBuildProjectDirectory)/Generated/IMyApi.g.cs" />
+      OutputPath="$(MSBuildProjectDirectory)/Generated/IMyApi.g.cs" />
 </ItemGroup>
 ```
 

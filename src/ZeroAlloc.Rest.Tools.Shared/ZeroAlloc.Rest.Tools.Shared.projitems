@@ -1,0 +1,14 @@
+<Project>
+  <!--
+    The OpenAPI-to-interface generator, compiled into both the zeroalloc dotnet tool
+    (ZeroAlloc.Rest.Tools) and the MSBuild task (ZeroAlloc.Rest.Tools.MSBuild). A dotnet tool
+    package cannot be referenced as a library, so the two packages share the source rather than
+    an assembly. Each importing project references Microsoft.OpenApi.Readers itself.
+  -->
+  <PropertyGroup>
+    <HasSharedItems>true</HasSharedItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)*.cs" />
+  </ItemGroup>
+</Project>

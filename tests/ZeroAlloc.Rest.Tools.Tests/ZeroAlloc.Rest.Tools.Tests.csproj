@@ -17,5 +17,11 @@
     <ProjectReference Include="../../src/ZeroAlloc.Rest.Generator/ZeroAlloc.Rest.Generator.csproj" />
     <!-- Reference the Tools project's library code, not as a tool -->
     <ProjectReference Include="../../src/ZeroAlloc.Rest.Tools/ZeroAlloc.Rest.Tools.csproj" />
+    <!--
+      The task assembly compiles the same shared generator source as the tool, so its public types
+      would clash with the tool's. The alias keeps them apart; GenerateRestClientTaskTests uses it.
+    -->
+    <ProjectReference Include="../../src/ZeroAlloc.Rest.Tools.MSBuild/ZeroAlloc.Rest.Tools.MSBuild.csproj"
+                      Aliases="MSBuildTask" />
   </ItemGroup>
 </Project>

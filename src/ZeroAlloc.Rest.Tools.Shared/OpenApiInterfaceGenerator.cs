@@ -279,7 +279,7 @@ public static class OpenApiInterfaceGenerator
 
     private static string MapSchemaTypeForReturn(OpenApiSchema schema)
     {
-        if (schema.Type == "array" && schema.Items != null)
+        if (string.Equals(schema.Type, "array", StringComparison.Ordinal) && schema.Items != null)
             return $"List<{MapSchemaTypeForReturn(schema.Items)}>";
         if (schema.Reference != null)
             return ToIdentifier(ToPascalCase(schema.Reference.Id), upperFirst: true);
@@ -310,7 +310,7 @@ public static class OpenApiInterfaceGenerator
         foreach (var part in parts)
         {
             if (part.Length == 0) continue;
-            result.Append(char.ToUpper(part[0]));
+            result.Append(char.ToUpperInvariant(part[0]));
             result.Append(part.Substring(1));
         }
         return result.Length > 0 ? result.ToString() : s;

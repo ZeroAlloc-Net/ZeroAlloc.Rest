@@ -1,0 +1,36 @@
+<Project>
+  <!--
+    Imported by NuGet from build/<PackageId>.targets into a project that references
+    ZeroAlloc.Rest.Tools.MSBuild. For each <ZeroAllocApiSpec> item it generates a
+    [ZeroAllocRestClient] interface into the item's OutputPath file and compiles it, so the
+    ZeroAlloc.Rest source generator emits the client for it in the same build. The metadata is
+    OutputPath, not Output: MSBuild reserves Output as an item metadata name.
+  -->
+  <!--
+    The generated files are compiled by the target below, which adds them after generating them.
+    Once they exist, the default Compile glob also picks up any under the project directory, and
+    compiling a file twice fails the build with CS2002, so they are taken out of the glob here.
+    This runs at evaluation, where Remove matches the glob's items by path; the same Remove inside
+    the target left them in place and the rebuild failed with CS2002.
+  -->
+  <ItemGroup>
+    <Compile Remove="@(ZeroAllocApiSpec->'%(OutputPath)')" />
+  </ItemGroup>
+
+  <UsingTask TaskName="ZeroAlloc.Rest.Tools.MSBuild.GenerateRestClientTask"
+             AssemblyFile="$(MSBuildThisFileDirectory)../tools/net10.0/ZeroAlloc.Rest.Tools.MSBuild.dll" />
+
+  <Target Name="GenerateZeroAllocRestClients"
+          BeforeTargets="CoreCompile"
+          Condition="'@(ZeroAllocApiSpec)' != ''">
+    <GenerateRestClientTask
+        Spec="%(ZeroAllocApiSpec.Identity)"
+        Namespace="%(ZeroAllocApiSpec.Namespace)"
+        OutputPath="%(ZeroAllocApiSpec.OutputPath)"
+        InterfaceName="%(ZeroAllocApiSpec.InterfaceName)" />
+
+    <ItemGroup>
+      <Compile Include="@(ZeroAllocApiSpec->'%(OutputPath)')" />
+    </ItemGroup>
+  </Target>
+</Project>

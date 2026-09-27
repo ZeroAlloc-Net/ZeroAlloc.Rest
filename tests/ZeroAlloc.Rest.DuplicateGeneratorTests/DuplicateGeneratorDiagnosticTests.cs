@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.IO;
 using Xunit;
 
@@ -9,7 +8,7 @@ public sealed class DuplicateGeneratorDiagnosticTests
     [Fact]
     public async Task Build_Fails_With_ZR9001_When_Both_Packages_Referenced()
     {
-        var repoRoot = LocateRepoRoot();
+        var repoRoot = ConsumerProcess.LocateRepoRoot();
         var feed = Path.Combine(repoRoot, "artifacts", "local");
         Assert.True(Directory.Exists(feed),
             $"Local nupkg feed not found at {feed}. Run `dotnet pack -c Release -o artifacts/local` first.");
@@ -33,7 +32,7 @@ public sealed class DuplicateGeneratorDiagnosticTests
         try
         {
             ScaffoldConsumer(workDir, feed, version);
-            var (exitCode, stdout, stderr) = await RunDotnetAsync(workDir, "build", "-c", "Release");
+            var (exitCode, stdout, stderr) = await ConsumerProcess.RunDotnetAsync(workDir, "build", "-c", "Release");
             Assert.NotEqual(0, exitCode);
             var combined = stdout + "\n" + stderr;
             Assert.Contains("ZR9001", combined, StringComparison.Ordinal);
@@ -75,32 +74,5 @@ public sealed class DuplicateGeneratorDiagnosticTests
             """);
 
         File.WriteAllText(Path.Combine(workDir, "Program.cs"), "// empty consumer\n");
-    }
-
-    private static async Task<(int ExitCode, string StdOut, string StdErr)> RunDotnetAsync(
-        string workingDirectory, params string[] args)
-    {
-        var psi = new ProcessStartInfo("dotnet")
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            WorkingDirectory = workingDirectory,
-        };
-        foreach (var a in args) psi.ArgumentList.Add(a);
-
-        using var p = Process.Start(psi)!;
-        var stdoutTask = p.StandardOutput.ReadToEndAsync();
-        var stderrTask = p.StandardError.ReadToEndAsync();
-        await p.WaitForExitAsync().ConfigureAwait(false);
-        return (p.ExitCode, await stdoutTask.ConfigureAwait(false), await stderrTask.ConfigureAwait(false));
-    }
-
-    private static string LocateRepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Directory.Build.props")))
-            dir = dir.Parent;
-        return dir?.FullName ?? throw new DirectoryNotFoundException("Could not find repo root (Directory.Build.props)");
     }
 }

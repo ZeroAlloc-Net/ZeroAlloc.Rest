@@ -6,8 +6,8 @@ namespace ZeroAlloc.Rest.Tools.MSBuild;
 
 public sealed class GenerateRestClientTask : Task
 {
-    [Required] public string Spec    { get; set; } = "";
-    [Required] public string Output  { get; set; } = "";
+    [Required] public string Spec { get; set; } = "";
+    [Required] public string OutputPath { get; set; } = "";
     [Required] public string Namespace { get; set; } = "";
     public string InterfaceName { get; set; } = "IApiClient";
 
@@ -18,9 +18,9 @@ public sealed class GenerateRestClientTask : Task
             Log.LogError("ZeroAlloc.Rest: Namespace is required and cannot be empty.");
             return false;
         }
-        if (string.IsNullOrWhiteSpace(Output))
+        if (string.IsNullOrWhiteSpace(OutputPath))
         {
-            Log.LogError("ZeroAlloc.Rest: Output is required and cannot be empty.");
+            Log.LogError("ZeroAlloc.Rest: OutputPath is required and cannot be empty.");
             return false;
         }
         if (string.IsNullOrWhiteSpace(Spec))
@@ -45,10 +45,18 @@ public sealed class GenerateRestClientTask : Task
             foreach (var warning in warnings)
                 Log.LogWarning(null, warning.Code, null, Spec, 0, 0, 0, 0, warning.Message);
 
-            var dir = Path.GetDirectoryName(Output);
+            // The task runs before every compile. Rewriting an unchanged file would bump its timestamp
+            // and make CoreCompile rerun on every build.
+            if (File.Exists(OutputPath) && string.Equals(File.ReadAllText(OutputPath), content, StringComparison.Ordinal))
+            {
+                Log.LogMessage(MessageImportance.Low, $"ZeroAlloc.Rest: {OutputPath} is up to date");
+                return true;
+            }
+
+            var dir = Path.GetDirectoryName(OutputPath);
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-            File.WriteAllText(Output, content);
-            Log.LogMessage(MessageImportance.Normal, $"ZeroAlloc.Rest: Generated {Output}");
+            File.WriteAllText(OutputPath, content);
+            Log.LogMessage(MessageImportance.Normal, $"ZeroAlloc.Rest: Generated {OutputPath}");
             return true;
         }
         catch (Exception ex)

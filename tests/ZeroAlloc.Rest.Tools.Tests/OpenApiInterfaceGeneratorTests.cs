@@ -1,3 +1,4 @@
+using System.Globalization;
 using Xunit;
 using ZeroAlloc.Rest.Tools;
 
@@ -179,6 +180,37 @@ public class OpenApiInterfaceGeneratorTests
             """;
         var result = OpenApiInterfaceGenerator.Generate(yaml, "MyApp", "IMyApi");
         Assert.Contains("GetAllUsersAsync", result);
+    }
+
+    // Under tr-TR, a culture-sensitive upper-casing turns i into a dotted İ, so list_items became
+    // Listİtems. The generated names must not depend on the culture the build runs in.
+    [Fact]
+    public void Generate_SnakeCaseOperationId_IsCasedTheSameInAnyCulture()
+    {
+        var yaml = """
+            openapi: 3.0.0
+            info:
+              title: Test
+              version: "1"
+            paths:
+              /items:
+                get:
+                  operationId: list_items
+                  responses:
+                    '200':
+                      description: ok
+            """;
+        var previous = CultureInfo.CurrentCulture;
+        CultureInfo.CurrentCulture = new CultureInfo("tr-TR");
+        try
+        {
+            var result = OpenApiInterfaceGenerator.Generate(yaml, "MyApp", "IMyApi");
+            Assert.Contains("ListItemsAsync", result);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = previous;
+        }
     }
 
     [Fact]
