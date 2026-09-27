@@ -7,53 +7,6 @@ using ZeroAlloc.Results;
 
 namespace ZeroAlloc.Rest.Benchmarks;
 
-// ── DTOs ──────────────────────────────────────────────────────────────────────
-
-public sealed class UserDto
-{
-    public int Id { get; set; }
-    public string Name { get; set; } = "";
-}
-
-// ── ZeroAlloc.Rest interface — source generator emits ZeroAllocUserApiClient ──
-// Use fully-qualified attribute names to avoid ambiguity with Refit's attributes.
-
-[ZeroAlloc.Rest.Attributes.ZeroAllocRestClient]
-public interface IZeroAllocUserApi
-{
-    [ZeroAlloc.Rest.Attributes.Get("/users/{id}")]
-    Task<UserDto> GetUserAsync(int id, CancellationToken ct = default);
-
-    [ZeroAlloc.Rest.Attributes.Post("/users")]
-    Task<UserDto> CreateUserAsync([ZeroAlloc.Rest.Attributes.Body] UserDto body, CancellationToken ct = default);
-
-    [ZeroAlloc.Rest.Attributes.Get("/users/{id}")]
-    Task<UserDto> GetUserWithTagAsync(int id, [ZeroAlloc.Rest.Attributes.Query] string? tag = null, CancellationToken ct = default);
-
-    [ZeroAlloc.Rest.Attributes.Delete("/users/{id}")]
-    Task DeleteUserAsync(int id, CancellationToken ct = default);
-
-    [ZeroAlloc.Rest.Attributes.Get("/users/{id}/result")]
-    Task<Result<UserDto, HttpError>> GetUserResultAsync(int id, CancellationToken ct = default);
-}
-
-// ── Refit interface — reflection-based client ─────────────────────────────────
-
-public interface IRefitUserApi
-{
-    [Refit.Get("/users/{id}")]
-    Task<UserDto> GetUserAsync(int id);
-
-    [Refit.Post("/users")]
-    Task<UserDto> CreateUserAsync([Refit.Body] UserDto body);
-
-    [Refit.Get("/users/{id}")]
-    Task<UserDto> GetUserWithTagAsync(int id, string? tag = null);
-
-    [Refit.Delete("/users/{id}")]
-    Task DeleteUserAsync(int id);
-}
-
 // ── Benchmarks ────────────────────────────────────────────────────────────────
 
 [MemoryDiagnoser]
