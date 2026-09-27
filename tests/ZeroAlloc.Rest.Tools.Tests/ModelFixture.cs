@@ -1,0 +1,52 @@
+using Microsoft.OpenApi.Models;
+using Microsoft.OpenApi.Readers;
+using Xunit;
+
+namespace ZeroAlloc.Rest.Tools.Tests;
+
+// Builds the models for the components of a small spec, as the generator does for the schemas
+// its interface references: each component is mapped in declaration order, then built.
+internal static class ModelFixture
+{
+    internal static readonly string[] ReservedNames = ["IMyApi", "MyApiClient", "MyApiJsonContext"];
+
+    // schemasYaml holds the entries of components/schemas, each line indented by four spaces.
+    internal static OpenApiDocument Parse(string schemasYaml)
+    {
+        var yaml = $"""
+            openapi: 3.0.0
+            info:
+              title: Test
+              version: "1"
+            paths: {"{}"}
+            components:
+              schemas:
+            {schemasYaml}
+            """;
+        var document = new OpenApiStringReader().Read(yaml, out var diagnostic);
+        Assert.Empty(diagnostic.Errors);
+        return document;
+    }
+
+    internal static (EquatableList<ModelDefinition> Models, List<OpenApiWarning> Warnings) Build(string schemasYaml)
+    {
+        var document = Parse(schemasYaml);
+        var warnings = new List<OpenApiWarning>();
+        var builder = new SchemaModelBuilder(ReservedNames, warnings);
+        foreach (var (id, schema) in document.Components.Schemas)
+            TypeMapper.Map(schema, id, "#/components/schemas/" + id, builder);
+        return (builder.Build(), warnings);
+    }
+
+    internal static PropertyModel Required(string name, string wireName, TypeRef type)
+        => new(name, wireName, type, Required: true, Nullable: false, Description: null);
+
+    internal static PropertyModel Optional(string name, string wireName, TypeRef type)
+        => new(name, wireName, type, Required: false, Nullable: false, Description: null);
+
+    internal static TypeRef Model(string name) => new(name, TypeRefKind.Model, IsValueType: false);
+
+    internal static TypeRef Enum(string name) => new(name, TypeRefKind.Model, IsValueType: true);
+
+    internal static EquatableList<T> List<T>(params T[] items) => new(items);
+}
