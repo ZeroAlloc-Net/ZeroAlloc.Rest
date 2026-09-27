@@ -8,11 +8,13 @@
     <OptimizationPreference>Size</OptimizationPreference>
 
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
-    <WarningsAsErrors>$(WarningsAsErrors);IL2026;IL2067;IL2075;IL2091;IL3050;IL3051</WarningsAsErrors>
+    <WarningsAsErrors>$(WarningsAsErrors);IL2026;IL2067;IL2075;IL2091;IL3050;IL3051;IL2104;IL3053;IL2046</WarningsAsErrors>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\ZeroAlloc.Rest\ZeroAlloc.Rest.csproj" />
+    <!-- The generated PetStore client serializes through its generated JSON context. -->
+    <ProjectReference Include="..\..\src\ZeroAlloc.Rest.SystemTextJson\ZeroAlloc.Rest.SystemTextJson.csproj" />
     <!-- The Resilience bridge; its ZeroAlloc.Resilience reference brings the proxy generator. -->
     <ProjectReference Include="..\..\src\ZeroAlloc.Rest.Resilience\ZeroAlloc.Rest.Resilience.csproj" />
     <ProjectReference Include="..\..\src\ZeroAlloc.Rest.Generator\ZeroAlloc.Rest.Generator.csproj"

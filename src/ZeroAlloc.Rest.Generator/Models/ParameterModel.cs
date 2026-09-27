@@ -9,4 +9,5 @@ internal record ParameterModel(
     string? HeaderName = null,
     string? QueryName = null,
     bool IsNullable = true,
-    bool IsCollection = false);
+    bool IsCollection = false,
+    ValueFormatModel? Format = null);

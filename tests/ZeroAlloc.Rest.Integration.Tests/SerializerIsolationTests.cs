@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Net.Http;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,13 +17,9 @@ public abstract class ProbeSerializer : IRestSerializer
 
     public int SerializeCalls => _serializeCalls;
 
-    [RequiresDynamicCode("Test serializer.")]
-    [RequiresUnreferencedCode("Test serializer.")]
     public ValueTask<T?> DeserializeAsync<T>(Stream stream, CancellationToken ct = default)
         => ValueTask.FromResult<T?>(default);
 
-    [RequiresDynamicCode("Test serializer.")]
-    [RequiresUnreferencedCode("Test serializer.")]
     public ValueTask SerializeAsync<T>(Stream stream, T value, CancellationToken ct = default)
     {
         Interlocked.Increment(ref _serializeCalls);

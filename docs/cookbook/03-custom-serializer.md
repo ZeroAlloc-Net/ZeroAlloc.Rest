@@ -23,10 +23,17 @@ public sealed class XmlRestSerializer : IRestSerializer
 {
     public string ContentType => "application/xml";
 
+    // XmlSerializer builds its (de)serializer for T through reflection, so the constructor says
+    // so. IRestSerializer's own methods carry no trim or AOT annotation; annotating them here too
+    // would mismatch the interface and warn IL2046.
     [System.Diagnostics.CodeAnalysis.RequiresDynamicCode(
         "XML serialization may require dynamic code.")]
     [System.Diagnostics.CodeAnalysis.RequiresUnreferencedCode(
         "XML serialization may require unreferenced code.")]
+    public XmlRestSerializer()
+    {
+    }
+
     public ValueTask<T?> DeserializeAsync<T>(Stream stream, CancellationToken ct = default)
     {
         var xs = new XmlSerializer(typeof(T));
@@ -34,10 +41,6 @@ public sealed class XmlRestSerializer : IRestSerializer
         return ValueTask.FromResult(result);
     }
 
-    [System.Diagnostics.CodeAnalysis.RequiresDynamicCode(
-        "XML serialization may require dynamic code.")]
-    [System.Diagnostics.CodeAnalysis.RequiresUnreferencedCode(
-        "XML serialization may require unreferenced code.")]
     public ValueTask SerializeAsync<T>(Stream stream, T value, CancellationToken ct = default)
     {
         var xs = new XmlSerializer(typeof(T));

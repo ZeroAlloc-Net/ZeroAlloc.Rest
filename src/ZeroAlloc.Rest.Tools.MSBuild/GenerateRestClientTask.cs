@@ -11,6 +11,10 @@ public sealed class GenerateRestClientTask : Task
     [Required] public string Namespace { get; set; } = "";
     public string InterfaceName { get; set; } = "IApiClient";
 
+    // Metadata GenerateModels="false" keeps hand-written DTOs. MSBuild does not set a parameter
+    // whose metadata is empty, so an item without it keeps the default.
+    public bool GenerateModels { get; set; } = true;
+
     public override bool Execute()
     {
         if (string.IsNullOrWhiteSpace(Namespace))
@@ -33,11 +37,12 @@ public sealed class GenerateRestClientTask : Task
         {
             string content;
             var warnings = new List<OpenApiWarning>();
+            var options = new GenerationOptions(GenerateModels);
             if (Spec.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || Spec.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-                content = System.Threading.Tasks.Task.Run(() => OpenApiInterfaceGenerator.GenerateFromUrlAsync(Spec, Namespace, InterfaceName, warnings, CancellationToken.None))
+                content = System.Threading.Tasks.Task.Run(() => OpenApiInterfaceGenerator.GenerateFromUrlAsync(Spec, Namespace, InterfaceName, warnings, options, CancellationToken.None))
                     .GetAwaiter().GetResult();
             else
-                content = System.Threading.Tasks.Task.Run(() => OpenApiInterfaceGenerator.GenerateFromFileAsync(Spec, Namespace, InterfaceName, warnings, CancellationToken.None))
+                content = System.Threading.Tasks.Task.Run(() => OpenApiInterfaceGenerator.GenerateFromFileAsync(Spec, Namespace, InterfaceName, warnings, options, CancellationToken.None))
                     .GetAwaiter().GetResult();
 
             // Reported against the spec, the file to change to resolve them, under their ZRT code,

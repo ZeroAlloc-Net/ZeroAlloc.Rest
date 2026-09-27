@@ -27,7 +27,8 @@
         Spec="%(ZeroAllocApiSpec.Identity)"
         Namespace="%(ZeroAllocApiSpec.Namespace)"
         OutputPath="%(ZeroAllocApiSpec.OutputPath)"
-        InterfaceName="%(ZeroAllocApiSpec.InterfaceName)" />
+        InterfaceName="%(ZeroAllocApiSpec.InterfaceName)"
+        GenerateModels="%(ZeroAllocApiSpec.GenerateModels)" />
 
     <ItemGroup>
       <Compile Include="@(ZeroAllocApiSpec->'%(OutputPath)')" />

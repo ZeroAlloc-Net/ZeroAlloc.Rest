@@ -287,12 +287,8 @@ public class GeneratorEmissionTests
             public class OverrideSerializer : IRestSerializer
             {
                 public string ContentType => "application/octet-stream";
-                [System.Diagnostics.CodeAnalysis.RequiresDynamicCode("")]
-                [System.Diagnostics.CodeAnalysis.RequiresUnreferencedCode("")]
                 public ValueTask<T?> DeserializeAsync<T>(Stream stream, CancellationToken ct = default)
                     => ValueTask.FromResult<T?>(default);
-                [System.Diagnostics.CodeAnalysis.RequiresDynamicCode("")]
-                [System.Diagnostics.CodeAnalysis.RequiresUnreferencedCode("")]
                 public ValueTask SerializeAsync<T>(Stream stream, T value, CancellationToken ct = default)
                     => ValueTask.CompletedTask;
             }
@@ -313,12 +309,8 @@ public class GeneratorEmissionTests
         public sealed class {0} : ZeroAlloc.Rest.IRestSerializer
         {{
             public string ContentType => "application/x-test";
-            [System.Diagnostics.CodeAnalysis.RequiresDynamicCode("")]
-            [System.Diagnostics.CodeAnalysis.RequiresUnreferencedCode("")]
             public System.Threading.Tasks.ValueTask<T?> DeserializeAsync<T>(System.IO.Stream stream, System.Threading.CancellationToken ct = default)
                 => System.Threading.Tasks.ValueTask.FromResult<T?>(default);
-            [System.Diagnostics.CodeAnalysis.RequiresDynamicCode("")]
-            [System.Diagnostics.CodeAnalysis.RequiresUnreferencedCode("")]
             public System.Threading.Tasks.ValueTask SerializeAsync<T>(System.IO.Stream stream, T value, System.Threading.CancellationToken ct = default)
                 => System.Threading.Tasks.ValueTask.CompletedTask;
         }}
@@ -727,12 +719,12 @@ public class GeneratorEmissionTests
 
         Assert.Empty(errors);
         Assert.Contains("if (reference is not null)", output);
-        Assert.Contains("__request.Headers.TryAddWithoutValidation(\"X-Ref\", reference.ToString());", output);
+        Assert.Contains("__request.Headers.TryAddWithoutValidation(\"X-Ref\", __FormatValue(reference));", output);
         Assert.Contains("if (retry is not null)", output);
-        Assert.Contains("__request.Headers.TryAddWithoutValidation(\"X-Retry\", retry.ToString());", output);
+        Assert.Contains("__request.Headers.TryAddWithoutValidation(\"X-Retry\", __FormatValue(retry));", output);
         Assert.Contains("if (plain is not null)", output);
         Assert.DoesNotContain("if (count is not null)", output);
-        Assert.Contains("__request.Headers.TryAddWithoutValidation(\"X-Count\", count.ToString());", output);
+        Assert.Contains("__request.Headers.TryAddWithoutValidation(\"X-Count\", __FormatValue(count));", output);
     }
 
     [Fact]
@@ -838,6 +830,31 @@ public class GeneratorEmissionTests
         Assert.Equal(
             "Method 'BadAsync' has both [Body] and [FormBody] parameters; only one is allowed",
             diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture));
+    }
+
+    // Rest 3.0: IRestSerializer carries no trim annotations, so a generated method calls it with
+    // no suppression, and ILC has nothing to hide.
+    [Fact]
+    public void GeneratedMethods_CarryNoTrimSuppression()
+    {
+        const string source = """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using ZeroAlloc.Rest.Attributes;
+            namespace MyApp;
+            [ZeroAllocRestClient]
+            public interface IPingApi
+            {
+                [Get("/ping")]
+                Task<string> PingAsync(CancellationToken ct = default);
+            }
+            """;
+
+        var generated = GetGeneratedSource(source, "IPingApi.g.cs");
+
+        Assert.Contains("PingAsync(", generated);
+        Assert.DoesNotContain("UnconditionalSuppressMessage", generated);
+        Assert.DoesNotContain("#pragma", generated);
     }
 
     private static string GetGeneratedSource(string source, string hintName)

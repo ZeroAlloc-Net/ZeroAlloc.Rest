@@ -70,3 +70,10 @@ static void global::ZeroAlloc.Rest.IGeneratedRestClient<UploadApiClient>.AddSeri
 ```
 
 No manual registration is needed. The real output spells every type name out in full.
+
+`MemoryPackRestSerializer` needs one: it serves only the `[MemoryPackable]` types registered with it, plus MemoryPack's built-in types such as `int`, `string` or `byte[]`. The instance `TryAddSingleton` activates has no registered types, so the first call with a `[MemoryPackable]` type throws `InvalidOperationException` naming the type and the fix. Register a configured instance before `AddI{Interface}`, and `TryAddSingleton` leaves it in place:
+
+```csharp
+services.AddSingleton(new MemoryPackRestSerializer(types => types.Add<UploadDto>()));
+services.AddIUploadApi(options => options.BaseAddress = new Uri("https://api.example.com"));
+```

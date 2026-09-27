@@ -24,4 +24,27 @@
     <ProjectReference Include="../../src/ZeroAlloc.Rest.Tools.MSBuild/ZeroAlloc.Rest.Tools.MSBuild.csproj"
                       Aliases="MSBuildTask" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Probes built from generated clients serialize with it -->
+    <ProjectReference Include="../../src/ZeroAlloc.Rest.SystemTextJson/ZeroAlloc.Rest.SystemTextJson.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Real-world specs RealWorldSpecTests generates clients from -->
+    <None Include="Specs/*.yaml" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!--
+    GeneratedCode compiles emitted models the way a consumer's build does, with the System.Text.Json
+    source generator. The SDK passes that generator to this project as an Analyzer item from the
+    targeting pack; its path is recorded here so the test uses the same one.
+  -->
+  <Target Name="RecordJsonSourceGeneratorPath" BeforeTargets="GetAssemblyAttributes" DependsOnTargets="ResolveTargetingPackAssets">
+    <ItemGroup>
+      <_JsonSourceGenerator Include="@(Analyzer)" Condition="'%(Filename)' == 'System.Text.Json.SourceGeneration'" />
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+        <_Parameter1>JsonSourceGenerator</_Parameter1>
+        <_Parameter2>@(_JsonSourceGenerator->'%(FullPath)')</_Parameter2>
+      </AssemblyAttribute>
+    </ItemGroup>
+  </Target>
 </Project>

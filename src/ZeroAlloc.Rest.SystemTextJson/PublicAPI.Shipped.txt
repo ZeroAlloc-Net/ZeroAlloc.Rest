@@ -1,0 +1,7 @@
+#nullable enable
+ZeroAlloc.Rest.SystemTextJson.SystemTextJsonSerializer
+ZeroAlloc.Rest.SystemTextJson.SystemTextJsonSerializer.ContentType.get -> string!
+ZeroAlloc.Rest.SystemTextJson.SystemTextJsonSerializer.DeserializeAsync<T>(System.IO.Stream! stream, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<T?>
+ZeroAlloc.Rest.SystemTextJson.SystemTextJsonSerializer.SerializeAsync<T>(System.IO.Stream! stream, T value, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+ZeroAlloc.Rest.SystemTextJson.SystemTextJsonSerializer.SystemTextJsonSerializer() -> void
+ZeroAlloc.Rest.SystemTextJson.SystemTextJsonSerializer.SystemTextJsonSerializer(System.Text.Json.JsonSerializerOptions! options) -> void

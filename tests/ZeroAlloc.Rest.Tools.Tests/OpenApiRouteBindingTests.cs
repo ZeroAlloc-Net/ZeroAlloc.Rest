@@ -1,9 +1,4 @@
-using System.Collections.Immutable;
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.Diagnostics;
 using Xunit;
-using ZeroAlloc.Rest.Generator;
 
 namespace ZeroAlloc.Rest.Tools.Tests;
 
@@ -14,15 +9,6 @@ namespace ZeroAlloc.Rest.Tools.Tests;
 // ordinary source; otherwise a mismatch would pass unseen, its value silently left out of the URL.
 public class OpenApiRouteBindingTests
 {
-    private static readonly MetadataReference[] References =
-    [
-        .. Basic.Reference.Assemblies.Net100.References.All,
-        MetadataReference.CreateFromFile(typeof(ZeroAlloc.Rest.HttpError).Assembly.Location),
-        MetadataReference.CreateFromFile(typeof(ZeroAlloc.Collections.HeapPooledList<>).Assembly.Location),
-        MetadataReference.CreateFromFile(typeof(Microsoft.Extensions.DependencyInjection.IServiceCollection).Assembly.Location),
-        MetadataReference.CreateFromFile(typeof(Microsoft.Extensions.DependencyInjection.HttpClientFactoryServiceCollectionExtensions).Assembly.Location),
-    ];
-
     private static string Spec(string paths) => $"""
         openapi: 3.0.0
         info:
@@ -50,7 +36,7 @@ public class OpenApiRouteBindingTests
                       description: OK
             """));
 
-        Assert.Contains("[Get(\"/users/{userId}\")]", code);
+        Assert.Contains("[global::ZeroAlloc.Rest.Attributes.Get(\"/users/{userId}\")]", code);
         Assert.Contains("int userId", code);
         AssertCompilesClean(code);
     }
@@ -78,7 +64,7 @@ public class OpenApiRouteBindingTests
                       description: OK
             """));
 
-        Assert.Contains("[Get(\"/orgs/{orgId}/users/{userId}\")]", code);
+        Assert.Contains("[global::ZeroAlloc.Rest.Attributes.Get(\"/orgs/{orgId}/users/{userId}\")]", code);
         Assert.Contains("string orgId, int userId", code);
         AssertCompilesClean(code);
     }
@@ -101,7 +87,7 @@ public class OpenApiRouteBindingTests
                       description: OK
             """));
 
-        Assert.Contains("[Get(\"/types/{class}\")]", code);
+        Assert.Contains("[global::ZeroAlloc.Rest.Attributes.Get(\"/types/{class}\")]", code);
         Assert.Contains("string @class", code);
         AssertCompilesClean(code);
     }
@@ -129,8 +115,8 @@ public class OpenApiRouteBindingTests
                       description: Deleted
             """));
 
-        Assert.Contains("GetUserAsync(int id, CancellationToken ct = default)", code);
-        Assert.Contains("DeleteUserAsync(int id, CancellationToken ct = default)", code);
+        Assert.Contains("GetUserAsync(int id, global::System.Threading.CancellationToken ct = default)", code);
+        Assert.Contains("DeleteUserAsync(int id, global::System.Threading.CancellationToken ct = default)", code);
         AssertCompilesClean(code);
     }
 
@@ -158,7 +144,7 @@ public class OpenApiRouteBindingTests
                       description: OK
             """));
 
-        Assert.Contains("GetUserAsync(string id, CancellationToken ct = default)", code);
+        Assert.Contains("GetUserAsync(string id, global::System.Threading.CancellationToken ct = default)", code);
         AssertCompilesClean(code);
     }
 
@@ -185,7 +171,7 @@ public class OpenApiRouteBindingTests
                       description: OK
             """), "MyApp", "IMyApi", warnings);
 
-        Assert.Contains("GetUserAsync(int id, CancellationToken ct = default)", code);
+        Assert.Contains("GetUserAsync(int id, global::System.Threading.CancellationToken ct = default)", code);
         Assert.DoesNotContain("session)", code);
         Assert.Contains("// Cookie parameter 'session' is not emitted", code);
         var warning = Assert.Single(warnings);
@@ -221,9 +207,9 @@ public class OpenApiRouteBindingTests
                       description: OK
             """));
 
-        Assert.Contains("[Query(Name = \"page-size\")] int pageSize", code);
-        Assert.Contains("[Query(Name = \"PageToken\")] string pageToken", code);
-        Assert.Contains("[Header(\"X-Request-Id\")] string xRequestId", code);
+        Assert.Contains("[global::ZeroAlloc.Rest.Attributes.Query(Name = \"page-size\")] int? pageSize", code);
+        Assert.Contains("[global::ZeroAlloc.Rest.Attributes.Query(Name = \"PageToken\")] string? pageToken", code);
+        Assert.Contains("[global::ZeroAlloc.Rest.Attributes.Header(\"X-Request-Id\")] string? xRequestId", code);
         AssertCompilesClean(code);
     }
 
@@ -262,10 +248,13 @@ public class OpenApiRouteBindingTests
                       description: Updated
             """));
 
-        Assert.Contains("[Put(\"/items/{id2}\")]", code);
+        Assert.Contains("[global::ZeroAlloc.Rest.Attributes.Put(\"/items/{id2}\")]", code);
         Assert.Contains(
-            "PutItemAsync([Query] string id, int id2, [Query(Name = \"ct\")] string ct2, "
-                + "[Header(\"body\")] string body2, [Body] object body, CancellationToken ct = default)",
+            "PutItemAsync([global::ZeroAlloc.Rest.Attributes.Query] string? id, int id2, "
+                + "[global::ZeroAlloc.Rest.Attributes.Query(Name = \"ct\")] string? ct2, "
+                + "[global::ZeroAlloc.Rest.Attributes.Header(\"body\")] string? body2, "
+                + "[global::ZeroAlloc.Rest.Attributes.Body] global::System.Collections.Generic.Dictionary<string, global::System.Text.Json.JsonElement>? body, "
+                + "global::System.Threading.CancellationToken ct = default)",
             code);
         AssertCompilesClean(code);
     }
@@ -301,27 +290,5 @@ public class OpenApiRouteBindingTests
         return code;
     }
 
-    private static void AssertCompilesClean(string code)
-    {
-        var compilation = CSharpCompilation.Create(
-            "OpenApiClient",
-            [CSharpSyntaxTree.ParseText(code.Replace("// <auto-generated/>", "", StringComparison.Ordinal), path: "IMyApi.cs")],
-            References,
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
-
-        CSharpGeneratorDriver
-            .Create(new RestClientGenerator())
-            .RunGeneratorsAndUpdateCompilation(compilation, out var output, out var generatorDiagnostics);
-
-        var analyzerDiagnostics = output
-            .WithAnalyzers([new RouteTemplateAnalyzer()])
-            .GetAnalyzerDiagnosticsAsync().GetAwaiter().GetResult();
-
-        var problems = generatorDiagnostics
-            .AddRange(analyzerDiagnostics)
-            .AddRange(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error))
-            .Select(d => d.ToString())
-            .ToImmutableArray();
-        Assert.True(problems.IsEmpty, code + "\n" + string.Join("\n", problems));
-    }
+    private static void AssertCompilesClean(string code) => GeneratedCode.Compile(code).AssertClean();
 }

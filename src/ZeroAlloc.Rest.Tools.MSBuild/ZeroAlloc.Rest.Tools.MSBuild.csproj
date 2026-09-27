@@ -37,6 +37,11 @@
   <ItemGroup>
     <None Include="build/ZeroAlloc.Rest.Tools.MSBuild.targets" Pack="true" PackagePath="build/" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" PrivateAssets="all" />
+    <AdditionalFiles Include="PublicAPI.Shipped.txt" />
+    <AdditionalFiles Include="PublicAPI.Unshipped.txt" />
+  </ItemGroup>
 
   <!-- Packs the task's runtime dependencies, Microsoft.OpenApi.Readers and what it depends on, next to it. -->
   <Target Name="IncludeTaskDependenciesInPackage" DependsOnTargets="ResolveReferences">

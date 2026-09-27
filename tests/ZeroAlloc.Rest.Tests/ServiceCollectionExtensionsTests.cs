@@ -1,5 +1,4 @@
 using Microsoft.Extensions.DependencyInjection;
-using System.Diagnostics.CodeAnalysis;
 using Xunit;
 using ZeroAlloc.Rest;
 
@@ -10,12 +9,8 @@ file sealed class StubSerializer : IRestSerializer
 {
     public string ContentType => "application/json";
 
-    [RequiresDynamicCode("")]
-    [RequiresUnreferencedCode("")]
     public ValueTask<T?> DeserializeAsync<T>(Stream stream, CancellationToken ct) => ValueTask.FromResult(default(T));
 
-    [RequiresDynamicCode("")]
-    [RequiresUnreferencedCode("")]
     public ValueTask SerializeAsync<T>(Stream stream, T value, CancellationToken ct) => ValueTask.CompletedTask;
 }
 

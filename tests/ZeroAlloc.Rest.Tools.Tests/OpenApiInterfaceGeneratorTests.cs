@@ -42,7 +42,7 @@ public class OpenApiInterfaceGeneratorTests
     public void Generate_ProducesInterfaceWithZeroAllocAttribute()
     {
         var result = OpenApiInterfaceGenerator.Generate(MinimalYaml, "MyApp", "ITestApi");
-        Assert.Contains("[ZeroAllocRestClient]", result);
+        Assert.Contains("[global::ZeroAlloc.Rest.Attributes.ZeroAllocRestClient]", result);
         Assert.Contains("interface ITestApi", result);
     }
 
@@ -57,14 +57,14 @@ public class OpenApiInterfaceGeneratorTests
     public void Generate_ProducesGetMethod()
     {
         var result = OpenApiInterfaceGenerator.Generate(MinimalYaml, "MyApp", "ITestApi");
-        Assert.Contains("[Get(\"/users/{id}\")]", result);
+        Assert.Contains("[global::ZeroAlloc.Rest.Attributes.Get(\"/users/{id}\")]", result);
     }
 
     [Fact]
     public void Generate_ProducesPostMethod()
     {
         var result = OpenApiInterfaceGenerator.Generate(MinimalYaml, "MyApp", "ITestApi");
-        Assert.Contains("[Post(\"/users\")]", result);
+        Assert.Contains("[global::ZeroAlloc.Rest.Attributes.Post(\"/users\")]", result);
     }
 
     [Fact]
@@ -78,7 +78,7 @@ public class OpenApiInterfaceGeneratorTests
     public void Generate_PostMethodHasBodyParam()
     {
         var result = OpenApiInterfaceGenerator.Generate(MinimalYaml, "MyApp", "ITestApi");
-        Assert.Contains("[Body]", result);
+        Assert.Contains("[global::ZeroAlloc.Rest.Attributes.Body]", result);
     }
 
     [Fact]
@@ -89,7 +89,7 @@ public class OpenApiInterfaceGeneratorTests
         try
         {
             var result = OpenApiInterfaceGenerator.GenerateFromFile(file, "MyApp", "ITestApi");
-            Assert.Contains("[ZeroAllocRestClient]", result);
+            Assert.Contains("[global::ZeroAlloc.Rest.Attributes.ZeroAllocRestClient]", result);
         }
         finally
         {
@@ -128,7 +128,7 @@ public class OpenApiInterfaceGeneratorTests
                   type: object
             """;
         var result = OpenApiInterfaceGenerator.Generate(yaml, "MyApp", "IMyApi");
-        Assert.Contains("Task<UserDto>", result);
+        Assert.Contains("global::System.Threading.Tasks.Task<global::ZeroAlloc.Results.Result<UserDto, global::ZeroAlloc.Rest.HttpError>>", result);
         Assert.DoesNotContain("Task<object>", result);
     }
 
@@ -159,7 +159,7 @@ public class OpenApiInterfaceGeneratorTests
                   type: object
             """;
         var result = OpenApiInterfaceGenerator.Generate(yaml, "MyApp", "IMyApi");
-        Assert.Contains("Task<List<UserDto>>", result);
+        Assert.Contains("global::System.Threading.Tasks.Task<global::ZeroAlloc.Results.Result<global::System.Collections.Generic.List<UserDto>, global::ZeroAlloc.Rest.HttpError>>", result);
     }
 
     [Fact]

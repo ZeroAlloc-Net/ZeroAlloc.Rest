@@ -34,6 +34,7 @@ The generated client returns `Result<T, HttpError>.Success(value)` on a 2xx resp
 | The request fails before a response arrives: DNS, connection refused, TLS | `Transport` | `0`, or the status an `HttpRequestException` carries | Empty | The `HttpRequestException` |
 | The request times out, for example through `HttpClient.Timeout` | `Timeout` | `0` | Empty | The `OperationCanceledException` or `TaskCanceledException` |
 | The body of a 2xx response cannot be deserialized | `Deserialization` | The response status | The response and content headers | Whatever the serializer threw: a `JsonException`, a `MemoryPackSerializationException`, a `MessagePackSerializationException` and so on |
+| The body of a 2xx response is empty, as a 204's is, or JSON `null`, and `T` does not accept null | `Deserialization` | The response status | The response and content headers | An `InvalidOperationException` whose message names the method and says to declare `T?` |
 
 `HttpError` exposes:
 
@@ -105,7 +106,29 @@ Only transport, timeout and response-deserialization failures become an `HttpErr
 - **Serializing the request body.** A `[Body]` value the serializer cannot write is a bug in the call, not a failure of the server.
 - **Everything else**, such as an argument the client cannot put in the URL, or an exception from your own `DelegatingHandler` that is not an `HttpRequestException`.
 
+A method generated from an OpenAPI spec is a `Result` or `UnitResult` method, so these rules apply to every generated operation.
+
 Methods that do not return a `Result` throw in every case, as before.
+
+### Empty and null success bodies
+
+A 2xx body that is empty, as a 204's is, or that is JSON `null`, has no value. What the client does
+with it depends on the success type `T` the method declares:
+
+| `T` | `Result<T, E>` method | `Task<T>` method |
+|---|---|---|
+| Nullable: `User?` or `int?` | `Success(null)` | Returns `null` |
+| A non-nullable reference type: `User` | A `Deserialization` failure | Throws `InvalidOperationException` |
+| A non-nullable value type: `int` | An empty body is a `Deserialization` failure; JSON `null` already fails to deserialize | An empty body throws `InvalidOperationException` |
+
+The failure's `Exception` is an `InvalidOperationException` whose message names the method and says
+to declare `T?` to accept an empty body. A null never reaches the caller as a `T` that denies it. A
+generated method whose operation can also succeed with no body, such as 200 with a schema and 204
+without one, or whose response schema is `nullable`, declares `T?` for this reason.
+
+A reference type in a nullable-oblivious context, such as an interface under `#nullable disable`,
+counts as non-nullable: its `Task<Pet>` or `Result<Pet, E>` method rejects an empty body. To accept
+one, enable nullable annotations for the interface and declare `Pet?`.
 
 Failures that become an `HttpError` are still traced as failures: the span status is set to `Error` and the request duration is recorded, as for an exception that propagates.
 
@@ -122,6 +145,22 @@ else
     Console.WriteLine($"Error: {result.Error.StatusCode}");
 }
 ```
+
+### Operations with no response body: `UnitResult<HttpError>`
+
+A method that has nothing to return on success returns `UnitResult<HttpError>`, from
+ZeroAlloc.Results. Any 2xx status is a success, and the body is not read, so a success can never be
+a `Deserialization` failure. Every other failure is exactly as for `Result<T, HttpError>`: a
+non-success status, a transport failure and a timeout come back as an `HttpError`, and what still
+throws is listed above.
+
+```csharp
+[Delete("/users/{id}")]
+Task<UnitResult<HttpError>> DeleteUserAsync(int id, CancellationToken ct = default);
+```
+
+`UnitResult<TError>` works with an `[ErrorMapper]` in the same way as `Result<T, TError>`. The code
+generator returns it for every operation whose 2xx responses have no schema.
 
 ## Your own error type: `[ErrorMapper]`
 
@@ -333,6 +372,38 @@ Message: `Operation 'listUsers': cookie parameter 'session' is not emitted, beca
 To suppress it, add the code to `<NoWarn>` in the project that runs the MSBuild task, or pass
 `--nowarn ZRT001` to `zeroalloc generate`.
 
+#### ZRT002: Schema mapped to JsonElement
+
+Severity: Warning.
+
+The spec has a schema the generator cannot give a C# type, so the property, parameter or response
+is typed `System.Text.Json.JsonElement` and you read it yourself. The reasons are:
+
+- the schema uses `not`;
+- its `allOf` refers back to itself;
+- it has neither a `type` nor a composition;
+- a success response has no JSON media type, or is binary: ZeroAlloc.Rest has no raw stream binding yet;
+- `--models false` is set and the schema is an inline object, enum or composition.
+
+Message: `Schema '#/components/schemas/Holder/properties/anything' is mapped to JsonElement, because it has neither a type nor a composition.`
+
+To suppress it, add the code to `<NoWarn>` in the project that runs the MSBuild task, or pass
+`--nowarn ZRT002` to `zeroalloc generate`.
+
+## Value formatting
+
+Every route, query and header value the generated client writes is formatted with
+`CultureInfo.InvariantCulture`, not the current culture: ISO 8601, the `"O"` format, for `DateTime`,
+`DateTimeOffset`, `DateOnly` and `TimeOnly`; `true`/`false` for `bool`; an enum member's
+`[JsonStringEnumMemberName]` or C# name; a `[Flags]` combination as the member names
+System.Text.Json writes for it, joined with `, `; and an enum value that no member or combination
+names as its underlying number. A type implementing `IFormattable`, including one that implements it
+explicitly, is formatted with `value.ToString(null, CultureInfo.InvariantCulture)`; every other type
+uses its own `ToString()`. A `null` nullable `[Header]` parameter sends no header at all. See
+[parameters](parameters.md#value-formatting) for the summary table, and
+[Migrating to 3.0](migrating-to-v3.md#route-query-and-header-values-are-written-invariantly) for what
+changed from 2.x.
+
 ## CancellationToken
 
 Always add `CancellationToken ct = default` as the last parameter. The generator recognises the type by its well-known fully qualified name `System.Threading.CancellationToken` and passes it to `HttpClient.SendAsync`. No attribute is required.
@@ -360,6 +431,8 @@ public interface IMixedApi
 
 The generated `AddSerializers`, called by `Add{I}` and `AddRestResilience`, registers each override serializer type as a singleton via `TryAddSingleton<T>()`. The override types may be `internal` even when the interface is public, because they never appear in the client's public constructor.
 
+`MemoryPackRestSerializer` serves only the `[MemoryPackable]` types registered with it, plus MemoryPack's built-in types. The instance `TryAddSingleton` creates has no registered types, so a method that only sends `byte[]`, as above, works with it. For `[MemoryPackable]` types, register a configured instance before `Add{I}`, and `TryAddSingleton` keeps it: `services.AddSingleton(new MemoryPackRestSerializer(types => types.Add<PayloadDto>()));`. See [Dependency Injection](dependency-injection.md#serializer-overrides-in-di).
+
 ## Void methods (no response body)
 
 Return `Task` (not `Task<T>`) for methods where you only care about success/failure:
@@ -370,6 +443,8 @@ Task DeleteUserAsync(int id, CancellationToken ct = default);
 ```
 
 The generated code calls `EnsureSuccessStatusCode()` and returns.
+
+To get failures as values instead of exceptions, return `UnitResult<HttpError>`; see [Operations with no response body](#operations-with-no-response-body-unitresulthttperror).
 
 ## Long-running clients outside DI
 

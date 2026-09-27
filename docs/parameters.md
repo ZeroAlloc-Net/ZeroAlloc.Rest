@@ -19,7 +19,7 @@ never sent and [ZRA005](advanced.md#zra005-route-template-and-route-parameters-d
 Task<UserDto> GetUserAsync(int id, CancellationToken ct = default);
 ```
 
-Strongly-typed identifiers from [`ZeroAlloc.ValueObjects`](https://www.nuget.org/packages/ZeroAlloc.ValueObjects) `[TypedId]` are also supported as path or query parameters — the generator calls `id.ToString()` on the typed wrapper, which produces the strategy-specific string format (ULID base32 by default). See the [`Strongly-typed IDs` cookbook entry](cookbook/05-typed-ids.md) for a worked example.
+Strongly-typed identifiers from [`ZeroAlloc.ValueObjects`](https://www.nuget.org/packages/ZeroAlloc.ValueObjects) `[TypedId]` are also supported as path or query parameters — the generator formats the typed wrapper the same as any other [route, query or header value](#value-formatting); a `[TypedId]` wrapper implements no `IFormattable`, so that is its own `ToString()`, which produces the strategy-specific string format (ULID base32 by default). See the [`Strongly-typed IDs` cookbook entry](cookbook/05-typed-ids.md) for a worked example.
 
 ## Query parameters
 
@@ -74,6 +74,22 @@ Task PublishAsync([Body] Event body, [Header("X-Retry-Count")] int? retryCount, 
 ```
 
 Passing `null` sends no `X-Retry-Count` header at all, not an empty one. An empty string is a value, so `""` still sends the header with an empty value.
+
+## Value formatting
+
+Every route, query and header value is written with `CultureInfo.InvariantCulture`, not the current culture:
+
+| Type | Written as |
+|---|---|
+| `bool` | `true` or `false` |
+| `DateTime`, `DateTimeOffset`, `DateOnly`, `TimeOnly` | ISO 8601, the `"O"` format |
+| An enum member | its `[JsonStringEnumMemberName]`, or its C# name |
+| A `[Flags]` combination | the member names System.Text.Json writes for it, joined with `, ` |
+| An enum value no member or combination names | its underlying number |
+| A type implementing `IFormattable`, including explicitly | `value.ToString(null, CultureInfo.InvariantCulture)` |
+| Any other type | `value.ToString()` |
+
+A `null` nullable `[Header]` parameter sends no header at all, as described above; a `null` nullable `[Query]` parameter is omitted the same way.
 
 ## CancellationToken
 

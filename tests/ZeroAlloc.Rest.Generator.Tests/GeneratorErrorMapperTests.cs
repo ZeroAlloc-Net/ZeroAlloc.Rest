@@ -693,7 +693,7 @@ public class GeneratorErrorMapperTests
     private static string MethodText(string generated, string methodName)
     {
         var signature = generated.IndexOf($" {methodName}(", StringComparison.Ordinal);
-        var start = generated.LastIndexOf("    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(\"Trimming\"", signature, StringComparison.Ordinal);
+        var start = generated.LastIndexOf("    public ", signature, StringComparison.Ordinal);
         var end = generated.IndexOf("\n    }\n", signature, StringComparison.Ordinal);
         return generated.Substring(start, end - start);
     }

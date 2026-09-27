@@ -11,6 +11,7 @@
   </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/ZeroAlloc.Rest.AotSmoke/ZeroAlloc.Rest.AotSmoke.csproj" />
+    <Project Path="samples/ZeroAlloc.Rest.MemoryPack.AotSmoke/ZeroAlloc.Rest.MemoryPack.AotSmoke.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/ZeroAlloc.Rest.Tests/ZeroAlloc.Rest.Tests.csproj" />

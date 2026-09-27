@@ -1,5 +1,4 @@
 using System;
-using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Net;
 using System.Threading;
@@ -19,13 +18,10 @@ public sealed class TaggedSerializer(string contentType) : IRestSerializer
 {
     public string ContentType => contentType;
 
-    [RequiresDynamicCode("Test serializer.")]
-    [RequiresUnreferencedCode("Test serializer.")]
+    // The body is read for real: a generated method rejects a null body its T does not accept.
     public ValueTask<T?> DeserializeAsync<T>(Stream stream, CancellationToken ct = default)
-        => ValueTask.FromResult<T?>(default);
+        => System.Text.Json.JsonSerializer.DeserializeAsync<T>(stream, cancellationToken: ct);
 
-    [RequiresDynamicCode("Test serializer.")]
-    [RequiresUnreferencedCode("Test serializer.")]
     public ValueTask SerializeAsync<T>(Stream stream, T value, CancellationToken ct = default)
         => ValueTask.CompletedTask;
 }
@@ -34,13 +30,10 @@ public sealed class AttributeSerializer : IRestSerializer
 {
     public string ContentType => "application/x-attribute";
 
-    [RequiresDynamicCode("Test serializer.")]
-    [RequiresUnreferencedCode("Test serializer.")]
+    // The body is read for real: a generated method rejects a null body its T does not accept.
     public ValueTask<T?> DeserializeAsync<T>(Stream stream, CancellationToken ct = default)
-        => ValueTask.FromResult<T?>(default);
+        => System.Text.Json.JsonSerializer.DeserializeAsync<T>(stream, cancellationToken: ct);
 
-    [RequiresDynamicCode("Test serializer.")]
-    [RequiresUnreferencedCode("Test serializer.")]
     public ValueTask SerializeAsync<T>(Stream stream, T value, CancellationToken ct = default)
         => ValueTask.CompletedTask;
 }

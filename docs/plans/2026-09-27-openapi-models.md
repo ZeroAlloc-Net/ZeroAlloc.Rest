@@ -39,7 +39,7 @@ dotnet test ZeroAlloc.Rest.slnx --no-build -c Release
 
 Expected: `Build succeeded. 0 Warning(s) 0 Error(s)`, then every test project reports `Passed!` with `Failed: 0`.
 
-**AOT smoke command.** Tasks 1, 2 and 18 run it. On Windows, ILC links with the MSVC toolchain, so the Visual Studio "Desktop development with C++" workload must be installed; otherwise run it under WSL with `-r linux-x64`, as CI does.
+**AOT smoke command.** Tasks 1, 2 and 18 run it. On Windows, ILC links with the MSVC toolchain, so the Visual Studio "Desktop development with C++" workload must be installed; otherwise run it under WSL with `-r linux-x64`, as CI does. On win-x64, ILC also needs the directory of `vswhere.exe` on `PATH`, usually `C:\Program Files (x86)\Microsoft Visual Studio\Installer`.
 
 ```bash
 mkdir -p artifacts
@@ -78,7 +78,30 @@ The spec leaves these open. Each resolution binds the tasks below.
 
 ## AOT decision record
 
-Task 1 replaces this section's body with its measurements and the decision. Until then, Tasks 2 onward must not start.
+Measured on 2026-09-27 with SDK 10.0.401, win-x64.
+
+| Step | Configuration | IL warnings |
+|---|---|---|
+| M0 | today: annotated interface, suppressed generated methods | 0 |
+| M1 | suppression removed | IL2026 9, IL3050 9 |
+| M2 | interface, `RestSerializerAdapter` and smoke serializer without annotations | 0 |
+| M3 | each in-repo serializer with IsAotCompatible, without annotations | Rest 0, STJ 0, MemoryPack 2 (IL2091), MessagePack 0 |
+| M4 | M2 plus a context-backed SystemTextJsonSerializer call | 0, then `AOT smoke: PASS` |
+
+`RestSerializerAdapter` moved into the M2 measurement alongside `IRestSerializer`: they share an
+assembly, and the C# compiler's interface/override trim-annotation consistency check requires an
+implementation to match its interface member exactly, so the two cannot be staged independently.
+
+**Decision: A, with MemoryPack by explicit registration.** `IRestSerializer` and every in-repo
+serializer carry no trim annotations, the generated client carries no suppression, and the
+reflection-based `SystemTextJsonSerializer` constructors carry `[RequiresUnreferencedCode]` and
+`[RequiresDynamicCode]`. `MemoryPackSerializer.Deserialize<T>` carries `DynamicallyAccessedMemberTypes.All`
+on `T` in every overload, because MemoryPack finds `RegisterFormatter` by reflection; putting that
+annotation on `IRestSerializer` instead was measured at 47 to 74 percent AOT binary growth and 6
+IL3050 warnings per array-returning endpoint, so it was rejected, and an unannotated reader path
+builds clean but fails at run time under Native AOT. The maintainer chose explicit registration
+instead, Task 20. An ITypeInfoRestSerializer was not needed: its fallback call to the annotated
+interface would have kept a warning in every generated method.
 
 ## File Structure
 
@@ -169,11 +192,11 @@ Record the counts as **M1**. Expected: IL2026 and IL3050, at least one of each p
 
 - [ ] **Step 4: Measure with an annotation-free `IRestSerializer`**
 
-Delete the four `[RequiresDynamicCode]`/`[RequiresUnreferencedCode]` lines from `src/ZeroAlloc.Rest/IRestSerializer.cs` and from `samples/ZeroAlloc.Rest.AotSmoke/SmokeSerializer.cs`. Publish as in Step 3 and record **M2**. Expected: no IL lines at all.
+Delete the `[RequiresDynamicCode]`/`[RequiresUnreferencedCode]` lines from `src/ZeroAlloc.Rest/IRestSerializer.cs`, from `src/ZeroAlloc.Rest/RestSerializerAdapter.cs` and from `samples/ZeroAlloc.Rest.AotSmoke/SmokeSerializer.cs`. The adapter is in the same assembly as the interface, so its methods must lose the attributes together with the interface's, or the build reports the annotation mismatch IL2046/IL3051 instead of measuring anything. Publish as in Step 3 and record **M2**. Expected: no IL lines at all.
 
 - [ ] **Step 5: Measure the in-repo serializers without annotations**
 
-Delete the same attributes from `src/ZeroAlloc.Rest/RestSerializerAdapter.cs`, `src/ZeroAlloc.Rest.MemoryPack/MemoryPackRestSerializer.cs` and `src/ZeroAlloc.Rest.MessagePack/MessagePackRestSerializer.cs`. Replace `src/ZeroAlloc.Rest.SystemTextJson/SystemTextJsonSerializer.cs` with the Task 2 Step 5 version. Then build each with the trim and AOT analyzers on:
+Delete the same attributes from `src/ZeroAlloc.Rest.MemoryPack/MemoryPackRestSerializer.cs` and `src/ZeroAlloc.Rest.MessagePack/MessagePackRestSerializer.cs`. Replace `src/ZeroAlloc.Rest.SystemTextJson/SystemTextJsonSerializer.cs` with the Task 2 Step 5 version. Then build each with the trim and AOT analyzers on:
 
 ```bash
 for p in ZeroAlloc.Rest ZeroAlloc.Rest.SystemTextJson ZeroAlloc.Rest.MemoryPack ZeroAlloc.Rest.MessagePack; do
@@ -198,7 +221,7 @@ namespace ZeroAlloc.Rest.AotSmoke;
 internal sealed partial class SpikeJsonContext : JsonSerializerContext;
 ```
 
-Give the spike's `SystemTextJsonSerializer` the Task 3 Step 4 context constructor. In `Program.cs`, before the final PASS line, call `new UserApiClient(new HttpClient(new UnprocessableHandler()) { BaseAddress = new Uri("http://localhost/") }, new SystemTextJsonSerializer(SpikeJsonContext.Default)).TryGetUserAsync(1)` and expect `HttpErrorKind.Status`. Add a `ProjectReference` to `ZeroAlloc.Rest.SystemTextJson`. Run the full AOT smoke command and record **M4**. Expected: `0`, then `AOT smoke: PASS`.
+Give the spike's `SystemTextJsonSerializer` the Task 3 Step 4 context constructor. In `Program.cs`, before the final PASS line, bind through the interface — the generated client's own `ct` parameter has no default, unlike the interface's — and call it: `IUserApi client = new UserApiClient(new HttpClient(new UnprocessableHandler()) { BaseAddress = new Uri("http://localhost/") }, new SystemTextJsonSerializer(SpikeJsonContext.Default)); await client.TryGetUserAsync(1)`, and expect `HttpErrorKind.Status`. Add a `ProjectReference` to `ZeroAlloc.Rest.SystemTextJson`. Run the full AOT smoke command and record **M4**. Expected: `0`, then `AOT smoke: PASS`.
 
 - [ ] **Step 7: Apply the decision rule**
 
@@ -260,7 +283,7 @@ Applies decision A. If Task 1 ended in "Stop", this task waits.
 - Modify: `src/ZeroAlloc.Rest/IRestSerializer.cs`
 - Modify: `src/ZeroAlloc.Rest/RestSerializerAdapter.cs:26-27,40-41`
 - Modify: `src/ZeroAlloc.Rest.SystemTextJson/SystemTextJsonSerializer.cs`, `ZeroAlloc.Rest.SystemTextJson.csproj`
-- Modify: `src/ZeroAlloc.Rest.MemoryPack/MemoryPackRestSerializer.cs:15-16,24-25`, `ZeroAlloc.Rest.MemoryPack.csproj`
+- Modify: `src/ZeroAlloc.Rest.MemoryPack/MemoryPackRestSerializer.cs:15-16,24-25`
 - Modify: `src/ZeroAlloc.Rest.MessagePack/MessagePackRestSerializer.cs:22-23,30-31`, `ZeroAlloc.Rest.MessagePack.csproj`
 - Modify: `src/ZeroAlloc.Rest.Generator/ClientEmitter.cs:270-279`
 - Modify: `samples/ZeroAlloc.Rest.AotSmoke/SmokeSerializer.cs`
@@ -392,7 +415,7 @@ public interface IRestSerializer
 
 In `RestSerializerAdapter.cs`, `MemoryPackRestSerializer.cs`, `MessagePackRestSerializer.cs` and `samples/ZeroAlloc.Rest.AotSmoke/SmokeSerializer.cs`, delete every `[RequiresDynamicCode(...)]` and `[RequiresUnreferencedCode(...)]` line, then any `using System.Diagnostics.CodeAnalysis;` left unused. Do the same in each test serializer listed under Files.
 
-Add `<IsAotCompatible>true</IsAotCompatible>` to the first `<PropertyGroup>` of `ZeroAlloc.Rest.SystemTextJson.csproj`, `ZeroAlloc.Rest.MemoryPack.csproj` and `ZeroAlloc.Rest.MessagePack.csproj`, so the trim analyzer checks them from now on.
+Add `<IsAotCompatible>true</IsAotCompatible>` to the first `<PropertyGroup>` of `ZeroAlloc.Rest.SystemTextJson.csproj` and `ZeroAlloc.Rest.MessagePack.csproj`, so the trim analyzer checks them from now on. MemoryPack gets `IsAotCompatible` in Task 20, not here; Task 2 only strips its method annotations.
 
 - [ ] **Step 5: Resolve STJ type info through the options**
 
@@ -497,12 +520,101 @@ IRestSerializer and the in-repo serializers carry no RequiresDynamicCode or
 RequiresUnreferencedCode, so generated clients no longer emit UnconditionalSuppressMessage
 to hide them. The reflection-based SystemTextJsonSerializer constructors carry the
 annotations instead, and every method resolves JsonTypeInfo through the options.
-SystemTextJson, MemoryPack and MessagePack now build with IsAotCompatible.
+SystemTextJson and MessagePack now build with IsAotCompatible; MemoryPack follows in Task 20.
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 EOF
 )"
 ```
+
+---
+
+### Task 20: AOT-safe `MemoryPackRestSerializer` through explicit registration
+
+Runs after Task 2 and before Task 3. The maintainer's decision on the Task 1 stop, recorded in the AOT decision record.
+Task 1 measured 2 IL2091 in `ZeroAlloc.Rest.MemoryPack`: every `MemoryPackSerializer.Deserialize<T>` overload in
+MemoryPack 1.21.4 carries `[DynamicallyAccessedMembers(All)]` on `T`, because MemoryPack finds a type's
+`RegisterFormatter` through reflection. Calling MemoryPack's unannotated reader APIs builds clean but fails at run time
+under Native AOT, since nothing registered the formatter. Explicit registration removes the reflection instead of hiding it.
+
+**Files:**
+- Modify: `src/ZeroAlloc.Rest.MemoryPack/MemoryPackRestSerializer.cs`, `ZeroAlloc.Rest.MemoryPack.csproj`
+- Create: `src/ZeroAlloc.Rest.MemoryPack/MemoryPackRestTypes.cs` (the registration builder; the implementer may pick a
+  better name that fits the repo), `src/ZeroAlloc.Rest.MemoryPack/PublicAPI.Shipped.txt` and `PublicAPI.Unshipped.txt`
+  if the project has no tracking yet, following the pattern of the projects that do
+- Create: `samples/ZeroAlloc.Rest.MemoryPack.AotSmoke/*`: a MemoryPack round trip and a missing-registration check
+  under Native AOT, in its own sample and CI job `aot-smoke-memorypack`, because MemoryPack.Core itself reports
+  IL2104 and IL3053 on every AOT publish. The main AOT smoke keeps no MemoryPack reference and 0 IL warnings.
+- Modify: every caller that needs registered types: `tests/ZeroAlloc.Rest.Tests/Serializers/MemoryPackSerializerTests.cs`,
+  `tests/ZeroAlloc.Rest.Integration.Tests/ResultTransportErrorTests.cs`, `tests/ZeroAlloc.Rest.Benchmarks/SerializerBenchmarks.cs`
+- Modify: `docs/serialization.md`, `docs/dependency-injection.md`, `docs/advanced.md`, `docs/benchmarks.md` where they
+  construct or auto-register `MemoryPackRestSerializer`
+
+**Interfaces:**
+- Consumes: Task 2's annotation-free `IRestSerializer`.
+- Produces:
+  - `public MemoryPackRestSerializer(Action<MemoryPackRestTypes> configure)`. The parameterless constructor stays,
+    so api-compat passes; it registers no types, so it serves only MemoryPack's built-in types.
+  - `public sealed class MemoryPackRestTypes` with `public MemoryPackRestTypes Add<T>() where T : IMemoryPackable<T>`,
+    which calls `T.RegisterFormatter()`, MemoryPack's generated static registration, and records `typeof(T)`.
+  - Serialize and deserialize go through MemoryPack's unannotated formatter path, such as
+    `MemoryPackReaderOptionalStatePool.Rent`, `MemoryPackReader` and `ReadValue<T>`, with the same state handling
+    and disposal `MemoryPackSerializer.Deserialize<T>` uses, and the unannotated `MemoryPackSerializer.Serialize<T>`.
+  - A type that is neither registered through `Add<T>()` nor served by a MemoryPack built-in formatter throws
+    `InvalidOperationException` before any MemoryPack call. The message names the type and shows the fix:
+    `new MemoryPackRestSerializer(types => types.Add<TheType>())`. Built-in detection must not itself use reflection
+    that fails under Native AOT; the AOT smoke proves it.
+  - The project sets `IsAotCompatible` to `true` in a new `<PropertyGroup>` and builds with 0 IL warnings.
+
+**DI.** `[Serializer(typeof(MemoryPackRestSerializer))]` makes the generated client call
+`TryAddSingleton<MemoryPackRestSerializer>()`. That activates the parameterless constructor, which serves only built-in
+types, so the caller registers a configured instance first:
+`services.AddSingleton(new MemoryPackRestSerializer(types => types.Add<User>()));`, and `TryAddSingleton` then leaves
+it in place. A caller who forgets gets the registration error at the first call with a `[MemoryPackable]` type.
+Document it in `docs/dependency-injection.md` and `docs/serialization.md`. Add an integration test in which a
+generated client with a MemoryPack method resolves through DI with a pre-registered instance and round-trips a value,
+and one in which the auto-registered instance throws the registration error.
+
+- [ ] **Step 1: Failing tests.** In `MemoryPackSerializerTests`: round trip of a registered `[MemoryPackable]` type;
+  `DeserializeAsync` and `SerializeAsync` of an unregistered `[MemoryPackable]` type throw `InvalidOperationException`
+  whose message contains the type name and `types.Add<`; a built-in type such as `int` or `string` round-trips without
+  registration; `Add<T>()` returns the same builder so calls chain. Watch them fail to compile against the old constructor.
+- [ ] **Step 2: Implement** the builder and the serializer. No `!`, no suppressions of any kind.
+- [ ] **Step 3: PublicAPI.** List every new public member in `PublicAPI.Unshipped.txt`; the parameterless constructor
+  stays in `PublicAPI.Shipped.txt`.
+- [ ] **Step 4: Native AOT runtime proof.** In the new `samples/ZeroAlloc.Rest.MemoryPack.AotSmoke`, reference
+  `ZeroAlloc.Rest.MemoryPack`. Declare a
+  `[MemoryPackable]` partial record, register it, round-trip it through `IRestSerializer.SerializeAsync` and
+  `DeserializeAsync`, and compare field by field. Then call `DeserializeAsync` for a second, unregistered `[MemoryPackable]`
+  type and require the `InvalidOperationException` with the type's name. Any mismatch exits non-zero before the PASS line.
+  Publish it with `-p:TrimmerSingleWarn=false`: every IL warning line must come from MemoryPack.Core, and the binary
+  prints its PASS line. The main AOT smoke command from the Global Constraints still prints `0` and `AOT smoke: PASS`.
+  On win-x64, ILC needs the directory of `vswhere.exe` on `PATH`, usually
+  `C:\Program Files (x86)\Microsoft Visual Studio\Installer`.
+- [ ] **Step 5: Callers and docs.** Update every caller that serializes a `[MemoryPackable]` type and every doc that
+  says no registration is needed for MemoryPack.
+- [ ] **Step 6: Full suite**, then commit:
+
+```bash
+git commit -m "$(cat <<'MSG'
+feat: make MemoryPackRestSerializer AOT-safe through explicit type registration
+
+MemoryPack finds a type's formatter through reflection unless it is registered. The serializer now
+takes the types it serves up front, registers each through its generated static RegisterFormatter,
+and reads through MemoryPack's unannotated formatter path. An unregistered type throws
+InvalidOperationException naming the type. The parameterless constructor now serves only
+MemoryPack's built-in types. The Native AOT proof lives in its own sample and CI job, because
+MemoryPack.Core itself reports IL2104 and IL3053.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+MSG
+)"
+```
+
+Task 14's `BREAKING CHANGE` footer and Task 16's migration guide both gain an item:
+`MemoryPackRestSerializer` serves only registered types plus MemoryPack built-ins,
+`new MemoryPackRestSerializer(types => types.Add<User>())`, and a client using the Serializer
+attribute for it registers that configured instance in DI before `Add{Interface}`.
 
 ---
 
@@ -5304,6 +5416,9 @@ BREAKING CHANGE: regenerating a client changes its shape, and the runtime change
   RequiresUnreferencedCode, and generated clients no longer carry UnconditionalSuppressMessage.
   A custom serializer must drop those attributes. The parameterless and options
   SystemTextJsonSerializer constructors now carry them; pass a JsonSerializerContext instead.
+- MemoryPackRestSerializer serves only registered types plus MemoryPack built-ins: pass a delegate
+  that registers every MemoryPackable type it serializes, such as types.Add<User>. A client using
+  the Serializer attribute for it registers that configured instance in DI before Add{Interface}.
 - Route, query and header values are written invariantly: ISO 8601 dates and times, true and
   false, and enum wire names. A null header value sends no header.
 - docs/migrating-to-v3.md walks through each change.
@@ -5845,6 +5960,22 @@ otherwise. If your serializer needs reflection, put the attributes on its constr
 `new SystemTextJsonSerializer()` and `new SystemTextJsonSerializer(options)` now carry
 `[RequiresUnreferencedCode]` and `[RequiresDynamicCode]`, so a trimmed or AOT build warns where they
 are called. Use `new SystemTextJsonSerializer(context)` or `new SystemTextJsonSerializer(resolver, options)`.
+
+## MemoryPackRestSerializer needs its types registered
+
+`MemoryPackRestSerializer` serves only the types registered with it plus MemoryPack's built-in
+types; `new MemoryPackRestSerializer()` serves only the built-ins. Pass a delegate that registers
+every `[MemoryPackable]` type you serialize with it, through `T.RegisterFormatter()`, MemoryPack's
+own generated method:
+
+```csharp
+services.AddSingleton(new MemoryPackRestSerializer(types => types.Add<User>()));
+```
+
+A type you never registered, and that MemoryPack has no built-in formatter for, throws
+`InvalidOperationException` naming the type. A client using
+`[Serializer(typeof(MemoryPackRestSerializer))]` registers the configured instance in DI before
+`Add{Interface}` runs.
 
 ## Route, query and header values are written invariantly
 

@@ -1,0 +1,1098 @@
+using Xunit;
+
+namespace ZeroAlloc.Rest.Tools.Tests;
+
+// Spec §3, §6 and §10: one file per spec, typed members, Result returns, and a client that compiles
+// with no diagnostics and round-trips through its generated context.
+public class OpenApiClientGenerationTests
+{
+    private const string A = "global::ZeroAlloc.Rest.Attributes.";
+    private const string Ct = "global::System.Threading.CancellationToken ct = default";
+    private const string Task = "global::System.Threading.Tasks.Task";
+    private const string HttpError = "global::ZeroAlloc.Rest.HttpError";
+
+    internal const string PetsSpec = """
+        openapi: 3.0.0
+        info:
+          title: Pets
+          version: "1"
+        paths:
+          /pets:
+            get:
+              operationId: listPets
+              parameters:
+                - name: status
+                  in: query
+                  schema:
+                    type: string
+                    enum: [available, sold]
+                - name: limit
+                  in: query
+                  required: true
+                  schema:
+                    type: integer
+                    format: int32
+                - name: X-Trace
+                  in: header
+                  schema:
+                    type: string
+                    format: uuid
+              responses:
+                '200':
+                  description: OK
+                  content:
+                    application/json:
+                      schema:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Pet'
+            post:
+              operationId: addPet
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      $ref: '#/components/schemas/Pet'
+              responses:
+                '201':
+                  description: Created
+                  content:
+                    application/json:
+                      schema:
+                        $ref: '#/components/schemas/Pet'
+          /pets/{petId}:
+            parameters:
+              - name: petId
+                in: path
+                required: true
+                schema:
+                  type: integer
+                  format: int64
+            get:
+              operationId: getPet
+              responses:
+                '200':
+                  description: OK
+                  content:
+                    application/json:
+                      schema:
+                        $ref: '#/components/schemas/Pet'
+            delete:
+              operationId: deletePet
+              responses:
+                '204':
+                  description: Deleted
+          /pets/{petId}/photo:
+            parameters:
+              - name: petId
+                in: path
+                required: true
+                schema:
+                  type: integer
+                  format: int64
+            get:
+              operationId: getPhoto
+              responses:
+                '200':
+                  description: The photo
+                  content:
+                    image/png:
+                      schema:
+                        type: string
+                        format: binary
+            put:
+              operationId: putPhoto
+              requestBody:
+                content:
+                  application/octet-stream:
+                    schema:
+                      type: string
+                      format: binary
+              responses:
+                '204':
+                  description: Stored
+          /stats:
+            get:
+              operationId: getStats
+              responses:
+                '200':
+                  description: OK
+                  content:
+                    application/json:
+                      schema:
+                        type: object
+                        properties:
+                          count:
+                            type: integer
+        components:
+          schemas:
+            Pet:
+              type: object
+              required: [id, name]
+              properties:
+                id:
+                  type: integer
+                  format: int64
+                name:
+                  type: string
+                status:
+                  type: string
+                  enum: [available, sold]
+        """;
+
+    private static (string Code, List<OpenApiWarning> Warnings) Generate(bool models = true)
+    {
+        var warnings = new List<OpenApiWarning>();
+        var code = OpenApiInterfaceGenerator.Generate(PetsSpec, "MyApp", "IPetsApi", warnings, new GenerationOptions(models));
+        return (code, warnings);
+    }
+
+    [Fact]
+    public void File_HoldsTheInterfaceThenTheModelsThenTheContext()
+    {
+        var code = Generate().Code;
+
+        Assert.StartsWith("// <auto-generated/>", code, StringComparison.Ordinal);
+        Assert.Contains("#nullable enable", code);
+        var iface = code.IndexOf("public interface IPetsApi", StringComparison.Ordinal);
+        var model = code.IndexOf("public sealed record Pet", StringComparison.Ordinal);
+        var context = code.IndexOf("public partial class PetsApiJsonContext", StringComparison.Ordinal);
+        Assert.True(iface >= 0 && iface < model && model < context, code);
+        Assert.DoesNotContain("using ", code);
+    }
+
+    [Fact]
+    public void Methods_AreTyped_AndReturnResults()
+    {
+        var code = Generate().Code;
+
+        Assert.Contains(
+            $"{Task}<global::ZeroAlloc.Results.Result<global::System.Collections.Generic.List<Pet>, {HttpError}>> ListPetsAsync("
+                + $"[{A}Query] ListPetsStatus? status, [{A}Query] int limit, [{A}Header(\"X-Trace\")] global::System.Guid? xTrace, {Ct});",
+            code);
+        Assert.Contains($"{Task}<global::ZeroAlloc.Results.Result<Pet, {HttpError}>> AddPetAsync([{A}Body] Pet body, {Ct});", code);
+        Assert.Contains($"{Task}<global::ZeroAlloc.Results.Result<Pet, {HttpError}>> GetPetAsync(long petId, {Ct});", code);
+        Assert.Contains($"{Task}<global::ZeroAlloc.Results.UnitResult<{HttpError}>> DeletePetAsync(long petId, {Ct});", code);
+        Assert.Contains($"{Task}<global::ZeroAlloc.Results.Result<GetStatsResponse, {HttpError}>> GetStatsAsync({Ct});", code);
+        Assert.Contains($"[{A}Get(\"/pets/{{petId}}\")]", code);
+    }
+
+    [Fact]
+    public void NonJsonContent_KeepsAnUntypedBody_AndReportsAnUntypedResponse()
+    {
+        var (code, warnings) = Generate();
+
+        Assert.Contains($"{Task}<global::ZeroAlloc.Results.Result<global::System.Text.Json.JsonElement, {HttpError}>> GetPhotoAsync(long petId, {Ct});", code);
+        Assert.Contains($"{Task}<global::ZeroAlloc.Results.UnitResult<{HttpError}>> PutPhotoAsync(long petId, [{A}Body] object body, {Ct});", code);
+        var warning = Assert.Single(warnings);
+        Assert.Equal("ZRT002", warning.Code);
+        Assert.Equal(
+            "Schema 'getPhoto: response 200' is mapped to JsonElement, because its content 'image/png' is not JSON, which the generated client cannot read yet.",
+            warning.Message);
+    }
+
+    [Fact]
+    public void Context_RegistersEveryRequestAndResponseType()
+    {
+        var code = Generate().Code;
+
+        Assert.Contains("[global::System.Text.Json.Serialization.JsonSerializable(typeof(global::System.Collections.Generic.List<Pet>))]", code);
+        Assert.Contains("[global::System.Text.Json.Serialization.JsonSerializable(typeof(GetStatsResponse))]", code);
+        Assert.Contains("[global::System.Text.Json.Serialization.JsonSerializable(typeof(global::System.Text.Json.JsonElement))]", code);
+    }
+
+    [Fact]
+    public void GeneratedClient_CompilesWithNoDiagnostics()
+        => GeneratedCode.Compile(Generate().Code).AssertClean();
+
+    [Fact]
+    public void GeneratedClient_RoundTrips_AndReturnsDeserializationFailuresAsResults()
+    {
+        var output = GeneratedCode.Compile(Generate().Code, """
+            using System;
+            using System.Net;
+            using System.Net.Http;
+            using System.Text;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using ZeroAlloc.Rest.SystemTextJson;
+
+            public sealed class Stub : HttpMessageHandler
+            {
+                private readonly string _json;
+
+                public Stub(string json) => _json = json;
+
+                public string? LastBody { get; private set; }
+
+                public string? LastUri { get; private set; }
+
+                protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+                {
+                    LastUri = request.RequestUri?.PathAndQuery;
+                    LastBody = request.Content is null ? null : await request.Content.ReadAsStringAsync(cancellationToken);
+                    return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(_json, Encoding.UTF8, "application/json") };
+                }
+            }
+
+            public static class Probe
+            {
+                public static string Run() => RunAsync().GetAwaiter().GetResult();
+
+                private static MyApp.IPetsApi Client(Stub stub)
+                    => new MyApp.PetsApiClient(
+                        new HttpClient(stub) { BaseAddress = new Uri("http://stub/") },
+                        new SystemTextJsonSerializer(MyApp.PetsApiJsonContext.Default));
+
+                private static async Task<string> RunAsync()
+                {
+                    var good = new Stub("{\"id\":1,\"name\":\"Rex\",\"status\":\"sold\"}");
+                    var api = Client(good);
+                    var pet = await api.GetPetAsync(1);
+                    await api.AddPetAsync(new MyApp.Pet { Id = 2, Name = "Tom" });
+                    var body = good.LastBody;
+                    var deleted = await api.DeletePetAsync(1);
+                    await api.ListPetsAsync(MyApp.ListPetsStatus.Available, 10, null);
+                    var uri = good.LastUri;
+
+                    var unknown = await Client(new Stub("{\"id\":1,\"name\":\"Rex\",\"status\":\"lost\"}")).GetPetAsync(1);
+
+                    return (pet.IsSuccess ? pet.Value.Name + ":" + pet.Value.Status : "failed")
+                        + "|" + body + "|" + deleted.IsSuccess + "|" + uri + "|" + (unknown.IsFailure ? unknown.Error.Kind.ToString() : "read");
+                }
+            }
+            """);
+
+        Assert.Equal(
+            "Rex:Sold|{\"id\":2,\"name\":\"Tom\"}|True|/pets?status=available&limit=10|Deserialization",
+            output.RunProbe());
+    }
+
+    [Fact]
+    public void ModelsOff_UsesBareNames_AndCompilesAgainstHandWrittenDtos()
+    {
+        var (code, warnings) = Generate(models: false);
+
+        Assert.DoesNotContain("public sealed record", code);
+        Assert.Contains($"{Task}<global::ZeroAlloc.Results.Result<Pet, {HttpError}>> GetPetAsync(long petId, {Ct});", code);
+        Assert.Contains("[global::ZeroAlloc.Rest.Attributes.Query] global::System.Text.Json.JsonElement? status", code);
+        Assert.Equal(3, warnings.Count(w => string.Equals(w.Code, "ZRT002", StringComparison.Ordinal)));
+        GeneratedCode.Compile(code, """
+            namespace MyApp;
+
+            public sealed record Pet
+            {
+                public required long Id { get; init; }
+
+                public required string Name { get; init; }
+            }
+            """).AssertClean();
+    }
+
+    [Fact]
+    public void SpecWithNoBodies_EmitsNoContext()
+    {
+        const string Spec = """
+            openapi: 3.0.0
+            info:
+              title: Status
+              version: "1"
+            paths:
+              /status:
+                get:
+                  operationId: getStatus
+                  responses:
+                    '204':
+                      description: OK
+            """;
+
+        var code = OpenApiInterfaceGenerator.Generate(Spec, "MyApp", "IStatusApi");
+
+        Assert.DoesNotContain("JsonSerializerContext", code);
+        GeneratedCode.Compile(code).AssertClean();
+    }
+
+    // Spec §6: the success type comes from the first 2xx response with a schema. A 2xx response
+    // whose content has no schema is skipped, and is not reported as non-JSON content. Its body
+    // is not typed, so the success type of an operation that also has one is T?.
+    [Fact]
+    public void SuccessResponseWithoutASchema_IsSkipped()
+    {
+        const string Spec = """
+            openapi: 3.0.0
+            info:
+              title: Ping
+              version: "1"
+            paths:
+              /ping:
+                post:
+                  operationId: ping
+                  responses:
+                    '200':
+                      description: OK
+                      content:
+                        application/json: {}
+              /echo:
+                post:
+                  operationId: echo
+                  responses:
+                    '200':
+                      description: OK
+                      content:
+                        application/json: {}
+                    '201':
+                      description: Created
+                      content:
+                        application/json:
+                          schema:
+                            type: string
+            """;
+        var warnings = new List<OpenApiWarning>();
+
+        var code = OpenApiInterfaceGenerator.Generate(Spec, "MyApp", "IPingApi", warnings, GenerationOptions.Default);
+
+        Assert.Contains($"{Task}<global::ZeroAlloc.Results.UnitResult<{HttpError}>> PingAsync({Ct});", code);
+        Assert.Contains($"{Task}<global::ZeroAlloc.Results.Result<string?, {HttpError}>> EchoAsync({Ct});", code);
+        Assert.Empty(warnings);
+        GeneratedCode.Compile(code).AssertClean();
+    }
+
+    [Fact]
+    public void Context_RegistersAListResponse_WhichRoundTrips()
+    {
+        var output = GeneratedCode.Compile(Generate().Code, """
+            using System;
+            using System.Net;
+            using System.Net.Http;
+            using System.Text;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using ZeroAlloc.Rest.SystemTextJson;
+
+            public sealed class Stub : HttpMessageHandler
+            {
+                protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+                    => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = new StringContent("[{\"id\":1,\"name\":\"Rex\"},{\"id\":2,\"name\":\"Tom\",\"status\":\"available\"}]", Encoding.UTF8, "application/json"),
+                    });
+            }
+
+            public static class Probe
+            {
+                public static string Run()
+                {
+                    MyApp.IPetsApi api = new MyApp.PetsApiClient(
+                        new HttpClient(new Stub()) { BaseAddress = new Uri("http://stub/") },
+                        new SystemTextJsonSerializer(MyApp.PetsApiJsonContext.Default));
+                    var pets = api.ListPetsAsync(null, 10, null).GetAwaiter().GetResult();
+                    return pets.IsSuccess ? pets.Value.Count + ":" + pets.Value[1].Name + ":" + pets.Value[1].Status : "failed";
+                }
+            }
+            """);
+
+        Assert.Equal("2:Tom:Available", output.RunProbe());
+    }
+
+    // Without an operationId the method is named from the verb and the path, and so are the inline
+    // response model and the inline enum of a parameter.
+    [Fact]
+    public void OperationWithoutAnId_IsNamedFromItsVerbAndPath()
+    {
+        const string Spec = """
+            openapi: 3.0.0
+            info:
+              title: Anon
+              version: "1"
+            paths:
+              /pets/{petId}/toys:
+                get:
+                  parameters:
+                    - name: petId
+                      in: path
+                      required: true
+                      schema:
+                        type: integer
+                    - name: kind
+                      in: query
+                      schema:
+                        type: string
+                        enum: [ball, rope]
+                  responses:
+                    '200':
+                      description: OK
+                      content:
+                        application/json:
+                          schema:
+                            type: object
+                            properties:
+                              name:
+                                type: string
+            """;
+
+        var code = OpenApiInterfaceGenerator.Generate(Spec, "MyApp", "IAnonApi");
+
+        Assert.Contains(
+            $"{Task}<global::ZeroAlloc.Results.Result<GetPetsPetIdToysResponse, {HttpError}>> GetPetsPetIdToysAsync("
+                + $"int petId, [{A}Query] GetPetsPetIdToysKind? kind, {Ct});",
+            code);
+        Assert.Contains("public sealed record GetPetsPetIdToysResponse", code);
+        Assert.Contains("public enum GetPetsPetIdToysKind", code);
+        GeneratedCode.Compile(code).AssertClean();
+    }
+
+    // Design decision 5: JSON is application/json and text/json, with parameters or not, any +json
+    // type and */*. Anything else is not typed.
+    [Theory]
+    [InlineData("application/json", "string")]
+    [InlineData("application/json; charset=utf-8", "string")]
+    [InlineData("application/problem+json", "string")]
+    [InlineData("text/json", "string")]
+    [InlineData("*/*", "string")]
+    [InlineData("text/plain", "global::System.Text.Json.JsonElement")]
+    public void ResponseMediaType_IsTypedOnlyWhenJson(string mediaType, string expected)
+    {
+        var spec = $$"""
+            openapi: 3.0.0
+            info:
+              title: Media
+              version: "1"
+            paths:
+              /name:
+                get:
+                  operationId: getName
+                  responses:
+                    '200':
+                      description: OK
+                      content:
+                        '{{mediaType}}':
+                          schema:
+                            type: string
+            """;
+
+        var code = OpenApiInterfaceGenerator.Generate(spec, "MyApp", "IMediaApi");
+
+        Assert.Contains($"{Task}<global::ZeroAlloc.Results.Result<{expected}, {HttpError}>> GetNameAsync({Ct});", code);
+    }
+
+    private const string PaintSpec = """
+        openapi: 3.0.0
+        info:
+          title: Paint
+          version: "1"
+        paths:
+          /color:
+            put:
+              operationId: setColor
+              requestBody:
+                content:
+                  application/json:
+                    schema:
+                      $ref: '#/components/schemas/Color'
+              responses:
+                '204':
+                  description: Stored
+          /count:
+            put:
+              operationId: setCount
+              requestBody:
+                content:
+                  application/json:
+                    schema:
+                      type: integer
+              responses:
+                '204':
+                  description: Stored
+        components:
+          schemas:
+            Color:
+              type: string
+              enum: [red, green]
+        """;
+
+    private const string PaintProbe = """
+        using System;
+        using System.Collections.Generic;
+        using System.Net;
+        using System.Net.Http;
+        using System.Threading;
+        using System.Threading.Tasks;
+        using ZeroAlloc.Rest.SystemTextJson;
+
+        public sealed class Stub : HttpMessageHandler
+        {
+            public List<string> Bodies { get; } = new();
+
+            protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                Bodies.Add(request.Content is null ? "<none>" : await request.Content.ReadAsStringAsync(cancellationToken));
+                return new HttpResponseMessage(HttpStatusCode.NoContent);
+            }
+        }
+
+        public static class Probe
+        {
+            public static string Run()
+            {
+                var stub = new Stub();
+                MyApp.IPaintApi api = new MyApp.PaintApiClient(
+                    new HttpClient(stub) { BaseAddress = new Uri("http://stub/") },
+                    new SystemTextJsonSerializer(MyApp.PaintApiJsonContext.Default));
+                var ok = api.SetColorAsync(MyApp.Color.Green).GetAwaiter().GetResult().IsSuccess
+                    & api.SetColorAsync(null).GetAwaiter().GetResult().IsSuccess
+                    & api.SetCountAsync(3).GetAwaiter().GetResult().IsSuccess
+                    & api.SetCountAsync(null).GetAwaiter().GetResult().IsSuccess;
+                return ok + "|" + string.Join("|", stub.Bodies);
+            }
+        }
+        """;
+
+    // An optional request body is T?. For a value type, T? is Nullable<T>, a type of its own that
+    // the context must register, or the serializer throws on every call.
+    [Fact]
+    public void OptionalValueTypeBodies_AreRegistered_AndRoundTrip()
+    {
+        var code = OpenApiInterfaceGenerator.Generate(PaintSpec, "MyApp", "IPaintApi");
+
+        Assert.Contains($"SetColorAsync([{A}Body] Color? body, {Ct});", code);
+        Assert.Contains($"SetCountAsync([{A}Body] int? body, {Ct});", code);
+        Assert.Contains("[global::System.Text.Json.Serialization.JsonSerializable(typeof(Color?))]", code);
+        Assert.Contains("[global::System.Text.Json.Serialization.JsonSerializable(typeof(int?))]", code);
+        var output = GeneratedCode.Compile(code, PaintProbe);
+
+        Assert.Equal("True|\"green\"|null|3|null", output.RunProbe());
+    }
+
+    private const string MaybeSpec = """
+        openapi: 3.0.0
+        info:
+          title: Maybe
+          version: "1"
+        paths:
+          /pet:
+            get:
+              operationId: findPet
+              responses:
+                '200':
+                  description: Found
+                  content:
+                    application/json:
+                      schema:
+                        $ref: '#/components/schemas/Pet'
+                '204':
+                  description: None
+          /count:
+            get:
+              operationId: findCount
+              responses:
+                '200':
+                  description: Found
+                  content:
+                    application/json:
+                      schema:
+                        type: integer
+                '204':
+                  description: None
+          /tag:
+            get:
+              operationId: findTag
+              responses:
+                '200':
+                  description: Found
+                  content:
+                    application/json:
+                      schema:
+                        type: string
+                        nullable: true
+          /pets:
+            get:
+              operationId: getPet
+              responses:
+                '200':
+                  description: Found
+                  content:
+                    application/json:
+                      schema:
+                        $ref: '#/components/schemas/Pet'
+        components:
+          schemas:
+            Pet:
+              type: object
+              properties:
+                name:
+                  type: string
+        """;
+
+    private const string MaybeProbe = """
+        using System;
+        using System.Net;
+        using System.Net.Http;
+        using System.Text;
+        using System.Threading;
+        using System.Threading.Tasks;
+        using ZeroAlloc.Rest.SystemTextJson;
+
+        public sealed class Stub : HttpMessageHandler
+        {
+            public bool Empty { get; set; }
+
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                if (Empty)
+                    return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NoContent));
+                var json = request.RequestUri?.AbsolutePath switch
+                {
+                    "/count" => "7",
+                    "/tag" => "\"t\"",
+                    _ => "{\"name\":\"Rex\"}",
+                };
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") });
+            }
+        }
+
+        public static class Probe
+        {
+            public static string Run()
+            {
+                var stub = new Stub();
+                MyApp.IMaybeApi api = new MyApp.MaybeApiClient(
+                    new HttpClient(stub) { BaseAddress = new Uri("http://stub/") },
+                    new SystemTextJsonSerializer(MyApp.MaybeApiJsonContext.Default));
+                var full = string.Join(",", api.FindPetAsync().GetAwaiter().GetResult().Value?.Name,
+                    api.FindCountAsync().GetAwaiter().GetResult().Value, api.FindTagAsync().GetAwaiter().GetResult().Value);
+                stub.Empty = true;
+                var pet = api.FindPetAsync().GetAwaiter().GetResult();
+                var count = api.FindCountAsync().GetAwaiter().GetResult();
+                var tag = api.FindTagAsync().GetAwaiter().GetResult();
+                var required = api.GetPetAsync().GetAwaiter().GetResult();
+                return full + "|" + (pet.IsSuccess && pet.Value is null) + "," + (count.IsSuccess && count.Value is null) + ","
+                    + (tag.IsSuccess && tag.Value is null) + "|" + (required.IsFailure ? required.Error.Kind.ToString() : "success");
+            }
+        }
+        """;
+
+    // An operation that answers with a body or with none, 200 and 204, or whose response schema is
+    // nullable, declares T?: an empty body is a success with no value, not a failure.
+    [Fact]
+    public void EmptyOrNullableSuccess_DeclaresNullableT_AndReadsAnEmptyBodyAsNull()
+    {
+        var code = OpenApiInterfaceGenerator.Generate(MaybeSpec, "MyApp", "IMaybeApi");
+
+        Assert.Contains($"{Task}<global::ZeroAlloc.Results.Result<Pet?, {HttpError}>> FindPetAsync({Ct});", code);
+        Assert.Contains($"{Task}<global::ZeroAlloc.Results.Result<int?, {HttpError}>> FindCountAsync({Ct});", code);
+        Assert.Contains($"{Task}<global::ZeroAlloc.Results.Result<string?, {HttpError}>> FindTagAsync({Ct});", code);
+        Assert.Contains($"{Task}<global::ZeroAlloc.Results.Result<Pet, {HttpError}>> GetPetAsync({Ct});", code);
+        Assert.Contains("[global::System.Text.Json.Serialization.JsonSerializable(typeof(int?))]", code);
+        var output = GeneratedCode.Compile(code, MaybeProbe);
+
+        Assert.Equal("Rex,7,t|True,True,True|Deserialization", output.RunProbe());
+    }
+
+    private const string TasksSpec = """
+        openapi: 3.0.0
+        info:
+          title: Tasks
+          version: "1"
+        paths:
+          /tasks/{id}:
+            get:
+              operationId: getTask
+              parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: at
+                  in: query
+                  schema:
+                    type: string
+                    format: date-time
+              responses:
+                '200':
+                  description: OK
+                  content:
+                    application/json:
+                      schema:
+                        $ref: '#/components/schemas/Task'
+            put:
+              operationId: putLink
+              parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      $ref: '#/components/schemas/Uri'
+              responses:
+                '204':
+                  description: Stored
+        components:
+          schemas:
+            Task:
+              type: object
+              required: [id]
+              properties:
+                id:
+                  type: string
+                link:
+                  type: string
+                  format: uri
+            Uri:
+              type: object
+              properties:
+                href:
+                  type: string
+        """;
+
+    // Design decision 10: every type the file uses is global::-qualified, so a schema named after a
+    // framework type shadows nothing.
+    [Fact]
+    public void SchemasNamedLikeFrameworkTypes_ShadowNothing()
+    {
+        var code = OpenApiInterfaceGenerator.Generate(TasksSpec, "MyApp", "ITasksApi");
+
+        Assert.Contains("public sealed record Task", code);
+        Assert.Contains("public sealed record Uri", code);
+        // The STJ generator names a context property after the type's simple name, so the model and
+        // System.Uri, which Task.Link reaches, would both be Uri: SYSLIB1031.
+        Assert.Contains(
+            "[global::System.Text.Json.Serialization.JsonSerializable(typeof(Uri), TypeInfoPropertyName = \"UriModel\")]",
+            code);
+        var output = GeneratedCode.Compile(code, """
+            using System.Net;
+            using System.Net.Http;
+            using System.Text;
+            using System.Threading;
+            using ZeroAlloc.Rest.SystemTextJson;
+
+            public sealed class Stub : HttpMessageHandler
+            {
+                public string? LastUri { get; private set; }
+
+                protected override System.Threading.Tasks.Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+                {
+                    LastUri = request.RequestUri?.PathAndQuery;
+                    return System.Threading.Tasks.Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = new StringContent("{\"id\":\"a b\",\"link\":\"http://x/y\"}", Encoding.UTF8, "application/json"),
+                    });
+                }
+            }
+
+            public static class Probe
+            {
+                public static string Run()
+                {
+                    var stub = new Stub();
+                    MyApp.ITasksApi api = new MyApp.TasksApiClient(
+                        new HttpClient(stub) { BaseAddress = new System.Uri("http://stub/") },
+                        new SystemTextJsonSerializer(MyApp.TasksApiJsonContext.Default));
+                    var task = api.GetTaskAsync("a b", null).GetAwaiter().GetResult();
+                    return (task.IsSuccess ? task.Value.Id + "|" + task.Value.Link : "failed") + "|" + stub.LastUri;
+                }
+            }
+            """);
+
+        Assert.Equal("a b|http://x/y|/tasks/a%20b", output.RunProbe());
+    }
+
+    // Schemas named like members of JsonSerializerContext, and schemas named like the context
+    // property the STJ generator derives for a composite type the file reaches: ListPet for
+    // List<Pet>, DictionaryStringPet for Dictionary<string, Pet>, NullableGuid for Guid?,
+    // ByteArray for byte[], ListListPet for List<List<Pet>> and NullableInt32 for int?, and one
+    // named like a method the generator gives a model, PetSerializeHandler.
+    private const string ClashesSpec = """
+        openapi: 3.0.0
+        info:
+          title: Clashes
+          version: "1"
+        paths:
+          /pets:
+            get:
+              operationId: listPets
+              responses:
+                '200':
+                  description: OK
+                  content:
+                    application/json:
+                      schema:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Pet'
+            put:
+              operationId: replacePets
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      $ref: '#/components/schemas/ListPet'
+              responses:
+                '200':
+                  description: OK
+                  content:
+                    application/json:
+                      schema:
+                        $ref: '#/components/schemas/Default'
+          /settings:
+            get:
+              operationId: getSettings
+              responses:
+                '200':
+                  description: OK
+                  content:
+                    application/json:
+                      schema:
+                        $ref: '#/components/schemas/Options'
+        components:
+          schemas:
+            Pet:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                ownerId:
+                  type: string
+                  format: uuid
+            ListPet:
+              type: object
+              required: [pets]
+              properties:
+                pets:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Pet'
+                byName:
+                  type: object
+                  additionalProperties:
+                    $ref: '#/components/schemas/Pet'
+            Default:
+              type: object
+              properties:
+                count:
+                  type: integer
+            Options:
+              type: object
+              properties:
+                owner:
+                  $ref: '#/components/schemas/NullableGuid'
+                index:
+                  $ref: '#/components/schemas/DictionaryStringPet'
+                typeInfo:
+                  $ref: '#/components/schemas/GetTypeInfo'
+                generated:
+                  $ref: '#/components/schemas/GeneratedSerializerOptions'
+                photo:
+                  type: string
+                  format: byte
+                grid:
+                  type: array
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Pet'
+                rank:
+                  type: integer
+                byteArray:
+                  $ref: '#/components/schemas/ByteArray'
+                listListPet:
+                  $ref: '#/components/schemas/ListListPet'
+                nullableInt32:
+                  $ref: '#/components/schemas/NullableInt32'
+                petSerializeHandler:
+                  $ref: '#/components/schemas/PetSerializeHandler'
+            ByteArray:
+              type: object
+              properties:
+                name:
+                  type: string
+            ListListPet:
+              type: object
+              properties:
+                name:
+                  type: string
+            NullableInt32:
+              type: object
+              properties:
+                name:
+                  type: string
+            PetSerializeHandler:
+              type: object
+              properties:
+                name:
+                  type: string
+            NullableGuid:
+              type: object
+              properties:
+                value:
+                  type: string
+                  format: uuid
+            DictionaryStringPet:
+              type: object
+              properties:
+                size:
+                  type: integer
+            GetTypeInfo:
+              type: object
+              properties:
+                name:
+                  type: string
+            GeneratedSerializerOptions:
+              type: object
+              properties:
+                name:
+                  type: string
+        """;
+
+    [Fact]
+    public void SchemasNamedLikeContextProperties_CompileClean_AndRoundTrip()
+    {
+        var warnings = new List<OpenApiWarning>();
+        var code = OpenApiInterfaceGenerator.Generate(ClashesSpec, "MyApp", "IClashesApi", warnings, GenerationOptions.Default);
+
+        Assert.Empty(warnings);
+        foreach (var model in new[] { "Pet", "ListPet", "Default", "Options", "NullableGuid", "DictionaryStringPet", "GetTypeInfo", "GeneratedSerializerOptions", "ByteArray", "ListListPet", "NullableInt32", "PetSerializeHandler" })
+            Assert.Contains("public sealed record " + model + "\n", code.ReplaceLineEndings("\n"), StringComparison.Ordinal);
+        var output = GeneratedCode.Compile(code, """
+            using System;
+            using System.Collections.Generic;
+            using System.Net;
+            using System.Net.Http;
+            using System.Text;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using ZeroAlloc.Rest.SystemTextJson;
+
+            public sealed class Stub : HttpMessageHandler
+            {
+                public string? LastBody { get; private set; }
+
+                protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+                {
+                    if (request.Content is not null)
+                        LastBody = await request.Content.ReadAsStringAsync(cancellationToken);
+                    var json = request.RequestUri?.AbsolutePath switch
+                    {
+                        "/settings" => "{\"owner\":{\"value\":\"6f9619ff-8b86-d011-b42d-00c04fc964ff\"},\"index\":{\"size\":3},\"typeInfo\":{\"name\":\"t\"},\"generated\":{\"name\":\"g\"}}",
+                        _ when request.Method == HttpMethod.Put => "{\"count\":2}",
+                        _ => "[{\"name\":\"Rex\",\"ownerId\":\"6f9619ff-8b86-d011-b42d-00c04fc964ff\"},{\"name\":\"Tom\"}]",
+                    };
+                    return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
+                }
+            }
+
+            public static class Probe
+            {
+                public static string Run()
+                {
+                    var stub = new Stub();
+                    MyApp.IClashesApi api = new MyApp.ClashesApiClient(
+                        new HttpClient(stub) { BaseAddress = new Uri("http://stub/") },
+                        new SystemTextJsonSerializer(MyApp.ClashesApiJsonContext.Default));
+                    var pets = api.ListPetsAsync().GetAwaiter().GetResult().Value;
+                    var body = new MyApp.ListPet { Pets = pets, ByName = new Dictionary<string, MyApp.Pet> { ["rex"] = pets[0] } };
+                    var count = api.ReplacePetsAsync(body).GetAwaiter().GetResult().Value.Count;
+                    var settings = api.GetSettingsAsync().GetAwaiter().GetResult().Value;
+                    return string.Join("|", pets.Count, pets[0].OwnerId, pets[1].OwnerId is null, count, stub.LastBody,
+                        settings.Owner?.Value, settings.Index?.Size, settings.TypeInfo?.Name, settings.Generated?.Name);
+                }
+            }
+            """);
+
+        Assert.Equal(
+            "2|6f9619ff-8b86-d011-b42d-00c04fc964ff|True|2|"
+                + "{\"pets\":[{\"name\":\"Rex\",\"ownerId\":\"6f9619ff-8b86-d011-b42d-00c04fc964ff\"},{\"name\":\"Tom\"}],"
+                + "\"byName\":{\"rex\":{\"name\":\"Rex\",\"ownerId\":\"6f9619ff-8b86-d011-b42d-00c04fc964ff\"}}}"
+                + "|6f9619ff-8b86-d011-b42d-00c04fc964ff|3|t|g",
+            output.RunProbe());
+    }
+
+    // The reader's default rules reject a discriminator whose property no schema lists in required,
+    // which real specs often leave out. The generator reads such a spec anyway.
+    [Fact]
+    public void DiscriminatorNotInRequired_Generates_AndCompiles()
+    {
+        const string Spec = """
+            openapi: 3.0.0
+            info:
+              title: Pets
+              version: "1"
+            paths:
+              /pet:
+                get:
+                  operationId: getPet
+                  responses:
+                    '200':
+                      description: OK
+                      content:
+                        application/json:
+                          schema:
+                            $ref: '#/components/schemas/Pet'
+            components:
+              schemas:
+                Pet:
+                  type: object
+                  discriminator:
+                    propertyName: petType
+                  properties:
+                    petType:
+                      type: string
+                  oneOf:
+                    - $ref: '#/components/schemas/Cat'
+                    - $ref: '#/components/schemas/Dog'
+                Cat:
+                  type: object
+                  properties:
+                    meow:
+                      type: boolean
+                Dog:
+                  type: object
+                  properties:
+                    bark:
+                      type: boolean
+            """;
+        var warnings = new List<OpenApiWarning>();
+
+        var code = OpenApiInterfaceGenerator.Generate(Spec, "MyApp", "IPetApi", warnings, GenerationOptions.Default);
+
+        Assert.Contains("public sealed record Cat : Pet", code);
+        Assert.Empty(warnings);
+        GeneratedCode.Compile(code).AssertClean();
+    }
+
+    // Only the discriminator rule is relaxed: every other reader validation still fails the run.
+    [Fact]
+    public void OtherValidationErrors_StillFail()
+    {
+        const string Spec = """
+            openapi: 3.0.0
+            info:
+              title: Pets
+              version: "1"
+            paths:
+              /pets/{id}:
+                get:
+                  operationId: getPet
+                  parameters:
+                    - name: id
+                      in: path
+                      required: false
+                      schema:
+                        type: string
+                  responses:
+                    '204':
+                      description: OK
+            """;
+
+        var error = Assert.Throws<InvalidOperationException>(() => OpenApiInterfaceGenerator.Generate(Spec, "MyApp", "IPetApi"));
+        Assert.Contains("OpenAPI parse errors", error.Message);
+    }
+}

@@ -24,6 +24,11 @@ internal static class ModelExtractor
     private const string NotConstructibleReason = "it must be a closed, non-abstract class with a public constructor";
     private const string NoMapperInterfaceReason = "it implements no IHttpErrorMapper<TError> interface";
     private const string ResultOpenType = "ZeroAlloc.Results.Result<T, E>";
+    private const string UnitResultOpenType = "ZeroAlloc.Results.UnitResult<E>";
+    private const string JsonStringEnumMemberNameAttr = "System.Text.Json.Serialization.JsonStringEnumMemberNameAttribute";
+    private const string EnumerableOpenType = "System.Collections.Generic.IEnumerable<T>";
+    private const string FlagsAttr = "System.FlagsAttribute";
+    private const string FormattableInterface = "System.IFormattable";
     private const int DefaultMaxErrorBodyBytes = 65536;
 
     internal static ClientModel? Extract(
@@ -357,7 +362,9 @@ internal static class ModelExtractor
 
         bool returnsVoid = false;
         bool returnsResult = false;
+        var returnsUnitResult = false;
         string? innerTypeName = null;
+        ITypeSymbol? innerType = null;
         string? errorTypeName = null;
         string? declaredErrorTypeName = null;
         string? errorMapperTypeName = null;
@@ -368,13 +375,29 @@ internal static class ModelExtractor
 
         if (returnType.TypeArguments.Length == 1)
         {
-            var inner = returnType.TypeArguments[0] as INamedTypeSymbol;
-            innerTypeName = inner?.ToDisplayString();
-            returnsResult = inner?.OriginalDefinition.ToDisplayString() == ResultOpenType;
-            if (returnsResult && inner?.TypeArguments.Length == 2)
+            innerType = returnType.TypeArguments[0];
+            var inner = innerType as INamedTypeSymbol;
+            innerTypeName = innerType.ToDisplayString();
+            var innerDefinition = inner?.OriginalDefinition.ToDisplayString();
+            returnsUnitResult = innerDefinition == UnitResultOpenType;
+            returnsResult = returnsUnitResult || innerDefinition == ResultOpenType;
+
+            ITypeSymbol? errorType = null;
+            if (returnsUnitResult && inner?.TypeArguments.Length == 1)
             {
-                innerTypeName = inner.TypeArguments[0].ToDisplayString();
-                var errorType = inner.TypeArguments[1];
+                innerTypeName = null;
+                innerType = null;
+                errorType = inner.TypeArguments[0];
+            }
+            else if (returnsResult && inner?.TypeArguments.Length == 2)
+            {
+                innerType = inner.TypeArguments[0];
+                innerTypeName = innerType.ToDisplayString();
+                errorType = inner.TypeArguments[1];
+            }
+
+            if (errorType is not null)
+            {
                 errorTypeName = ErrorTypeKey(errorType);
                 declaredErrorTypeName = AnnotatedErrorTypeName(errorType);
 
@@ -412,8 +435,17 @@ internal static class ModelExtractor
             parameters, methodSerializer, ToEquatable(staticHeaders),
             location, errorTypeName, errorMapperTypeName,
             declaredErrorTypeName, mapperErrorTypeName, mappedErrorNeedsNullCheck,
-            EvaluatedRouteTokens(method, route, clientHasQueryParameter, compilation, ct));
+            EvaluatedRouteTokens(method, route, clientHasQueryParameter, compilation, ct),
+            returnsUnitResult,
+            innerType?.IsValueType == true,
+            innerType is not null && IsNullable(innerType));
     }
+
+    // A nullable reference type, or Nullable<T>.
+    private static bool IsNullable(ITypeSymbol type)
+        => type.IsValueType
+            ? type.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T
+            : type.NullableAnnotation == NullableAnnotation.Annotated;
 
     private static EquatableArray<string> EvaluatedRouteTokens(
         IMethodSymbol method, string route, bool clientHasQueryParameter, Compilation compilation, CancellationToken ct)
@@ -469,9 +501,143 @@ internal static class ModelExtractor
                 }
             }
 
-            result.Add(new ParameterModel(param.Name, typeName, kind, headerName, queryName ?? param.Name, isNullable, isCollection));
+            var format = kind is ParameterKind.Path or ParameterKind.Query or ParameterKind.Header
+                ? FormatOf(param.Type, isCollection)
+                : null;
+            result.Add(new ParameterModel(param.Name, typeName, kind, headerName, queryName ?? param.Name, isNullable, isCollection, format));
         }
         return ToEquatable(result);
+    }
+
+    // The format of a value, or of a collection's elements, with Nullable<T> unwrapped. The enum
+    // check comes before IFormattable, which enums also implement.
+    private static ValueFormatModel FormatOf(ITypeSymbol type, bool isCollection)
+    {
+        var elementIsNullable = false;
+        if (isCollection)
+        {
+            type = ElementType(type) ?? type;
+            // A value-type element can never be null, and comparing it with null is CS8073 or
+            // CS0472, errors under TreatWarningsAsErrors.
+            elementIsNullable = !type.IsValueType
+                || type.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T;
+        }
+        if (type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable)
+            type = nullable.TypeArguments[0];
+
+        var name = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        if (type is INamedTypeSymbol { TypeKind: TypeKind.Enum } enumType)
+        {
+            return new ValueFormatModel(name, IsValueType: true, ValueFormat.Enum, EnumMembers(enumType), elementIsNullable,
+                IsFlags: enumType.GetAttributes().Any(a => a.AttributeClass?.ToDisplayString() == FlagsAttr),
+                EnumUnderlyingType: enumType.EnumUnderlyingType?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
+        }
+
+        var format = type.SpecialType switch
+        {
+            SpecialType.System_String => ValueFormat.String,
+            SpecialType.System_Boolean => ValueFormat.Boolean,
+            SpecialType.System_DateTime => ValueFormat.Iso8601,
+            _ when name is "global::System.DateTimeOffset" or "global::System.DateOnly" or "global::System.TimeOnly" => ValueFormat.Iso8601,
+            _ when type.AllInterfaces.Any(i => i.ToDisplayString() == FormattableInterface)
+                => HasPublicFormattableToString(type) ? ValueFormat.Invariant : ValueFormat.ExplicitInvariant,
+            _ => ValueFormat.Text,
+        };
+        return new ValueFormatModel(name, type.IsValueType, format, default, elementIsNullable);
+    }
+
+    // Whether `value.ToString(format, provider)` binds to a public method, or IFormattable is only
+    // implemented explicitly and must be called through the interface.
+    private static bool HasPublicFormattableToString(ITypeSymbol type)
+    {
+        for (var current = type; current is not null; current = current.BaseType)
+        {
+            foreach (var method in current.GetMembers("ToString").OfType<IMethodSymbol>())
+            {
+                if (method is { DeclaredAccessibility: Accessibility.Public, IsStatic: false, Parameters.Length: 2 }
+                    && method.Parameters[0].Type.SpecialType == SpecialType.System_String
+                    && method.Parameters[1].Type.ToDisplayString() == "System.IFormatProvider")
+                    return true;
+            }
+        }
+        return false;
+    }
+
+    // One member per distinct value, with the name System.Text.Json writes for it, in the order its
+    // JsonStringEnumConverter walks the members: by ascending value as a sign-extended ulong, the
+    // order of Enum.GetValues, then stably by descending bit count. Among members sharing a value
+    // the first declared is kept, as STJ keeps the first it sees.
+    private static EquatableArray<EnumMemberModel> EnumMembers(INamedTypeSymbol type)
+    {
+        var fields = new List<(ulong Key, string Member, string Wire)>();
+        foreach (var member in type.GetMembers().OfType<IFieldSymbol>())
+        {
+            if (!member.HasConstantValue || member.ConstantValue is null) continue;
+            var wire = member.Name;
+            foreach (var attribute in member.GetAttributes())
+            {
+                if (attribute.AttributeClass?.ToDisplayString() == JsonStringEnumMemberNameAttr
+                    && attribute.ConstructorArguments.Length == 1
+                    && attribute.ConstructorArguments[0].Value is string name)
+                    wire = name;
+            }
+            fields.Add((ToUInt64(member.ConstantValue), member.Name, wire));
+        }
+
+        var ordered = fields
+            .Select((field, index) => (field, index))
+            .OrderBy(f => f.field.Key)
+            .ThenBy(f => f.index)
+            .Select(f => f.field)
+            .ToList();
+        var seen = new HashSet<ulong>();
+        var result = new List<EnumMemberModel>();
+        foreach (var field in ordered.Select((field, index) => (field, index))
+                     .OrderBy(f => -PopCount(f.field.Key))
+                     .ThenBy(f => f.index)
+                     .Select(f => f.field))
+        {
+            if (seen.Add(field.Key))
+                result.Add(new EnumMemberModel(field.Member, field.Wire, field.Key));
+        }
+        return ToEquatable(result);
+    }
+
+    private static ulong ToUInt64(object value) => value switch
+    {
+        sbyte v => unchecked((ulong)v),
+        short v => unchecked((ulong)v),
+        int v => unchecked((ulong)v),
+        long v => unchecked((ulong)v),
+        byte v => v,
+        ushort v => v,
+        uint v => v,
+        ulong v => v,
+        _ => 0,
+    };
+
+    private static int PopCount(ulong value)
+    {
+        var count = 0;
+        while (value != 0)
+        {
+            value &= value - 1;
+            count++;
+        }
+        return count;
+    }
+
+    private static ITypeSymbol? ElementType(ITypeSymbol type)
+    {
+        if (type is IArrayTypeSymbol array) return array.ElementType;
+        if (type is INamedTypeSymbol named && named.OriginalDefinition.ToDisplayString() == EnumerableOpenType)
+            return named.TypeArguments[0];
+        foreach (var iface in type.AllInterfaces)
+        {
+            if (iface.OriginalDefinition.ToDisplayString() == EnumerableOpenType)
+                return iface.TypeArguments[0];
+        }
+        return null;
     }
 
     private static string? GetSerializerType(ISymbol symbol)

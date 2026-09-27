@@ -127,6 +127,8 @@ internal static class ClientEmitter
         foreach (var method in model.Methods)
             EmitMethod(ctx, sb, model.InterfaceName, method, serializerFieldMap, errorMapperFieldMap, model.MaxErrorBodyBytes);
 
+        EmitFormatHelpers(sb, model);
+
         EmitRecordFailure(sb);
 
         var anyReturnsResult = false;
@@ -263,20 +265,17 @@ internal static class ClientEmitter
             : "_serializer";
 
         string? errorMapperField = null;
-        if (method.MapsError && !errorMapperFieldMap.TryGetValue(method.ErrorTypeName!, out errorMapperField))
+        if (method.MapsError)
         {
-            EmitUnmappedStub(sb, method);
-            return;
+            var errorTypeName = method.ErrorTypeName
+                ?? throw new global::System.InvalidOperationException("MapsError implies ErrorTypeName is set.");
+            if (!errorMapperFieldMap.TryGetValue(errorTypeName, out errorMapperField))
+            {
+                EmitUnmappedStub(sb, method);
+                return;
+            }
         }
 
-        // IL3051/IL2046: Previously we emitted [RequiresDynamicCode] / [RequiresUnreferencedCode]
-        // here, but the user-authored interface doesn't carry those annotations — ILC rejects
-        // the mismatch and forces consumers to propagate the Requires attributes to every
-        // caller. Switch to [UnconditionalSuppressMessage] which flows no obligation to the
-        // caller: the serializer is provided by the consumer, so its trim/AOT-unsafety is
-        // their concern, not the client wrapper's.
-        sb.AppendLine("    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(\"Trimming\", \"IL2026\", Justification = \"IRestSerializer is provided by the consumer; its trim-unsafety is their concern. The generated client only forwards the call.\")]");
-        sb.AppendLine("    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(\"AOT\", \"IL3050\", Justification = \"IRestSerializer is provided by the consumer; its AOT-unsafety is their concern. The generated client only forwards the call.\")]");
         sb.AppendLine($"    public async {method.ReturnTypeName} {method.Name}({BuildParamList(method.Parameters)})");
         sb.AppendLine("    {");
 
@@ -297,6 +296,120 @@ internal static class ClientEmitter
         sb.AppendLine("    }");
         sb.AppendLine();
     }
+
+    // One __FormatValue overload per type a route, query or header value has, so a value is written
+    // the same wherever it goes: invariant culture, ISO 8601 dates and times, lower-case booleans, and
+    // an enum member's [JsonStringEnumMemberName]. A value type also gets a Nullable<T> overload, which
+    // the null-checked call sites bind to.
+    private static void EmitFormatHelpers(StringBuilder sb, ClientModel model)
+    {
+        var emitted = new HashSet<string>(System.StringComparer.Ordinal);
+        var anyExplicit = false;
+        foreach (var method in model.Methods)
+        {
+            foreach (var parameter in method.Parameters)
+            {
+                if (parameter.Format is { } format && emitted.Add(format.TypeName))
+                {
+                    EmitFormatHelper(sb, format);
+                    anyExplicit |= format.Format == ValueFormat.ExplicitInvariant;
+                }
+            }
+        }
+
+        // A type that implements IFormattable explicitly has no public ToString(format, provider), so
+        // it is called through the interface; the constraint keeps a struct from being boxed.
+        if (anyExplicit)
+        {
+            sb.AppendLine("    private static string __FormatFormattable<T>(T value) where T : global::System.IFormattable");
+            sb.AppendLine("        => value.ToString(null, global::System.Globalization.CultureInfo.InvariantCulture);");
+            sb.AppendLine();
+        }
+    }
+
+    private static void EmitFormatHelper(StringBuilder sb, ValueFormatModel format)
+    {
+        var type = format.TypeName;
+        sb.Append("    private static string __FormatValue(").Append(type).Append(" value) => ");
+        switch (format.Format)
+        {
+            case ValueFormat.String:
+                sb.AppendLine("value;");
+                break;
+            case ValueFormat.Boolean:
+                sb.AppendLine("value ? \"true\" : \"false\";");
+                break;
+            case ValueFormat.Iso8601:
+                sb.AppendLine("value.ToString(\"O\", global::System.Globalization.CultureInfo.InvariantCulture);");
+                break;
+            case ValueFormat.Invariant:
+                sb.AppendLine("value.ToString(null, global::System.Globalization.CultureInfo.InvariantCulture);");
+                break;
+            case ValueFormat.ExplicitInvariant:
+                sb.AppendLine("__FormatFormattable(value);");
+                break;
+            case ValueFormat.Enum:
+                EmitEnumFormat(sb, format);
+                break;
+            default:
+                // object.ToString and ValueType.ToString are annotated as returning string?.
+                sb.AppendLine("value.ToString() ?? string.Empty;");
+                break;
+        }
+        if (format.IsValueType)
+            sb.AppendLine($"    private static string __FormatValue({type}? value) => value.HasValue ? __FormatValue(value.GetValueOrDefault()) : string.Empty;");
+        sb.AppendLine();
+    }
+
+    // An enum is written as System.Text.Json's JsonStringEnumConverter writes it: a member's
+    // [JsonStringEnumMemberName] or C# name; for a [Flags] combination, the names of the members it
+    // consumes, walked in STJ's order and joined with ", "; and anything else as its number.
+    private static void EmitEnumFormat(StringBuilder sb, ValueFormatModel format)
+    {
+        var type = format.TypeName;
+        var number = $"(({format.EnumUnderlyingType})value).ToString(global::System.Globalization.CultureInfo.InvariantCulture)";
+        if (!format.IsFlags)
+        {
+            sb.AppendLine("value switch");
+            sb.AppendLine("    {");
+            foreach (var member in format.EnumMembers)
+                sb.AppendLine($"        {type}.{EscapeKeyword(member.Member)} => {Literal(member.Wire)},");
+            sb.AppendLine($"        _ => {number},");
+            sb.AppendLine("    };");
+            return;
+        }
+
+        sb.AppendLine("__FormatFlags(value);");
+        sb.AppendLine($"    private static string __FormatFlags({type} value)");
+        sb.AppendLine("    {");
+        if (format.EnumMembers.Count > 0)
+        {
+            sb.AppendLine("        switch (value)");
+            sb.AppendLine("        {");
+            foreach (var member in format.EnumMembers)
+                sb.AppendLine($"            case {type}.{EscapeKeyword(member.Member)}: return {Literal(member.Wire)};");
+            sb.AppendLine("        }");
+        }
+        sb.AppendLine($"        var __bits = unchecked((ulong)({format.EnumUnderlyingType})value);");
+        sb.AppendLine("        string? __text = null;");
+        foreach (var member in format.EnumMembers)
+        {
+            if (member.Key == 0) continue;
+            var key = "0x" + member.Key.ToString("X", CultureInfo.InvariantCulture) + "UL";
+            var wire = Literal(member.Wire);
+            sb.AppendLine($"        if ((__bits & {key}) == {key}) {{ __bits &= ~{key}; __text = __text is null ? {wire} : __text + \", \" + {wire}; }}");
+        }
+        sb.AppendLine($"        return __bits == 0 && __text is not null ? __text : {number};");
+        sb.AppendLine("    }");
+    }
+
+    private static string Literal(string value)
+        => Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(value, quote: true);
+
+    private static string EscapeKeyword(string name)
+        => Microsoft.CodeAnalysis.CSharp.SyntaxFacts.GetKeywordKind(name) != Microsoft.CodeAnalysis.CSharp.SyntaxKind.None
+            ? "@" + name
+            : name;
 
     private static void EmitUrlBuilding(StringBuilder sb, string route,
         List<ParameterModel> pathParams, List<ParameterModel> queryParams, EquatableArray<string> evaluatedTokens)
@@ -329,10 +442,11 @@ internal static class ClientEmitter
                     sb.AppendLine("        {");
                     sb.AppendLine($"            foreach (var __item in {Identifier(q)})");
                     sb.AppendLine("            {");
-                    sb.AppendLine($"                if (__item == null) continue;");
+                    if (q.Format is not { ElementIsNullable: false })
+                        sb.AppendLine("                if (__item == null) continue;");
                     sb.AppendLine($"                AppendToUrl(__urlBuilder, __hasQuery ? '&' : '?');");
                     sb.AppendLine($"                AppendToUrl(__urlBuilder, \"{q.QueryName}=\".AsSpan());");
-                    sb.AppendLine($"                AppendToUrl(__urlBuilder, System.Uri.EscapeDataString(__item.ToString()!).AsSpan());");
+                    sb.AppendLine($"                AppendToUrl(__urlBuilder, global::System.Uri.EscapeDataString(__FormatValue(__item)).AsSpan());");
                     sb.AppendLine("                __hasQuery = true;");
                     sb.AppendLine("            }");
                     sb.AppendLine("        }");
@@ -343,7 +457,7 @@ internal static class ClientEmitter
                     sb.AppendLine("        {");
                     sb.AppendLine($"            AppendToUrl(__urlBuilder, __hasQuery ? '&' : '?');");
                     sb.AppendLine($"            AppendToUrl(__urlBuilder, \"{q.QueryName}=\".AsSpan());");
-                    sb.AppendLine($"            AppendToUrl(__urlBuilder, System.Uri.EscapeDataString({Identifier(q)}!.ToString()!).AsSpan());");
+                    sb.AppendLine($"            AppendToUrl(__urlBuilder, global::System.Uri.EscapeDataString(__FormatValue({Identifier(q)})).AsSpan());");
                     sb.AppendLine("            __hasQuery = true;");
                     sb.AppendLine("        }");
                 }
@@ -351,7 +465,7 @@ internal static class ClientEmitter
                 {
                     sb.AppendLine($"        AppendToUrl(__urlBuilder, __hasQuery ? '&' : '?');");
                     sb.AppendLine($"        AppendToUrl(__urlBuilder, \"{q.QueryName}=\".AsSpan());");
-                    sb.AppendLine($"        AppendToUrl(__urlBuilder, System.Uri.EscapeDataString({Identifier(q)}.ToString()!).AsSpan());");
+                    sb.AppendLine($"        AppendToUrl(__urlBuilder, global::System.Uri.EscapeDataString(__FormatValue({Identifier(q)})).AsSpan());");
                     sb.AppendLine("        __hasQuery = true;");
                 }
             }
@@ -377,10 +491,10 @@ internal static class ClientEmitter
 
         // TryAddWithoutValidation sends a null value as an empty header, so a parameter that can be
         // null is added only when it has a value: a null argument means "no header". A non-nullable
-        // value type always has one, and `?.` would not compile on it.
+        // value type always has one, and comparing it with null would not compile cleanly.
         foreach (var h in headerParams)
         {
-            var addHeader = $"__request.Headers.TryAddWithoutValidation(\"{h.HeaderName}\", {Identifier(h)}.ToString());";
+            var addHeader = $"__request.Headers.TryAddWithoutValidation(\"{h.HeaderName}\", __FormatValue({Identifier(h)}));";
             if (h.IsNullable)
             {
                 sb.AppendLine($"        if ({Identifier(h)} is not null)");
@@ -441,7 +555,6 @@ internal static class ClientEmitter
         sb.AppendLine("                new global::System.Collections.Generic.KeyValuePair<string, object?>(\"rest.method\", __RestMethodTag));");
         EmitResponseHandling(sb, method, ctArg, serializerExpr, maxErrorBodyBytes, indent: "            ");
         sb.AppendLine("        }");
-        sb.AppendLine("#pragma warning disable EPC12");
         if (method.ReturnsResult)
             EmitResultCatches(sb, method, callerToken);
         sb.AppendLine("        catch (global::System.Exception __ex)");
@@ -449,7 +562,6 @@ internal static class ClientEmitter
         sb.AppendLine("            __RecordFailure(__activity, __ex, __sw, __httpMethod, __RestMethodTag);");
         sb.AppendLine("            throw;");
         sb.AppendLine("        }");
-        sb.AppendLine("#pragma warning restore EPC12");
         if (errorMapperField != null)
             EmitMapping(sb, method, errorMapperField);
     }
@@ -488,6 +600,18 @@ internal static class ClientEmitter
         {
             sb.AppendLine($"{indent}__response.EnsureSuccessStatusCode();");
         }
+        else if (method.ReturnsUnitResult)
+        {
+            // No body to read, so nothing can fail to deserialize: success is the status alone.
+            sb.AppendLine($"{indent}if (__response.IsSuccessStatusCode)");
+            sb.AppendLine($"{indent}{{");
+            sb.AppendLine($"{i1}return {ResultTypeName(method)}.Success();");
+            sb.AppendLine($"{indent}}}");
+            sb.AppendLine($"{indent}else");
+            sb.AppendLine($"{indent}{{");
+            EmitStatusFailure(sb, method, i1, ctArg, maxErrorBodyBytes);
+            sb.AppendLine($"{indent}}}");
+        }
         else if (method.ReturnsResult)
         {
             var resultType = ResultTypeName(method);
@@ -503,7 +627,8 @@ internal static class ClientEmitter
                 // through to the single mapping site after the method's try.
                 sb.AppendLine($"{i1}try");
                 sb.AppendLine($"{i1}{{");
-                sb.AppendLine($"{i2}{method.InnerTypeName} __content = (await {serializerExpr}.DeserializeAsync<{method.InnerTypeName}>(__responseStream, {ctArg}).ConfigureAwait(false))!;");
+                EmitEmptyBodyCheck(sb, method, i2);
+                sb.AppendLine($"{i2}{method.InnerTypeName} __content = {ReadBody(method, serializerExpr, ctArg)};");
                 sb.AppendLine($"{i2}return {resultType}.Success(__content);");
                 sb.AppendLine($"{i1}}}");
             }
@@ -512,7 +637,8 @@ internal static class ClientEmitter
                 sb.AppendLine($"{i1}{method.InnerTypeName} __content;");
                 sb.AppendLine($"{i1}try");
                 sb.AppendLine($"{i1}{{");
-                sb.AppendLine($"{i2}__content = (await {serializerExpr}.DeserializeAsync<{method.InnerTypeName}>(__responseStream, {ctArg}).ConfigureAwait(false))!;");
+                EmitEmptyBodyCheck(sb, method, i2);
+                sb.AppendLine($"{i2}__content = {ReadBody(method, serializerExpr, ctArg)};");
                 sb.AppendLine($"{i1}}}");
             }
             sb.AppendLine($"{i1}catch (global::System.Exception __ex) when (__ex is not global::System.OperationCanceledException)");
@@ -525,34 +651,69 @@ internal static class ClientEmitter
             sb.AppendLine($"{indent}}}");
             sb.AppendLine($"{indent}else");
             sb.AppendLine($"{indent}{{");
-            if (maxErrorBodyBytes > 0)
-            {
-                // Read before the response is disposed. The helper caps the body, turns a failed read
-                // into an empty body, and still throws on caller cancellation.
-                var cap = maxErrorBodyBytes.ToString(CultureInfo.InvariantCulture);
-                sb.AppendLine($"{i1}var __errorBody = await global::ZeroAlloc.Rest.GeneratedRestClient.ReadErrorBodyAsync(__response.Content, {cap}, {ctArg}).ConfigureAwait(false);");
-                EmitFailure(sb, i1, method, "__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Status, __response, null, __errorBody.Body, __errorBody.Truncated)");
-            }
-            else
-            {
-                EmitFailure(sb, i1, method, "__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Status, __response, null)");
-            }
+            EmitStatusFailure(sb, method, i1, ctArg, maxErrorBodyBytes);
             sb.AppendLine($"{indent}}}");
         }
         else
         {
             sb.AppendLine($"{indent}__response.EnsureSuccessStatusCode();");
             sb.AppendLine($"{indent}var __responseStream = await __response.Content.ReadAsStreamAsync().ConfigureAwait(false);");
-            sb.AppendLine($"{indent}return (await {serializerExpr}.DeserializeAsync<{method.InnerTypeName}>(__responseStream, {ctArg}).ConfigureAwait(false))!;");
+            EmitEmptyBodyCheck(sb, method, indent);
+            sb.AppendLine($"{indent}return {ReadBody(method, serializerExpr, ctArg)};");
         }
     }
 
-    // A mapped method repeats its E as declared, nullable annotation included: Result<T, E> is a
-    // struct, so Result<T, JevError> does not convert to Result<T, JevError?> without a warning.
+    // A success body of JSON null, or an empty one such as a 204's, has no value. A T that accepts
+    // null gets null. Otherwise the read throws, and a Result method's deserialization catch turns
+    // that into a Deserialization failure: a null never reaches the caller as a T that denies it.
+    // A reference T is checked after the read, which gives null for both. A value T reads an empty
+    // body as default, so the empty body is checked before the read; JSON null already throws.
+    private static string ReadBody(MethodModel method, string serializerExpr, string ctArg)
+    {
+        var read = $"await {serializerExpr}.DeserializeAsync<{method.InnerTypeName}>(__responseStream, {ctArg}).ConfigureAwait(false)";
+        return method.InnerTypeIsNullable || method.InnerTypeIsValueType
+            ? read
+            : $"({read}) ?? throw new global::System.InvalidOperationException({NullBodyMessage(method)})";
+    }
+
+    private static void EmitEmptyBodyCheck(StringBuilder sb, MethodModel method, string indent)
+    {
+        if (method.InnerTypeIsNullable || !method.InnerTypeIsValueType)
+            return;
+        sb.AppendLine($"{indent}if (__responseStream.CanSeek && __responseStream.Position >= __responseStream.Length)");
+        sb.AppendLine($"{indent}    throw new global::System.InvalidOperationException({NullBodyMessage(method)});");
+    }
+
+    private static string NullBodyMessage(MethodModel method)
+        => Literal($"{method.Name} received an empty or null response body, but its success type {method.InnerTypeName} "
+            + $"does not accept null. Declare {method.InnerTypeName}? to accept an empty body.");
+
+    // A non-success status: read the capped body, when asked, before the response is disposed.
+    private static void EmitStatusFailure(StringBuilder sb, MethodModel method, string indent, string ctArg, int maxErrorBodyBytes)
+    {
+        if (maxErrorBodyBytes > 0)
+        {
+            // The helper caps the body, turns a failed read into an empty body, and still throws on
+            // caller cancellation.
+            var cap = maxErrorBodyBytes.ToString(CultureInfo.InvariantCulture);
+            sb.AppendLine($"{indent}var __errorBody = await global::ZeroAlloc.Rest.GeneratedRestClient.ReadErrorBodyAsync(__response.Content, {cap}, {ctArg}).ConfigureAwait(false);");
+            EmitFailure(sb, indent, method, "__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Status, __response, null, __errorBody.Body, __errorBody.Truncated)");
+        }
+        else
+        {
+            EmitFailure(sb, indent, method, "__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Status, __response, null)");
+        }
+    }
+
+    // A mapped method repeats its E as declared, nullable annotation included: Result<T, E> and
+    // UnitResult<E> are structs, so Result<T, JevError> does not convert to Result<T, JevError?>.
     private static string ResultTypeName(MethodModel method)
-        => method.MapsError
-            ? $"ZeroAlloc.Results.Result<{method.InnerTypeName}, {method.DeclaredErrorTypeName}>"
-            : $"ZeroAlloc.Results.Result<{method.InnerTypeName}, ZeroAlloc.Rest.HttpError>";
+    {
+        var error = method.MapsError ? method.DeclaredErrorTypeName : "ZeroAlloc.Rest.HttpError";
+        return method.ReturnsUnitResult
+            ? $"ZeroAlloc.Results.UnitResult<{error}>"
+            : $"ZeroAlloc.Results.Result<{method.InnerTypeName}, {error}>";
+    }
 
     // How a failure site ends. An HttpError method returns the error from the site, exactly as
     // before. A mapped method stores it in __httpError and maps it once, after the method's try.
@@ -579,8 +740,10 @@ internal static class ClientEmitter
         {
             // The mapper is declared over E? but the method returns a non-nullable E. A null would
             // break the method's contract, so it fails loudly here instead of reaching the caller.
-            var mapperError = StripGlobal(method.MapperErrorTypeName!);
-            var methodError = StripGlobal(method.DeclaredErrorTypeName!);
+            var mapperError = StripGlobal(method.MapperErrorTypeName
+                ?? throw new global::System.InvalidOperationException("MappedErrorNeedsNullCheck requires MapperErrorTypeName."));
+            var methodError = StripGlobal(method.DeclaredErrorTypeName
+                ?? throw new global::System.InvalidOperationException("MappedErrorNeedsNullCheck requires DeclaredErrorTypeName."));
             mapped += $" ?? throw new global::System.InvalidOperationException(\"The IHttpErrorMapper<{mapperError}> returned null, but {method.Name} returns a Result whose error type {methodError} is not nullable.\")";
         }
         sb.AppendLine("        try");
@@ -607,7 +770,8 @@ internal static class ClientEmitter
     // client compiling, so that diagnostic is the only error the user sees.
     private static void EmitUnmappedStub(StringBuilder sb, MethodModel method)
     {
-        var errorType = StripGlobal(method.ErrorTypeName!);
+        var errorType = StripGlobal(method.ErrorTypeName
+            ?? throw new global::System.InvalidOperationException("EmitUnmappedStub requires ErrorTypeName."));
         sb.AppendLine($"    public {method.ReturnTypeName} {method.Name}({BuildParamList(method.Parameters)})");
         sb.AppendLine($"        => throw new global::System.NotSupportedException(\"No usable [ErrorMapper] maps {errorType}; see the ZeroAlloc.Rest diagnostic reported for this method.\");");
         sb.AppendLine();
@@ -761,7 +925,8 @@ internal static class ClientEmitter
             if (parameter is null && !Contains(evaluatedTokens, token.Name)) continue;
             AppendLiteral(sb, route.Substring(next, token.Start - next), interpolated: true);
             if (parameter is not null)
-                sb.Append("{Uri.EscapeDataString(").Append(Identifier(parameter)).Append(".ToString())}");
+                // Parenthesized: a bare `global::` would end the hole's expression at its colon.
+                sb.Append("{(global::System.Uri.EscapeDataString(__FormatValue(").Append(Identifier(parameter)).Append(")))}");
             else
                 sb.Append('{').Append(token.Name).Append('}');
             next = token.Start + token.Length;

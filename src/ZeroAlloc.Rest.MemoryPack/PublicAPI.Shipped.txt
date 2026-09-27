@@ -1,0 +1,6 @@
+#nullable enable
+ZeroAlloc.Rest.MemoryPack.MemoryPackRestSerializer
+ZeroAlloc.Rest.MemoryPack.MemoryPackRestSerializer.ContentType.get -> string!
+ZeroAlloc.Rest.MemoryPack.MemoryPackRestSerializer.DeserializeAsync<T>(System.IO.Stream! stream, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<T?>
+ZeroAlloc.Rest.MemoryPack.MemoryPackRestSerializer.MemoryPackRestSerializer() -> void
+ZeroAlloc.Rest.MemoryPack.MemoryPackRestSerializer.SerializeAsync<T>(System.IO.Stream! stream, T value, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask

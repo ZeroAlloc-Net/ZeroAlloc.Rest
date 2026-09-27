@@ -17,15 +17,16 @@ public interface IRestSerializer
 {
     string ContentType { get; }
 
-    [RequiresDynamicCode("...")]
-    [RequiresUnreferencedCode("...")]
     ValueTask<T?> DeserializeAsync<T>(Stream stream, CancellationToken ct = default);
 
-    [RequiresDynamicCode("...")]
-    [RequiresUnreferencedCode("...")]
     ValueTask SerializeAsync<T>(Stream stream, T value, CancellationToken ct = default);
 }
 ```
+
+The interface carries no trim or AOT annotations, so generated clients call it without a
+suppression. An implementation that needs reflection marks its constructor with
+`[RequiresUnreferencedCode]` and `[RequiresDynamicCode]` instead, as the reflection-based
+`SystemTextJsonSerializer` constructors and both `MessagePackRestSerializer` constructors do.
 
 The `ContentType` property controls both the `Content-Type` header on requests and the `Accept` header.
 
@@ -115,15 +116,27 @@ public interface IJevApi
 dotnet add package ZeroAlloc.Rest.SystemTextJson
 ```
 
+Pass the `JsonSerializerContext` generated from your spec, or your own:
+
 ```csharp
 services.AddIUserApi(options =>
 {
     options.BaseAddress = new Uri("https://api.example.com");
-    options.UseSerializer<SystemTextJsonSerializer>();
+    options.UseSerializer(new SystemTextJsonSerializer(AppJsonContext.Default));
 });
 ```
 
-Uses `JsonSerializerDefaults.Web` (camelCase, case-insensitive). Content-Type: `application/json`.
+| Constructor | Metadata | AOT |
+|---|---|---|
+| `SystemTextJsonSerializer(JsonSerializerContext context)` | The context's, with its options | Safe |
+| `SystemTextJsonSerializer(IJsonTypeInfoResolver resolver, JsonSerializerOptions? options = null)` | The resolver's, with a copy of `options` or `JsonSerializerDefaults.Web` | Safe |
+| `SystemTextJsonSerializer()` | Reflection, `JsonSerializerDefaults.Web` | Warns: `[RequiresUnreferencedCode]` |
+| `SystemTextJsonSerializer(JsonSerializerOptions options)` | Reflection, unless the options already have a resolver | Warns: `[RequiresUnreferencedCode]` |
+
+With a context or resolver, a type it does not cover throws `InvalidOperationException` naming the
+type; nothing falls back to reflection. `UseSerializer<SystemTextJsonSerializer>()` builds the
+serializer from DI with its parameterless constructor, so it uses reflection. Content-Type:
+`application/json`.
 
 ### MemoryPack
 
@@ -131,9 +144,15 @@ Uses `JsonSerializerDefaults.Web` (camelCase, case-insensitive). Content-Type: `
 dotnet add package ZeroAlloc.Rest.MemoryPack
 ```
 
+Register every `[MemoryPackable]` type the client sends or receives:
+
 ```csharp
-options.UseSerializer<MemoryPackRestSerializer>();
+options.UseSerializer(new MemoryPackRestSerializer(types => types
+    .Add<UserDto>()
+    .Add<OrderDto>()));
 ```
+
+`Add<T>()` registers the type's formatter through its generated static `RegisterFormatter`, and the formatter for arrays of it. MemoryPack would otherwise find the formatter through reflection, which trimming and Native AOT remove. A type MemoryPack serves with a built-in formatter, such as `int`, `string`, `Guid` or an array of one, needs no registration, and neither does an unmanaged type, such as an enum or a struct of value fields, which MemoryPack copies as raw memory; `new MemoryPackRestSerializer()` serves only those. For a generic collection such as `List<T>`, use an array of a registered type instead. Any other type, including an unregistered `[MemoryPackable]` type, throws `InvalidOperationException` naming the type and the `types.Add<T>()` call that fixes it, before anything is read or written.
 
 Content-Type: `application/x-memorypack`. Both endpoints must understand MemoryPack encoding.
 
@@ -147,6 +166,14 @@ dotnet add package ZeroAlloc.Rest.MessagePack
 options.UseSerializer<MessagePackRestSerializer>();
 ```
 
+Both constructors carry `[RequiresUnreferencedCode]` and `[RequiresDynamicCode]`.
+`new MessagePackRestSerializer()` uses `MessagePackSerializerOptions.Standard`, which builds
+formatters with reflection and dynamic code, and `new MessagePackRestSerializer(options)` cannot
+tell whether the resolver on your options falls back to it. A trimmed or Native AOT build therefore
+warns wherever one is constructed, `UseSerializer<MessagePackRestSerializer>()` included. For
+Native AOT, use `SystemTextJsonSerializer` with a `JsonSerializerContext`, or `MemoryPackRestSerializer`
+with registered types.
+
 Content-Type: `application/x-msgpack`.
 
 ## Custom serializer
@@ -158,15 +185,21 @@ public sealed class MySerializer : IRestSerializer
 {
     public string ContentType => "application/json";
 
+    // Reflection-based JsonSerializer.DeserializeAsync<T> and SerializeAsync<T> without a
+    // JsonSerializerContext need members the trimmer may remove and code Native AOT cannot
+    // generate, so the constructor says so. IRestSerializer's own methods carry no annotation:
+    // annotating them here too would mismatch the interface and warn IL2046.
     [RequiresDynamicCode("Serialization may require dynamic code.")]
     [RequiresUnreferencedCode("Serialization may require unreferenced code.")]
+    public MySerializer()
+    {
+    }
+
     public async ValueTask<T?> DeserializeAsync<T>(Stream stream, CancellationToken ct = default)
     {
         return await JsonSerializer.DeserializeAsync<T>(stream, cancellationToken: ct);
     }
 
-    [RequiresDynamicCode("Serialization may require dynamic code.")]
-    [RequiresUnreferencedCode("Serialization may require unreferenced code.")]
     public async ValueTask SerializeAsync<T>(Stream stream, T value, CancellationToken ct = default)
     {
         await JsonSerializer.SerializeAsync(stream, value, cancellationToken: ct);
@@ -199,3 +232,12 @@ public interface IUploadApi
 ```
 
 The generated client resolves `MemoryPackRestSerializer` from DI and uses it only for `UploadAsync`. Registration also runs `TryAddSingleton<MemoryPackRestSerializer>` automatically. The override type may be `internal` even when the interface is public.
+
+The instance `TryAddSingleton` activates has no registered types, so it serves only MemoryPack's built-in types, such as the `byte[]` above. When the method sends or receives a `[MemoryPackable]` type, register a configured instance before `AddIUploadApi`; `TryAddSingleton` then leaves it in place:
+
+```csharp
+services.AddSingleton(new MemoryPackRestSerializer(types => types.Add<UploadDto>()));
+services.AddIUploadApi(options => options.BaseAddress = new Uri("https://api.example.com"));
+```
+
+Without it, the first call with an unregistered `[MemoryPackable]` type throws `InvalidOperationException` naming the type and the `types.Add<T>()` call that fixes it.

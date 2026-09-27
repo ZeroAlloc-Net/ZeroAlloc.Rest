@@ -55,11 +55,16 @@ using System.Text.Json.Serialization;
 internal partial class AotJsonContext : JsonSerializerContext { }
 ```
 
+Pass it to the serializer in the next step. A client generated from an OpenAPI spec already has one;
+see [Recipe 02](02-openapi-import.md).
+
 ## 4. Wire everything up
 
 ```csharp
 // Program.cs
 using Microsoft.Extensions.DependencyInjection;
+using ZeroAlloc.Results;
+using ZeroAlloc.Rest;
 using ZeroAlloc.Rest.Attributes;
 using ZeroAlloc.Rest.SystemTextJson;
 
@@ -67,35 +72,23 @@ using ZeroAlloc.Rest.SystemTextJson;
 public interface IUserApi
 {
     [Get("/users/{id}")]
-    Task<UserDto> GetUserAsync(int id, CancellationToken ct = default);
+    Task<Result<UserDto, HttpError>> GetUserAsync(int id, CancellationToken ct = default);
 }
 
 var services = new ServiceCollection();
 services.AddIUserApi(options =>
 {
     options.BaseAddress = new Uri("https://jsonplaceholder.typicode.com");
-    options.UseSerializer<SystemTextJsonSerializer>();
+    options.UseSerializer(new SystemTextJsonSerializer(AotJsonContext.Default));
 });
 
 var provider = services.BuildServiceProvider();
 var api = provider.GetRequiredService<IUserApi>();
-var user = await api.GetUserAsync(1);
-Console.WriteLine($"User: {user.Id} — {user.Name}");
+var result = await api.GetUserAsync(1);
+Console.WriteLine(result.IsSuccess ? $"User: {result.Value.Id} — {result.Value.Name}" : $"Error: {result.Error.Kind}");
 ```
 
-## 5. Suppress AOT warnings
-
-After verifying your serializer is AOT-safe, suppress the warnings in your project:
-
-```xml
-<PropertyGroup>
-  <NoWarn>$(NoWarn);IL2026;IL3050</NoWarn>
-</PropertyGroup>
-```
-
-> Only suppress after you are confident all serialization paths are reachable by the AOT linker.
-
-## 6. Publish
+## 5. Publish
 
 ```sh
 dotnet publish -c Release -r linux-x64
@@ -105,9 +98,11 @@ dotnet publish -c Release -r win-x64
 dotnet publish -c Release -r osx-arm64
 ```
 
-The output is in `bin/Release/net10.0/linux-x64/publish/`. It is a single native binary.
+The output is in `bin/Release/net10.0/linux-x64/publish/`. It is a single native binary. The publish
+should report no IL2026 or IL3050 warning. If one appears, a serializer is using reflection:
+construct it with the context.
 
-## 7. Verify
+## 6. Verify
 
 ```sh
 ./AotDemo

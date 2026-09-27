@@ -7,4 +7,10 @@ internal sealed record OpenApiWarning(string Code, string Message)
 {
     // A cookie parameter: ZeroAlloc.Rest has no cookie binding.
     internal const string CookieParameterNotEmitted = "ZRT001";
+
+    // A schema the generated code cannot type, mapped to JsonElement.
+    internal const string SchemaMappedToJsonElement = "ZRT002";
+
+    internal static OpenApiWarning MappedToJsonElement(string path, string reason)
+        => new(SchemaMappedToJsonElement, $"Schema '{path}' is mapped to JsonElement, because {reason}.");
 }
