@@ -24,6 +24,9 @@ internal static class ModelEmitter
                 case PolymorphicModel polymorphic:
                     EmitPolymorphic(sb, polymorphic);
                     break;
+                case UnionModel union:
+                    UnionEmitter.Emit(sb, union);
+                    break;
                 default:
                     throw new InvalidOperationException($"No emitter for {model.GetType().Name} '{model.Name}'.");
             }
@@ -36,7 +39,14 @@ internal static class ModelEmitter
     internal static IEnumerable<string> SerializableTypes(IEnumerable<ModelDefinition> models)
     {
         foreach (var model in models)
+        {
             yield return model.Name;
+            if (model is UnionModel union)
+            {
+                foreach (var variant in union.Variants)
+                    yield return variant.Type.Name;
+            }
+        }
     }
 
     // Spec §5.5. The variants are ordinary records deriving from this base; STJ writes and reads the
