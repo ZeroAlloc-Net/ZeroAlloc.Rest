@@ -18,6 +18,7 @@
     <PackageReference Include="NetFabric.Hyperlinq.Analyzer" GeneratePathProperty="true" PrivateAssets="all" ExcludeAssets="analyzers" />
     <ProjectReference Include="../../src/ZeroAlloc.Rest.Generator/ZeroAlloc.Rest.Generator.csproj" />
     <ProjectReference Include="../../src/ZeroAlloc.Rest/ZeroAlloc.Rest.csproj" />
+    <ProjectReference Include="../../src/ZeroAlloc.Rest.DependencyInjection/ZeroAlloc.Rest.DependencyInjection.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="$(PkgNetFabric_Hyperlinq_Analyzer)\analyzers\dotnet\cs\NetFabric.Hyperlinq.Analyzer.dll" Private="true" />

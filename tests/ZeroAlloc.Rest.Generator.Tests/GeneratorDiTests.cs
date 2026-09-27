@@ -128,7 +128,8 @@ public class GeneratorDiTests
             "TestAssembly",
             new[] { CSharpSyntaxTree.ParseText(source) },
             Basic.Reference.Assemblies.Net100.References.All
-                .Append(MetadataReference.CreateFromFile(AttributesAssembly.Location)),
+                .Append(MetadataReference.CreateFromFile(AttributesAssembly.Location))
+                .Append(MetadataReference.CreateFromFile(typeof(ZeroAlloc.Rest.DependencyInjection.DependencyInjectionMarker).Assembly.Location)),
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
 
         var generator = new RestClientGenerator();

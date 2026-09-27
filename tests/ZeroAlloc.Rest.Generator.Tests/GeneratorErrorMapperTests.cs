@@ -16,6 +16,7 @@ public class GeneratorErrorMapperTests
         MetadataReference.CreateFromFile(typeof(ZeroAlloc.Results.Result<,>).Assembly.Location),
         MetadataReference.CreateFromFile(typeof(Microsoft.Extensions.DependencyInjection.IServiceCollection).Assembly.Location),
         MetadataReference.CreateFromFile(typeof(Microsoft.Extensions.DependencyInjection.HttpClientFactoryServiceCollectionExtensions).Assembly.Location),
+        MetadataReference.CreateFromFile(typeof(ZeroAlloc.Rest.DependencyInjection.DependencyInjectionMarker).Assembly.Location),
     ];
 
     private const string NotConstructible = "it must be a closed, non-abstract class with a public constructor";

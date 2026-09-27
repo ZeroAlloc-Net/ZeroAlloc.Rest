@@ -27,6 +27,8 @@
   <ItemGroup>
     <!-- Probes built from generated clients serialize with it -->
     <ProjectReference Include="../../src/ZeroAlloc.Rest.SystemTextJson/ZeroAlloc.Rest.SystemTextJson.csproj" />
+    <!-- Generated clients get their Add{I} and IGeneratedRestClient members only with it -->
+    <ProjectReference Include="../../src/ZeroAlloc.Rest.DependencyInjection/ZeroAlloc.Rest.DependencyInjection.csproj" />
   </ItemGroup>
   <ItemGroup>
     <!-- Real-world specs RealWorldSpecTests generates clients from -->

@@ -15,6 +15,7 @@ public class GeneratorAccessibilityTests
         MetadataReference.CreateFromFile(typeof(ZeroAlloc.Rest.IRestSerializer).Assembly.Location),
         MetadataReference.CreateFromFile(typeof(Microsoft.Extensions.DependencyInjection.IServiceCollection).Assembly.Location),
         MetadataReference.CreateFromFile(typeof(Microsoft.Extensions.DependencyInjection.HttpClientFactoryServiceCollectionExtensions).Assembly.Location),
+        MetadataReference.CreateFromFile(typeof(ZeroAlloc.Rest.DependencyInjection.DependencyInjectionMarker).Assembly.Location),
     ];
 
     [Fact]

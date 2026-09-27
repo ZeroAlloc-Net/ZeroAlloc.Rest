@@ -18,6 +18,7 @@ internal static class GeneratorHarness
         MetadataReference.CreateFromFile(typeof(ZeroAlloc.Collections.HeapPooledList<>).Assembly.Location),
         MetadataReference.CreateFromFile(typeof(Microsoft.Extensions.DependencyInjection.IServiceCollection).Assembly.Location),
         MetadataReference.CreateFromFile(typeof(Microsoft.Extensions.DependencyInjection.HttpClientFactoryServiceCollectionExtensions).Assembly.Location),
+        MetadataReference.CreateFromFile(typeof(ZeroAlloc.Rest.DependencyInjection.DependencyInjectionMarker).Assembly.Location),
     ];
 
     // Compiles `source` with the Rest client generator and returns the generated text for
@@ -27,10 +28,25 @@ internal static class GeneratorHarness
     internal static GeneratorHarnessRun Run(string source, string hintName, bool nullableEnabled = true,
         MetadataReference[]? extraReferences = null)
     {
+        var run = RunAll(source, [.. References, .. extraReferences ?? []], nullableEnabled);
+
+        var generatedSource = run.GeneratedSources
+            .First(s => string.Equals(s.HintName, hintName, System.StringComparison.Ordinal))
+            .SourceText.ToString().Replace("\r\n", "\n", System.StringComparison.Ordinal);
+
+        return new GeneratorHarnessRun(generatedSource, run.GeneratorDiagnostics, run.Problems);
+    }
+
+    // Like Run, but compiles against exactly `references` instead of the default set, and returns
+    // every generated source. Tests that must control the reference set, such as whether the
+    // DependencyInjection marker resolves, use this.
+    internal static GeneratorHarnessRunAll RunAll(string source, MetadataReference[] references,
+        bool nullableEnabled = true)
+    {
         var compilation = CSharpCompilation.Create(
             "TestAssembly",
             [CSharpSyntaxTree.ParseText(source, path: "Api.cs")],
-            [.. References, .. extraReferences ?? []],
+            references,
             new CSharpCompilationOptions(
                 OutputKind.DynamicallyLinkedLibrary,
                 nullableContextOptions: nullableEnabled ? NullableContextOptions.Enable : NullableContextOptions.Disable));
@@ -38,10 +54,6 @@ internal static class GeneratorHarness
         var driver = CSharpGeneratorDriver
             .Create(new RestClientGenerator())
             .RunGeneratorsAndUpdateCompilation(compilation, out var output, out var generatorDiagnostics);
-
-        var generatedSource = driver.GetRunResult().Results[0].GeneratedSources
-            .First(s => string.Equals(s.HintName, hintName, System.StringComparison.Ordinal))
-            .SourceText.ToString().Replace("\r\n", "\n", System.StringComparison.Ordinal);
 
         // Every error counts, wherever it is. A warning counts when it has a source location: a
         // diagnostic about code, generated code included, always carries one. A location-less warning
@@ -52,11 +64,16 @@ internal static class GeneratorHarness
                 || (d.Severity == DiagnosticSeverity.Warning && d.Location.IsInSource))
             .ToImmutableArray();
 
-        return new GeneratorHarnessRun(generatedSource, generatorDiagnostics, problems);
+        return new GeneratorHarnessRunAll(driver.GetRunResult().Results[0].GeneratedSources, generatorDiagnostics, problems);
     }
 
     internal sealed record GeneratorHarnessRun(
         string GeneratedSource,
+        ImmutableArray<Diagnostic> GeneratorDiagnostics,
+        ImmutableArray<Diagnostic> Problems);
+
+    internal sealed record GeneratorHarnessRunAll(
+        ImmutableArray<GeneratedSourceResult> GeneratedSources,
         ImmutableArray<Diagnostic> GeneratorDiagnostics,
         ImmutableArray<Diagnostic> Problems);
 }

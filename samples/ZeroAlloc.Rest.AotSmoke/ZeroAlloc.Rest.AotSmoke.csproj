@@ -13,6 +13,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\ZeroAlloc.Rest\ZeroAlloc.Rest.csproj" />
+    <!-- Generated clients get their Add{I} registrations only with it; Resilience brings it too. -->
+    <ProjectReference Include="..\..\src\ZeroAlloc.Rest.DependencyInjection\ZeroAlloc.Rest.DependencyInjection.csproj" />
     <!-- The generated PetStore client serializes through its generated JSON context. -->
     <ProjectReference Include="..\..\src\ZeroAlloc.Rest.SystemTextJson\ZeroAlloc.Rest.SystemTextJson.csproj" />
     <!-- The Resilience bridge; its ZeroAlloc.Resilience reference brings the proxy generator. -->

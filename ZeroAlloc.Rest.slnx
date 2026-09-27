@@ -8,6 +8,7 @@
     <Project Path="src/ZeroAlloc.Rest.Tools.MSBuild/ZeroAlloc.Rest.Tools.MSBuild.csproj" />
     <Project Path="src/ZeroAlloc.Rest.Tools/ZeroAlloc.Rest.Tools.csproj" />
     <Project Path="src/ZeroAlloc.Rest.Resilience/ZeroAlloc.Rest.Resilience.csproj" />
+    <Project Path="src/ZeroAlloc.Rest.DependencyInjection/ZeroAlloc.Rest.DependencyInjection.csproj" />
   </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/ZeroAlloc.Rest.AotSmoke/ZeroAlloc.Rest.AotSmoke.csproj" />

@@ -7,7 +7,7 @@
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\ZeroAlloc.Rest\ZeroAlloc.Rest.csproj" />
+    <ProjectReference Include="..\ZeroAlloc.Rest.DependencyInjection\ZeroAlloc.Rest.DependencyInjection.csproj" />
     <PackageReference Include="ZeroAlloc.Resilience" />
   </ItemGroup>
 </Project>

@@ -1,0 +1,2 @@
+#nullable enable
+ZeroAlloc.Rest.DependencyInjection.DependencyInjectionMarker
