@@ -139,7 +139,7 @@ options.UseSerializer(new MemoryPackRestSerializer(types => types
     .Add<OrderDto>()));
 ```
 
-`Add<T>()` registers the type's formatter through its generated static `RegisterFormatter`, and the formatter for arrays of it. MemoryPack would otherwise find the formatter through reflection, which trimming and Native AOT remove. A type MemoryPack serves with a built-in formatter, such as `int`, `string`, `Guid` or an array of one, needs no registration; `new MemoryPackRestSerializer()` serves only those. Any other type, including an unregistered `[MemoryPackable]` type, throws `InvalidOperationException` naming the type and the `types.Add<T>()` call that fixes it, before anything is read or written.
+`Add<T>()` registers the type's formatter through its generated static `RegisterFormatter`, and the formatter for arrays of it. MemoryPack would otherwise find the formatter through reflection, which trimming and Native AOT remove. A type MemoryPack serves with a built-in formatter, such as `int`, `string`, `Guid` or an array of one, needs no registration, and neither does an unmanaged type, such as an enum or a struct of value fields, which MemoryPack copies as raw memory; `new MemoryPackRestSerializer()` serves only those. For a generic collection such as `List<T>`, use an array of a registered type instead. Any other type, including an unregistered `[MemoryPackable]` type, throws `InvalidOperationException` naming the type and the `types.Add<T>()` call that fixes it, before anything is read or written.
 
 Content-Type: `application/x-memorypack`. Both endpoints must understand MemoryPack encoding.
 

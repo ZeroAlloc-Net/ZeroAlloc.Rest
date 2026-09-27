@@ -30,6 +30,9 @@ internal static class MemoryPackSmoke
             return "a built-in MemoryPack type should round-trip without registration";
         }
 
+        if (await RoundTripAsync(builtIn, SmokeColor.Green).ConfigureAwait(false) != SmokeColor.Green)
+            return "an enum should round-trip without registration";
+
         IRestSerializer serializer = new MemoryPackRestSerializer(types => types.Add<SmokeParcel>());
 
         using (var payload = new MemoryStream(s_parcelPayload))

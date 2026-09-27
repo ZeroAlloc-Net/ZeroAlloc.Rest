@@ -108,8 +108,8 @@ jobs:
     # Native AOT proof that MemoryPackRestSerializer's explicit type registration works without
     # MemoryPack's reflection-based formatter lookup, and that a missing registration is reported.
     # This job tolerates MemoryPack.Core's own trim and AOT warnings until upstream fixes them; see
-    # the tracking issue for MemoryPack.Core trim warnings. They stay in the log, one line per member,
-    # and any IL warning that does not come from MemoryPack.Core fails the job.
+    # #357, the tracking issue for MemoryPack.Core trim warnings. They stay in the log, one line per
+    # member, and any IL warning that does not come from MemoryPack.Core fails the job.
     steps:
       - uses: actions/checkout@v7
         with:
@@ -134,13 +134,11 @@ jobs:
             -r linux-x64 -c Release -o ./aot-mp-out 2>&1 | tee aot-mp-publish.log
 
       - name: Only MemoryPack.Core IL warnings
-        # The project sets TrimmerSingleWarn=false, so each warning names the member it comes from.
-        # A line is MemoryPack.Core's when that member is in the MemoryPack namespace, or when it is
-        # the per-assembly summary IL2104 or IL3053 for MemoryPack.Core.dll.
+        # The project sets TrimmerSingleWarn=false, so each warning names the member it comes from,
+        # and a line is MemoryPack.Core's when that member is in the MemoryPack namespace.
         run: |
           foreign=$(grep -E "(warning|error) IL[0-9]+" aot-mp-publish.log \
-            | grep -vE "(warning|error) IL[0-9]+: MemoryPack\.[A-Za-z]" \
-            | grep -vE "MemoryPack\.Core\.dll : warning IL(2104|3053):" || true)
+            | grep -vE "(warning|error) IL[0-9]+: MemoryPack\.[A-Za-z]" || true)
           if [ -n "$foreign" ]; then
             echo "IL warnings that do not come from MemoryPack.Core:"
             echo "$foreign"

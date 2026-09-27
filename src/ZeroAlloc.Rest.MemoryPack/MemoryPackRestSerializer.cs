@@ -17,7 +17,8 @@ namespace ZeroAlloc.Rest.MemoryPack;
 /// <remarks>
 /// Every <c>[MemoryPackable]</c> type the serializer reads or writes is registered up front:
 /// <c>new MemoryPackRestSerializer(types => types.Add&lt;User&gt;())</c>. Types MemoryPack serves with a
-/// built-in formatter, such as <see cref="int"/>, <see cref="string"/> or arrays of them, need no registration.
+/// built-in formatter, such as <see cref="int"/>, <see cref="string"/> or arrays of them, need no registration,
+/// and neither do unmanaged types, such as an enum or a struct of value fields, which MemoryPack copies as raw memory.
 /// Any other type throws <see cref="InvalidOperationException"/> before it is read or written.
 /// </remarks>
 public sealed class MemoryPackRestSerializer : IRestSerializer
@@ -26,7 +27,8 @@ public sealed class MemoryPackRestSerializer : IRestSerializer
 
     /// <summary>
     /// Creates a serializer with no registered types. It serves only the types MemoryPack handles with a
-    /// built-in formatter, such as <see cref="int"/>, <see cref="string"/> or arrays of them. Any other type,
+    /// built-in formatter, such as <see cref="int"/>, <see cref="string"/> or arrays of them, and unmanaged types
+    /// such as enums, which MemoryPack copies as raw memory. Any other type,
     /// including every <c>[MemoryPackable]</c> type, throws <see cref="InvalidOperationException"/> naming the
     /// type and the fix: <c>new MemoryPackRestSerializer(types => types.Add&lt;T&gt;())</c>.
     /// </summary>
@@ -42,6 +44,7 @@ public sealed class MemoryPackRestSerializer : IRestSerializer
         ArgumentNullException.ThrowIfNull(configure);
         var types = new MemoryPackRestTypes();
         configure(types);
+        types.Freeze();
         _types = types.Types.ToFrozenSet();
     }
 
@@ -113,11 +116,24 @@ public sealed class MemoryPackRestSerializer : IRestSerializer
         }
 
         if (hasFormatter) return;
+
+        // An enum, or a struct holding only unmanaged fields, is written and read as raw memory: MemoryPack's
+        // fast path in Serialize, and Read's matching one, never look a formatter up.
+        if (!RuntimeHelpers.IsReferenceOrContainsReferences<T>()) return;
+
+        if (type.IsArray || type.IsGenericType)
+        {
+            throw new InvalidOperationException(
+                $"MemoryPackRestSerializer cannot serialize {Display(type)}: MemoryPack has no formatter registered for it, "
+                + "and building one would take reflection that trimming and Native AOT remove. Use an array of a registered "
+                + "[MemoryPackable] type or of a built-in type instead, or register a formatter for it through "
+                + "MemoryPackFormatterProvider.Register first.");
+        }
+
         throw new InvalidOperationException(
             $"MemoryPackRestSerializer cannot serialize {Display(type)}: MemoryPack has no formatter registered for it, "
             + "and finding one would take reflection that trimming and Native AOT remove. Mark the type [MemoryPackable] "
-            + $"and register it: new MemoryPackRestSerializer(types => types.Add<{Display(type)}>()). For a collection, "
-            + "use an array of a registered type, or register a formatter through MemoryPackFormatterProvider.Register first.");
+            + $"and register it: new MemoryPackRestSerializer(types => types.Add<{Display(type)}>()).");
     }
 
     private static Type RegistrationOwner(Type type)

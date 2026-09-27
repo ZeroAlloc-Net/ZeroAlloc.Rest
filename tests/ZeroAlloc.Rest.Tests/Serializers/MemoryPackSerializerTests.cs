@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using MemoryPack;
 using Xunit;
 using ZeroAlloc.Rest.MemoryPack;
@@ -10,6 +11,23 @@ public partial record MemPackTestDto(string Name, int Age);
 // Never passed to types.Add<T>(): every serializer here must refuse it.
 [MemoryPackable]
 public partial record MemPackUnregisteredDto(string Name);
+
+// Unmanaged types: MemoryPack writes and reads them raw, with no formatter at all.
+public enum MemPackColor
+{
+    Red,
+    Green = 7,
+}
+
+// MemoryPack writes it as raw memory, so the layout is fixed.
+[StructLayout(LayoutKind.Sequential)]
+public readonly record struct MemPackPoint(int X, double Y);
+
+// Neither [MemoryPackable] nor served by a built-in formatter.
+public sealed class MemPackPlainClass
+{
+    public int Value { get; set; }
+}
 
 public class MemoryPackSerializerTests
 {
@@ -118,12 +136,54 @@ public class MemoryPackSerializerTests
     }
 
     [Fact]
-    public async Task Deserialize_TypeWithoutFormatter_Throws()
+    public async Task Deserialize_GenericCollection_GivesCollectionAdviceWithoutAdd()
     {
         using var stream = new MemoryStream([1, 2, 3, 4]);
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
             () => _sut.DeserializeAsync<List<MemPackTestDto>>(stream).AsTask());
         Assert.Contains("List<MemPackTestDto>", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("array", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("MemoryPackFormatterProvider.Register", ex.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("types.Add<", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Deserialize_ArrayOfPlainClass_GivesCollectionAdviceWithoutAdd()
+    {
+        using var stream = new MemoryStream([1, 2, 3, 4]);
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _sut.DeserializeAsync<MemPackPlainClass[]>(stream).AsTask());
+        Assert.Contains("MemPackPlainClass[]", ex.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("types.Add<", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Deserialize_PlainClass_SuggestsMemoryPackableAndAdd()
+    {
+        using var stream = new MemoryStream([1, 2, 3, 4]);
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _sut.DeserializeAsync<MemPackPlainClass>(stream).AsTask());
+        Assert.Contains($"types.Add<{nameof(MemPackPlainClass)}>", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task RoundTrip_UnmanagedTypes_NeedNoRegistration()
+    {
+        var sut = new MemoryPackRestSerializer();
+
+        Assert.Equal(MemPackColor.Green, await RoundTripAsync(sut, MemPackColor.Green));
+        Assert.Equal(new MemPackPoint(3, 4.5), await RoundTripAsync(sut, new MemPackPoint(3, 4.5)));
+    }
+
+    [Fact]
+    public void Add_AfterConstruction_Throws()
+    {
+        MemoryPackRestTypes? captured = null;
+        _ = new MemoryPackRestSerializer(types => captured = types.Add<MemPackTestDto>());
+        Assert.NotNull(captured);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => captured.Add<MemPackUnregisteredDto>());
+        Assert.Contains(nameof(MemPackUnregisteredDto), ex.Message, StringComparison.Ordinal);
     }
 
     [Fact]

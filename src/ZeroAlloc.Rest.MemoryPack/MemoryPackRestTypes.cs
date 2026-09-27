@@ -15,6 +15,7 @@ namespace ZeroAlloc.Rest.MemoryPack;
 public sealed class MemoryPackRestTypes
 {
     private readonly HashSet<Type> _types = [];
+    private bool _frozen;
 
     internal MemoryPackRestTypes()
     {
@@ -22,14 +23,26 @@ public sealed class MemoryPackRestTypes
 
     internal IReadOnlyCollection<Type> Types => _types;
 
+    internal void Freeze() => _frozen = true;
+
     /// <summary>
     /// Registers <typeparamref name="T"/>'s MemoryPack formatter, and the formatter for arrays of it,
     /// and lets the serializer read and write the type.
     /// </summary>
     /// <typeparam name="T">A <c>[MemoryPackable]</c> type.</typeparam>
     /// <returns>This builder, so calls chain.</returns>
+    /// <exception cref="InvalidOperationException">
+    /// The serializer's constructor has finished: a type added later would never be served.
+    /// </exception>
     public MemoryPackRestTypes Add<T>() where T : IMemoryPackable<T>
     {
+        if (_frozen)
+        {
+            throw new InvalidOperationException(
+                $"Cannot add {typeof(T).Name}: the MemoryPackRestSerializer is already built. Add every type inside "
+                + "the delegate passed to its constructor.");
+        }
+
         T.RegisterFormatter();
         _types.Add(typeof(T));
         return this;

@@ -2,7 +2,7 @@
   <!--
     Native AOT runtime proof for MemoryPackRestSerializer's explicit type registration. It is kept apart
     from ZeroAlloc.Rest.AotSmoke because MemoryPack.Core itself reports trim and AOT warnings on every
-    AOT publish, whatever code uses it. The main smoke stays at 0 IL warnings.
+    AOT publish, whatever code uses it; #357 tracks them. The main smoke stays at 0 IL warnings.
 
     TrimmerSingleWarn=false lists each MemoryPack.Core warning with its member, so they stay visible.
     Among them are IL3050 and IL2091, so this project cannot promote those codes to errors the way the
