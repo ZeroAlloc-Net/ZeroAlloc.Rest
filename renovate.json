@@ -6,6 +6,11 @@
       "description": "Auto-merge safe patch updates",
       "matchUpdateTypes": ["patch"],
       "automerge": true
+    },
+    {
+      "description": "MSBuild 18.10+ targets net11.0 only; the .NET 10 SDK hosts MSBuild 18.9. Lift on the move to .NET 11.",
+      "matchPackageNames": ["Microsoft.Build.Framework", "Microsoft.Build.Utilities.Core"],
+      "allowedVersions": "<18.10"
     }
   ]
 }

@@ -22,8 +22,13 @@
     <PackageVersion Include="WireMock.Net" Version="2.18.0" />
     <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.12" />
     <PackageVersion Include="Basic.Reference.Assemblies.Net100" Version="1.8.12" />
-    <PackageVersion Include="Microsoft.Build.Framework" Version="18.10.1" />
-    <PackageVersion Include="Microsoft.Build.Utilities.Core" Version="18.10.1" />
+    <!--
+      MSBuild task references must not be newer than the MSBuild that loads the task.
+      The .NET 10 SDK ships MSBuild 18.9; 18.10 and later target net11.0 only.
+      renovate.json holds these below 18.10 until the repo moves to .NET 11.
+    -->
+    <PackageVersion Include="Microsoft.Build.Framework" Version="18.9.6" />
+    <PackageVersion Include="Microsoft.Build.Utilities.Core" Version="18.9.6" />
     <!-- Benchmarks -->
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
     <PackageVersion Include="Refit" Version="16.1.0" />

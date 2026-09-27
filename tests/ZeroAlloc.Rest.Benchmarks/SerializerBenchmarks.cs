@@ -8,22 +8,6 @@ using ZeroAlloc.Rest.SystemTextJson;
 
 namespace ZeroAlloc.Rest.Benchmarks;
 
-// ── DTOs annotated for each serializer ────────────────────────────────────────
-
-[MemoryPackable]
-public partial class MemoryPackUserDto
-{
-    public int Id { get; set; }
-    public string Name { get; set; } = "";
-}
-
-[MessagePackObject]
-public sealed class MessagePackUserDto
-{
-    [Key(0)] public int Id { get; set; }
-    [Key(1)] public string Name { get; set; } = "";
-}
-
 // ── Benchmark: serializer throughput (serialize + deserialize) ────────────────
 
 [MemoryDiagnoser]
