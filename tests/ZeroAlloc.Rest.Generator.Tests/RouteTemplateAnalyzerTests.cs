@@ -28,6 +28,7 @@ public class RouteTemplateAnalyzerTests
         using ZeroAlloc.Rest.Attributes;
         namespace MyApp;
         public sealed record Payload(string Value);
+        public static class ApiInfo { public const string Version = "2"; }
 
         """;
 
@@ -96,18 +97,151 @@ public class RouteTemplateAnalyzerTests
         Assert.Contains("var __url = $\"users/{{usrId}}\";", run.Sources["IApi.g.cs"]);
     }
 
-    [Fact]
-    public void TokenMatchingOnlyAQueryParameter_IsReported_AndNotInterpolated()
+    // A token no route parameter matches, which the URL built before ZRA005 filled with a working
+    // value, keeps being filled the same way. Each expected line is the URL line the generator
+    // emitted at ae0124f, the commit before #339, for the same method, copied byte for byte. The
+    // only difference since is the local's name, which #339 prefixed with "__".
+    public static TheoryData<string, string, string, string> PreservedTokens => new()
     {
-        var source = Api("[Get(\"users/{id}\")] Task<string> GetAsync([Query] int id, CancellationToken ct = default);");
+        {
+            """[Get("users/{id}")] Task A1([Query] int id);""",
+            """        var urlBase = $"users/{id}";""",
+            "id",
+            "the query parameter 'id'"
+        },
+        {
+            """[Get("users/{id}")] Task A2([Header("X-Id")] string id, [Query] int page);""",
+            """        var urlBase = $"users/{id}";""",
+            "id",
+            "the header parameter 'id'"
+        },
+        {
+            """[Get("items/{id:D4}")] Task A3(int id);""",
+            """        var url = $"items/{id:D4}";""",
+            "id:D4",
+            "the route parameter 'id'"
+        },
+        {
+            """[Get("v{ApiInfo.Version}/users/{id}")] Task A5(int id);""",
+            """        var url = $"v{ApiInfo.Version}/users/{Uri.EscapeDataString(id.ToString())}";""",
+            "ApiInfo.Version",
+            "the C# expression 'ApiInfo.Version'"
+        },
+        {
+            """[Get("y/{DateTime.UtcNow:yyyy}/{id}")] Task A8(int id);""",
+            """        var url = $"y/{DateTime.UtcNow:yyyy}/{Uri.EscapeDataString(id.ToString())}";""",
+            "DateTime.UtcNow:yyyy",
+            "the C# expression 'DateTime.UtcNow'"
+        },
+        {
+            """[Post("b/{id}/{p}")] Task A9(int id, [Body] Payload p);""",
+            """        var url = $"b/{Uri.EscapeDataString(id.ToString())}/{p}";""",
+            "p",
+            "the body parameter 'p'"
+        },
+        {
+            """[Get("x/{ct}/{id}")] Task A10(int id, CancellationToken ct);""",
+            """        var url = $"x/{ct}/{Uri.EscapeDataString(id.ToString())}";""",
+            "ct",
+            "the cancellation token parameter 'ct'"
+        },
+        {
+            """[Get("q/{page + 1}")] Task A11([Query] int page);""",
+            """        var urlBase = $"q/{page + 1}";""",
+            "page + 1",
+            "the query parameter 'page'"
+        },
+        {
+            """[Get("f/{form}")] Task A12([FormBody] Dictionary<string, string> form, [Query] int z);""",
+            """        var urlBase = $"f/{form}";""",
+            "form",
+            "the form body parameter 'form'"
+        },
+    };
 
-        var run = Run(source);
+    [Theory]
+    [MemberData(nameof(PreservedTokens))]
+    public void TokenFilledBeforeZra005_KeepsItsUrl_AndIsReportedAtTheAttribute(
+        string member, string lineBefore339, string token, string source)
+    {
+        var api = Api(member);
 
+        var run = Run(api);
+
+        Assert.Empty(run.CompileErrors);
+        var line = lineBefore339.Replace("var url ", "var __url ", StringComparison.Ordinal)
+            .Replace("var urlBase ", "var __urlBase ", StringComparison.Ordinal);
+        Assert.Contains(line + "\n", run.Sources["IApi.g.cs"]);
+
+        // Only the token is reported: every route parameter reaches the URL.
         var diagnostic = Assert.Single(run.Diagnostics);
         Assert.Equal("ZRA005", diagnostic.Id);
-        Assert.Equal("Get(\"users/{id}\")", At(source, diagnostic));
+        Assert.Equal(DiagnosticSeverity.Warning, diagnostic.Severity);
+        var attribute = member.Substring(1, member.IndexOf(")]", StringComparison.Ordinal));
+        Assert.Equal(attribute, At(api, diagnostic));
+        var route = attribute.Substring(attribute.IndexOf('"') + 1, attribute.LastIndexOf('"') - attribute.IndexOf('"') - 1);
+        var method = member.Split("Task ")[1].Split('(')[0];
+        Assert.Equal(
+            $"Route '{route}' of method '{method}' has a '{{{token}}}' token that no route parameter matches; "
+                + $"it is compiled as C# and takes its value from {source}, without URL escaping; "
+                + "make that value a route parameter with a matching token",
+            Message(diagnostic));
+    }
+
+    // The same, run: the request goes to the URL it went to before #339.
+    [Fact]
+    public async Task TokenFilledByAQueryParameter_SendsTheSameUrl()
+    {
+        var source = Api("""[Get("users/{id}")] Task GetAsync([Query] int id, CancellationToken ct = default);""")
+            + """
+            public sealed class NoSerializer : ZeroAlloc.Rest.IRestSerializer
+            {
+                public string ContentType => "application/json";
+                public System.Threading.Tasks.ValueTask<T?> DeserializeAsync<T>(System.IO.Stream stream, CancellationToken ct = default)
+                    => default;
+                public System.Threading.Tasks.ValueTask SerializeAsync<T>(System.IO.Stream stream, T value, CancellationToken ct = default)
+                    => default;
+            }
+            """;
+        var run = Run(source);
         Assert.Empty(run.CompileErrors);
-        Assert.Contains("var __urlBase = $\"users/{{id}}\";", run.Sources["IApi.g.cs"]);
+
+        using var stream = new System.IO.MemoryStream();
+        Assert.True(run.Output.Emit(stream).Success);
+        var assembly = System.Reflection.Assembly.Load(stream.ToArray());
+        Uri? sent = null;
+        using var httpClient = new System.Net.Http.HttpClient(new CaptureHandler(uri => sent = uri))
+        {
+            BaseAddress = new Uri("https://host/api/"),
+        };
+        var serializer = Activator.CreateInstance(assembly.GetType("MyApp.NoSerializer")!);
+        var client = Activator.CreateInstance(assembly.GetType("MyApp.ApiClient")!, httpClient, serializer)!;
+
+        await (Task)client.GetType().GetMethod("GetAsync")!.Invoke(client, [5, CancellationToken.None])!;
+
+        Assert.Equal("https://host/api/users/5?id=5", sent!.ToString());
+    }
+
+    [Theory]
+    [InlineData("""[Get("u/{_httpClient}/{__httpMethod}/{__RestMethodTag}/{id}")] Task A6(int id);""",
+        """        var __url = $"u/{{_httpClient}}/{{__httpMethod}}/{{__RestMethodTag}}/{Uri.EscapeDataString(id.ToString())}";""", 3)]
+    [InlineData("""[Get("t/{this}/{id}")] Task A13(int id);""",
+        """        var __url = $"t/{{this}}/{Uri.EscapeDataString(id.ToString())}";""", 1)]
+    [InlineData("""[Get("users/{id}")] Task A4([Header("X-Id")] string id);""",
+        """        var __url = "users/{id}";""", 1)]
+    public void TokenThatOnlyReachedTheClientsOwnMembers_OrWasNeverInterpolated_IsLiteral(string member, string line, int reports)
+    {
+        // Before #339 the first two compiled, but sent the client's type name, an Activity, a
+        // timestamp or the method's tag: implementation details, not a working URL. The third never
+        // was interpolated, because the method has neither route nor query parameters.
+        var api = Api(member);
+
+        var run = Run(api);
+
+        Assert.Empty(run.CompileErrors);
+        Assert.Contains(line + "\n", run.Sources["IApi.g.cs"]);
+        Assert.Equal(reports, run.Diagnostics.Length);
+        Assert.All(run.Diagnostics, d => Assert.EndsWith("token that no route parameter matches, so it is sent as literal text", Message(d), StringComparison.Ordinal));
     }
 
     [Fact]
@@ -262,11 +396,22 @@ public class RouteTemplateAnalyzerTests
         var compileErrors = output.GetDiagnostics()
             .Where(d => d.Severity == DiagnosticSeverity.Error)
             .ToImmutableArray();
-        return new GeneratorRun(sources, generatorDiagnostics.AddRange(analyzerDiagnostics), compileErrors);
+        return new GeneratorRun(sources, generatorDiagnostics.AddRange(analyzerDiagnostics), compileErrors, output);
     }
 
     private sealed record GeneratorRun(
         Dictionary<string, string> Sources,
         ImmutableArray<Diagnostic> Diagnostics,
-        ImmutableArray<Diagnostic> CompileErrors);
+        ImmutableArray<Diagnostic> CompileErrors,
+        Compilation Output);
+
+    private sealed class CaptureHandler(Action<Uri?> capture) : System.Net.Http.HttpMessageHandler
+    {
+        protected override Task<System.Net.Http.HttpResponseMessage> SendAsync(
+            System.Net.Http.HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            capture(request.RequestUri);
+            return Task.FromResult(new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.OK));
+        }
+    }
 }

@@ -16,8 +16,11 @@ internal record MethodModel(
     string? ErrorMapperTypeName,
     string? DeclaredErrorTypeName,
     string? MapperErrorTypeName,
-    bool MappedErrorNeedsNullCheck)
+    bool MappedErrorNeedsNullCheck,
+    EquatableArray<string> EvaluatedRouteTokens)
 {
+    // EvaluatedRouteTokens are the {token} names the URL keeps as C# interpolation holes, exactly as
+    // before ZRA005; see RouteTokenBinding.
     // ErrorTypeName is the key a mapper is matched by: no tuple element names and no nullable
     // annotations. DeclaredErrorTypeName is the method's E with its annotations, which the generated
     // Result type must repeat. MapperErrorTypeName is E as the mapper declares it, which the injected

@@ -35,8 +35,10 @@ Task RemoveMemberAsync(int orgId, int userId, CancellationToken ct = default);
 Path parameters are URL-encoded with `Uri.EscapeDataString` before substitution.
 
 A token binds only the parameter with exactly its name, case included. A route parameter with no
-matching token is never sent, and a token with no matching route parameter is sent as literal text;
-both get a [ZRA005](advanced.md#zra005-route-template-and-route-parameters-do-not-match) warning.
+matching token is never sent. A token with no matching route parameter is sent as literal text,
+unless it compiles as C#, such as a token named after a `[Query]` parameter, which fills it without
+URL escaping. Both get a
+[ZRA005](advanced.md#zra005-route-template-and-route-parameters-do-not-match) warning.
 
 ## No path
 

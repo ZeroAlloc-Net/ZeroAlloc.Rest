@@ -38,7 +38,7 @@ internal static class DiagnosticDescriptors
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
-    // ZRA005 has two messages, one per direction, under one ID, title and severity. A Warning, not
+    // ZRA005 has three messages, one per case, under one ID, title and severity. A Warning, not
     // an Error: code that compiled before #333 and silently dropped the value keeps compiling.
     // RouteTemplateAnalyzer reports it, not the generator, so that #pragma warning disable applies.
     private const string RouteMismatchTitle = "Route template and route parameters do not match";
@@ -55,6 +55,16 @@ internal static class DiagnosticDescriptors
         id: "ZRA005",
         title: RouteMismatchTitle,
         messageFormat: "Route '{0}' of method '{1}' has a '{{{2}}}' token that no route parameter matches, so it is sent as literal text",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
+
+    // A token no route parameter matches, which the URL still fills as it always has: the token's
+    // text is compiled as a C# interpolation hole. See RouteTokenBinding.
+    internal static readonly DiagnosticDescriptor RouteTokenEvaluated = new(
+        id: "ZRA005",
+        title: RouteMismatchTitle,
+        messageFormat: "Route '{0}' of method '{1}' has a '{{{2}}}' token that no route parameter matches; it is compiled as C# and takes its value from {3}, without URL escaping; make that value a route parameter with a matching token",
         category: Category,
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
