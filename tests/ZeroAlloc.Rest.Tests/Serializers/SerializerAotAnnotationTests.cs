@@ -61,6 +61,17 @@ public class SerializerAotAnnotationTests
         Assert.NotNull(constructor.GetCustomAttribute<RequiresDynamicCodeAttribute>());
     }
 
+    // The caller's resolver is the whole formatter lookup, as a JsonSerializerContext is for JSON.
+    [Fact]
+    public void MessagePackResolverConstructor_IsNotAnnotated()
+    {
+        var constructor = typeof(MessagePackRestSerializer).GetConstructor(
+            [typeof(global::MessagePack.IFormatterResolver), typeof(global::MessagePack.MessagePackSerializerOptions)]);
+        Assert.NotNull(constructor);
+        Assert.Null(constructor.GetCustomAttribute<RequiresUnreferencedCodeAttribute>());
+        Assert.Null(constructor.GetCustomAttribute<RequiresDynamicCodeAttribute>());
+    }
+
     [Theory]
     [InlineData(typeof(System.Text.Json.Serialization.JsonSerializerContext))]
     [InlineData(typeof(System.Text.Json.Serialization.Metadata.IJsonTypeInfoResolver))]

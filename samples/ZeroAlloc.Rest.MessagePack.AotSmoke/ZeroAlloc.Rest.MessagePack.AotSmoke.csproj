@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Native AOT runtime proof for MessagePackRestSerializer's resolver constructor with a source-generated
+    resolver. It is kept apart from ZeroAlloc.Rest.AotSmoke because the MessagePack assembly itself
+    reports trim and AOT warnings on every AOT publish, whatever resolver is used; #374 tracks them.
+    The main smoke stays at 0 IL warnings.
+
+    TrimmerSingleWarn=false lists each MessagePack warning with its member, so they stay visible. Among
+    them are IL3050 and IL2067, so this project cannot promote those codes to errors
+    the way the main smoke does. The aot-smoke-messagepack CI job is the gate instead: it fails on any
+    IL warning, of any code, that does not come from a member of MessagePack.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>ZeroAlloc.Rest.MessagePackAotSmoke</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <OptimizationPreference>Size</OptimizationPreference>
+
+    <TrimmerSingleWarn>false</TrimmerSingleWarn>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\ZeroAlloc.Rest.MessagePack\ZeroAlloc.Rest.MessagePack.csproj" />
+    <!-- The MessagePack package brings its source generator for SmokeResolver. -->
+    <PackageReference Include="MessagePack" />
+  </ItemGroup>
+</Project>
