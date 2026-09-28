@@ -121,6 +121,12 @@ ZeroAlloc type as `global::`, so a schema named `Task` or `Header` cannot shadow
   matches and, for objects, whose required properties are all present, then picks the one matching
   the most required properties, the first declared on a tie. For `oneOf`, more than one match is
   ambiguous and throws `JsonException`; for `anyOf` the pick wins.
+- **Identical inline unions share one type.** Two inline `oneOf`/`anyOf` schemas with the same
+  keyword and the same variants in the same order, each a `$ref` or an inline primitive or array of
+  one, generate one type. The first occurrence in the spec names it and gives it its description; a
+  later one refers to that type whatever its path, description or `nullable`. A union with an inline
+  object, map, nested-union or `allOf`-wrapped variant always gets a type of its own, because such a
+  variant may carry its own required properties, and so does a union declared as a component.
 
 ### Using the generated client
 

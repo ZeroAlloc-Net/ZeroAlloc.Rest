@@ -1,0 +1,76 @@
+openapi: 3.0.0
+info:
+  title: Duplicate inline unions
+  version: "1"
+paths:
+  /apps/{id}:
+    get:
+      operationId: getApp
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: The app.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/App'
+  /installations:
+    post:
+      operationId: createInstallation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Installation'
+      responses:
+        "200":
+          description: The installation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Installation'
+components:
+  schemas:
+    User:
+      type: object
+      required: [login]
+      properties:
+        login:
+          type: string
+    Enterprise:
+      type: object
+      required: [slug]
+      properties:
+        slug:
+          type: string
+    App:
+      type: object
+      required: [owner]
+      properties:
+        owner:
+          oneOf:
+            - $ref: '#/components/schemas/User'
+            - $ref: '#/components/schemas/Enterprise'
+        value:
+          anyOf:
+            - type: string
+            - type: integer
+    Installation:
+      type: object
+      required: [account]
+      properties:
+        account:
+          oneOf:
+            - $ref: '#/components/schemas/User'
+            - $ref: '#/components/schemas/Enterprise'
+        value:
+          nullable: true
+          anyOf:
+            - type: string
+            - type: integer

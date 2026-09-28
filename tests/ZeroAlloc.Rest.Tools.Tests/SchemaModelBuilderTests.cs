@@ -592,6 +592,34 @@ public class SchemaModelBuilderTests
         Assert.Equal(new UnionVariantModel("String", TypeRef.String, JsonKind.String, EquatableList<string>.Empty), union.Variants[1]);
     }
 
+    // A single-part wrapper around a $ref stands for it, but the properties it requires still decide
+    // whether a JSON object matches the variant.
+    [Theory]
+    [InlineData("allOf")]
+    [InlineData("anyOf")]
+    public void UnionVariant_RequiredPropertiesIncludeThoseItsWrapperAdds(string wrapper)
+    {
+        var (models, _) = Build($$"""
+                Pet:
+                  type: object
+                  required: [id]
+                  properties:
+                    id:
+                      type: integer
+                    name:
+                      type: string
+                Either:
+                  oneOf:
+                    - {{wrapper}}:
+                        - $ref: '#/components/schemas/Pet'
+                      required: [name]
+                    - type: string
+            """);
+
+        var union = Assert.IsType<UnionModel>(models.Single(m => m is UnionModel));
+        Assert.Equal(new UnionVariantModel("Pet", Model("Pet"), JsonKind.Object, List("id", "name")), union.Variants[0]);
+    }
+
     [Fact]
     public void EnumVariant_TakesItsJsonKindFromItsType()
     {
@@ -608,4 +636,177 @@ public class SchemaModelBuilderTests
         var union = Assert.IsType<UnionModel>(models.Single(m => m is UnionModel));
         Assert.Equal(new[] { JsonKind.Number, JsonKind.Boolean }, union.Variants.Select(v => v.Kind));
     }
+
+    // Issue #359: structurally identical inline unions share one type. The first occurrence names it.
+    private const string PetAndError = """
+                Pet:
+                  type: object
+                  required: [id]
+                  properties:
+                    id:
+                      type: integer
+                Error:
+                  type: object
+                  required: [code]
+                  properties:
+                    code:
+                      type: string
+            """;
+
+    [Fact]
+    public void IdenticalInlineUnionsOfRefs_ShareOneType()
+    {
+        var (models, warnings) = Build(PetAndError + Environment.NewLine + """
+                A:
+                  type: object
+                  properties:
+                    outcome:
+                      oneOf:
+                        - $ref: '#/components/schemas/Pet'
+                        - $ref: '#/components/schemas/Error'
+                B:
+                  type: object
+                  description: B.
+                  properties:
+                    result:
+                      oneOf:
+                        - $ref: '#/components/schemas/Pet'
+                        - $ref: '#/components/schemas/Error'
+            """);
+
+        Assert.Empty(warnings);
+        var union = Assert.IsType<UnionModel>(Assert.Single(models, m => m is UnionModel));
+        Assert.Equal("PetOrError", union.Name);
+        Assert.Equal(Model("PetOrError"), Record(models, "A").Properties.Single().Type);
+        Assert.Equal(Model("PetOrError"), Record(models, "B").Properties.Single().Type);
+    }
+
+    // The union's own name comes from the first path that reaches it; a later path refers to it.
+    [Fact]
+    public void IdenticalInlineUnions_AreNamedByTheFirstOccurrence()
+    {
+        var (models, _) = Build("""
+                A:
+                  type: object
+                  properties:
+                    value:
+                      description: First.
+                      anyOf:
+                        - type: string
+                        - type: integer
+                B:
+                  type: object
+                  properties:
+                    value:
+                      description: Second.
+                      nullable: true
+                      anyOf:
+                        - type: string
+                        - type: integer
+            """);
+
+        var union = Assert.IsType<UnionModel>(Assert.Single(models, m => m is UnionModel));
+        Assert.Equal("AValue", union.Name);
+        Assert.Equal("First.", union.Description);
+        Assert.Equal(Model("AValue"), Record(models, "B").Properties.Single().Type);
+        Assert.True(Record(models, "B").Properties.Single().Nullable);
+    }
+
+    [Theory]
+    [InlineData("oneOf", "anyOf")]
+    [InlineData("oneOf", "oneOf")]
+    public void InlineUnions_DifferingInKindOrOrder_StayApart(string first, string second)
+    {
+        var reversed = string.Equals(first, second, StringComparison.Ordinal);
+        var (models, _) = Build(PetAndError + Environment.NewLine + $$"""
+                A:
+                  type: object
+                  properties:
+                    outcome:
+                      {{first}}:
+                        - $ref: '#/components/schemas/Pet'
+                        - $ref: '#/components/schemas/Error'
+                B:
+                  type: object
+                  properties:
+                    outcome:
+                      {{second}}:
+                        - $ref: '#/components/schemas/{{(reversed ? "Error" : "Pet")}}'
+                        - $ref: '#/components/schemas/{{(reversed ? "Pet" : "Error")}}'
+            """);
+
+        Assert.Equal(2, models.Count(m => m is UnionModel));
+    }
+
+    // A variant that is a wrapper around a $ref may add required properties, which change how the
+    // converter matches a JSON object. Such a union is never merged with the plain one.
+    [Fact]
+    public void InlineUnions_DifferingInRequiredProperties_StayApart()
+    {
+        var (models, _) = Build(PetAndError + Environment.NewLine + """
+                A:
+                  type: object
+                  properties:
+                    outcome:
+                      oneOf:
+                        - $ref: '#/components/schemas/Pet'
+                        - $ref: '#/components/schemas/Error'
+                B:
+                  type: object
+                  properties:
+                    outcome:
+                      oneOf:
+                        - allOf:
+                            - $ref: '#/components/schemas/Pet'
+                          required: [name]
+                        - $ref: '#/components/schemas/Error'
+                C:
+                  type: object
+                  properties:
+                    first:
+                      oneOf:
+                        - type: object
+                          required: [id]
+                          properties:
+                            id:
+                              type: integer
+                        - type: string
+                    second:
+                      oneOf:
+                        - type: object
+                          required: [name]
+                          properties:
+                            id:
+                              type: integer
+                            name:
+                              type: string
+                        - type: string
+            """);
+
+        Assert.Equal(new[] { "PetOrError", "BOutcome", "CFirst", "CSecond" }, models.OfType<UnionModel>().Select(u => u.Name), StringComparer.Ordinal);
+    }
+
+    // A component keeps its own name, so an inline union identical to it is still a type of its own.
+    [Fact]
+    public void InlineUnion_IdenticalToAComponent_KeepsItsOwnType()
+    {
+        var (models, _) = Build(PetAndError + Environment.NewLine + """
+                Outcome:
+                  oneOf:
+                    - $ref: '#/components/schemas/Pet'
+                    - $ref: '#/components/schemas/Error'
+                A:
+                  type: object
+                  properties:
+                    outcome:
+                      oneOf:
+                        - $ref: '#/components/schemas/Pet'
+                        - $ref: '#/components/schemas/Error'
+            """);
+
+        Assert.Equal(new[] { "Outcome", "PetOrError" }, models.OfType<UnionModel>().Select(u => u.Name), StringComparer.Ordinal);
+    }
+
+    private static RecordModel Record(EquatableList<ModelDefinition> models, string name)
+        => Assert.IsType<RecordModel>(Assert.Single(models, m => string.Equals(m.Name, name, StringComparison.Ordinal)));
 }
