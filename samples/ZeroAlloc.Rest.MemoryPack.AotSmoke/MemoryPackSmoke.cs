@@ -33,6 +33,9 @@ internal static class MemoryPackSmoke
         if (await RoundTripAsync(builtIn, SmokeColor.Green).ConfigureAwait(false) != SmokeColor.Green)
             return "an enum should round-trip without registration";
 
+        if (await ValueTypesAsync(builtIn).ConfigureAwait(false) is { } valueTypeFailure)
+            return valueTypeFailure;
+
         IRestSerializer serializer = new MemoryPackRestSerializer(types => types.Add<SmokeParcel>());
 
         using (var payload = new MemoryStream(s_parcelPayload))
@@ -70,6 +73,32 @@ internal static class MemoryPackSmoke
                     return "the missing-registration error should name the type: " + ex.Message;
             }
         }
+
+        return null;
+    }
+
+    // Nullable value types are unmanaged too, so they take the raw-memory path, and the registration
+    // check walks through Nullable<T> to the underlying type. Both states must survive the round trip.
+    private static async Task<string?> ValueTypesAsync(IRestSerializer builtIn)
+    {
+        if (await RoundTripAsync<int?>(builtIn, 5).ConfigureAwait(false) != 5)
+            return "an int? holding a value should round-trip without registration";
+
+        if (await RoundTripAsync<int?>(builtIn, null).ConfigureAwait(false) is not null)
+            return "an int? holding null should round-trip as null";
+
+        if (await RoundTripAsync<SmokeColor?>(builtIn, SmokeColor.Green).ConfigureAwait(false) != SmokeColor.Green)
+            return "a nullable enum should round-trip without registration";
+
+        var point = new SmokePoint(3, -4);
+        if (await RoundTripAsync(builtIn, point).ConfigureAwait(false) != point)
+            return "an unmanaged user struct should round-trip without registration";
+
+        if (await RoundTripAsync<SmokePoint?>(builtIn, point).ConfigureAwait(false) != point)
+            return "a nullable user struct holding a value should round-trip without registration";
+
+        if (await RoundTripAsync<SmokePoint?>(builtIn, null).ConfigureAwait(false) is not null)
+            return "a nullable user struct holding null should round-trip as null";
 
         return null;
     }
