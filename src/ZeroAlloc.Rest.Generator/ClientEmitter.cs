@@ -127,12 +127,16 @@ internal static class ClientEmitter
         if (dependencyInjection)
             EmitGeneratedClientMembers(sb, model, overrideSerializers, errorMappings);
 
+        var anyCallerCancellation = false;
         foreach (var method in model.Methods)
-            EmitMethod(ctx, sb, model.InterfaceName, method, serializerFieldMap, errorMapperFieldMap, model.MaxErrorBodyBytes);
+            anyCallerCancellation |= EmitMethod(ctx, sb, model.InterfaceName, method, serializerFieldMap, errorMapperFieldMap, model.MaxErrorBodyBytes);
 
         EmitFormatHelpers(sb, model);
 
         EmitRecordFailure(sb);
+        if (anyCallerCancellation)
+            EmitRecordCancellation(sb);
+        EmitRecordDurationWithoutResponse(sb);
 
         var anyReturnsResult = false;
         foreach (var m in model.Methods)
@@ -247,7 +251,9 @@ internal static class ClientEmitter
         sb.AppendLine();
     }
 
-    private static void EmitMethod(SourceProductionContext ctx, StringBuilder sb, string interfaceName, MethodModel method, IReadOnlyDictionary<string, string> serializerFieldMap, IReadOnlyDictionary<string, string> errorMapperFieldMap, int maxErrorBodyBytes)
+    // Returns true when the method has a CancellationToken parameter, so its body calls
+    // __RecordCancellation.
+    private static bool EmitMethod(SourceProductionContext ctx, StringBuilder sb, string interfaceName, MethodModel method, IReadOnlyDictionary<string, string> serializerFieldMap, IReadOnlyDictionary<string, string> errorMapperFieldMap, int maxErrorBodyBytes)
     {
         var ctParam = FindCancellationToken(method.Parameters);
         var ctArg = ctParam != null ? Identifier(ctParam) : "default";
@@ -277,7 +283,7 @@ internal static class ClientEmitter
             if (!errorMapperFieldMap.TryGetValue(errorTypeName, out errorMapperField))
             {
                 EmitUnmappedStub(sb, method);
-                return;
+                return false;
             }
         }
 
@@ -300,6 +306,7 @@ internal static class ClientEmitter
 
         sb.AppendLine("    }");
         sb.AppendLine();
+        return ctParam != null;
     }
 
     // One __FormatValue overload per type a route, query or header value has, so a value is written
@@ -570,8 +577,18 @@ internal static class ClientEmitter
         sb.AppendLine("            __durationRecorded = true;");
         EmitResponseHandling(sb, method, ctArg, serializerExpr, maxErrorBodyBytes, indent: "            ");
         sb.AppendLine("        }");
+        // Cancellation the caller asked for is not an error: the span keeps status Unset and is
+        // tagged instead. It still throws, from Result methods too.
+        if (callerToken != null)
+        {
+            sb.AppendLine($"        catch (global::System.OperationCanceledException) when ({callerToken}.IsCancellationRequested)");
+            sb.AppendLine("        {");
+            sb.AppendLine("            __RecordCancellation(__activity, __sw, __httpMethod, __RestMethodTag, __durationRecorded);");
+            sb.AppendLine("            throw;");
+            sb.AppendLine("        }");
+        }
         if (method.ReturnsResult)
-            EmitResultCatches(sb, method, callerToken);
+            EmitResultCatches(sb, method);
         sb.AppendLine("        catch (global::System.Exception __ex)");
         sb.AppendLine("        {");
         sb.AppendLine("            __RecordFailure(__activity, __ex, __sw, __httpMethod, __RestMethodTag, __durationRecorded);");
@@ -582,18 +599,10 @@ internal static class ClientEmitter
     }
 
     // A Result-returning method returns a failure for a timeout or a transport error instead of
-    // throwing. Cancellation the caller asked for still throws: it is not an error. Anything else,
-    // such as a bug in a handler, reaches the rethrowing catch that follows these.
-    private static void EmitResultCatches(StringBuilder sb, MethodModel method, string? callerToken)
+    // throwing. Cancellation the caller asked for is caught before these and still throws. Anything
+    // else, such as a bug in a handler, reaches the rethrowing catch that follows these.
+    private static void EmitResultCatches(StringBuilder sb, MethodModel method)
     {
-        if (callerToken != null)
-        {
-            sb.AppendLine($"        catch (global::System.OperationCanceledException __ex) when ({callerToken}.IsCancellationRequested)");
-            sb.AppendLine("        {");
-            sb.AppendLine("            __RecordFailure(__activity, __ex, __sw, __httpMethod, __RestMethodTag, __durationRecorded);");
-            sb.AppendLine("            throw;");
-            sb.AppendLine("        }");
-        }
         // Not requested by the caller, so it is HttpClient.Timeout or another timeout in the pipeline.
         sb.AppendLine("        catch (global::System.OperationCanceledException __ex)");
         sb.AppendLine("        {");
@@ -802,8 +811,32 @@ internal static class ClientEmitter
         sb.AppendLine("    private static void __RecordFailure(global::System.Diagnostics.Activity? activity, global::System.Exception exception, long startTimestamp, string httpMethod, string restMethod, bool durationRecorded)");
         sb.AppendLine("    {");
         sb.AppendLine("        activity?.SetStatus(global::System.Diagnostics.ActivityStatusCode.Error, exception.Message);");
-        sb.AppendLine("        if (durationRecorded)");
-        sb.AppendLine("            return;");
+        sb.AppendLine("        if (!durationRecorded)");
+        sb.AppendLine("            __RecordDurationWithoutResponse(startTimestamp, httpMethod, restMethod);");
+        sb.AppendLine("    }");
+        sb.AppendLine();
+    }
+
+    // Cancellation the caller asked for. OpenTelemetry leaves the span status Unset for an outcome
+    // that is not an error of the operation, and error.type goes with an Error status, so the span
+    // gets rest.cancelled = true instead. The duration is recorded once, as for a failure.
+    private static void EmitRecordCancellation(StringBuilder sb)
+    {
+        sb.AppendLine("    private static void __RecordCancellation(global::System.Diagnostics.Activity? activity, long startTimestamp, string httpMethod, string restMethod, bool durationRecorded)");
+        sb.AppendLine("    {");
+        sb.AppendLine("        activity?.SetTag(\"rest.cancelled\", true);");
+        sb.AppendLine("        if (!durationRecorded)");
+        sb.AppendLine("            __RecordDurationWithoutResponse(startTimestamp, httpMethod, restMethod);");
+        sb.AppendLine("    }");
+        sb.AppendLine();
+    }
+
+    // The duration of a call that ended before a response arrived, so it has no status code or
+    // server address tag.
+    private static void EmitRecordDurationWithoutResponse(StringBuilder sb)
+    {
+        sb.AppendLine("    private static void __RecordDurationWithoutResponse(long startTimestamp, string httpMethod, string restMethod)");
+        sb.AppendLine("    {");
         sb.AppendLine("        var elapsedMs = global::System.Diagnostics.Stopwatch.GetElapsedTime(startTimestamp).TotalMilliseconds;");
         sb.AppendLine("        _requestDurationMs.Record(elapsedMs,");
         sb.AppendLine("            new global::System.Collections.Generic.KeyValuePair<string, object?>(\"http.method\", httpMethod),");
