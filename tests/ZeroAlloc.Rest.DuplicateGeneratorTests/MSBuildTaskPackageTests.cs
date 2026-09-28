@@ -14,15 +14,10 @@ public sealed class MSBuildTaskPackageTests
     [Fact]
     public async Task ConsumerBuild_GeneratesAndCompilesClients_AndReportsZRT001()
     {
-        var repoRoot = ConsumerProcess.LocateRepoRoot();
-        var feed = Path.Combine(repoRoot, "artifacts", "local");
-        Assert.True(Directory.Exists(feed),
-            $"Local nupkg feed not found at {feed}. Run `dotnet pack -c Release -p:Version=0.0.0-dev -o artifacts/local` on src/ZeroAlloc.Rest and src/ZeroAlloc.Rest.Tools.MSBuild first.");
-
-        var taskNupkg = Directory.GetFiles(feed, PackageId + ".*.nupkg");
-        Assert.NotEmpty(taskNupkg);
+        var feed = ConsumerProcess.LocateFeed();
         // ZeroAlloc.Rest is packed into the same feed at the same version.
-        var version = Path.GetFileNameWithoutExtension(taskNupkg[0]).Substring(PackageId.Length + 1);
+        var taskNupkgPath = ConsumerProcess.FindPackage(feed, PackageId);
+        var version = ConsumerProcess.GetPackageVersion(taskNupkgPath, PackageId);
 
         var workDir = Path.Combine(Path.GetTempPath(), "za-rest-msbuild-task-" + Path.GetRandomFileName());
         Directory.CreateDirectory(workDir);
@@ -66,17 +61,7 @@ public sealed class MSBuildTaskPackageTests
 
     private static void ScaffoldConsumer(string workDir, string feed, string version)
     {
-        File.WriteAllText(Path.Combine(workDir, "NuGet.config"),
-            $"""
-            <?xml version="1.0" encoding="utf-8"?>
-            <configuration>
-              <packageSources>
-                <clear />
-                <add key="local" value="{feed}" />
-                <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
-              </packageSources>
-            </configuration>
-            """);
+        ConsumerProcess.WriteNuGetConfig(workDir, feed);
 
         // RestorePackagesPath keeps the restore out of the global packages folder, which would otherwise
         // serve a package cached by an earlier run at the same version instead of the one just packed.

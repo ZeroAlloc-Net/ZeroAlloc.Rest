@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Xml.Linq;
@@ -20,17 +19,10 @@ public sealed class PackageDependencyTests
     [InlineData("ZeroAlloc.Rest.DependencyInjection", new[] { "Microsoft.Extensions.Http", "ZeroAlloc.Rest" })]
     public void Package_DependsOnExactly(string packageId, string[] expected)
     {
-        var repoRoot = ConsumerProcess.LocateRepoRoot();
-        var feed = Path.Combine(repoRoot, "artifacts", "local");
-        Assert.True(Directory.Exists(feed),
-            $"Local nupkg feed not found at {feed}. Run `dotnet pack -c Release -p:Version=0.0.0-dev -o artifacts/local` " +
-            "on src/ZeroAlloc.Rest, src/ZeroAlloc.Rest.Generator, src/ZeroAlloc.Rest.Tools.MSBuild and " +
-            "src/ZeroAlloc.Rest.DependencyInjection first.");
+        var feed = ConsumerProcess.LocateFeed();
+        var nupkgPath = ConsumerProcess.FindPackage(feed, packageId);
 
-        var nupkgPath = FindPackage(feed, packageId);
-        Assert.False(nupkgPath is null, $"No {packageId}.<version>.nupkg found in {feed}.");
-
-        using var archive = ZipFile.OpenRead(nupkgPath!);
+        using var archive = ZipFile.OpenRead(nupkgPath);
         var entry = archive.GetEntry(packageId + ".nuspec");
         Assert.False(entry is null, $"{packageId}.nuspec not found inside {nupkgPath}.");
 
@@ -48,19 +40,5 @@ public sealed class PackageDependencyTests
             .ToArray();
 
         Assert.Equal(expected, actual);
-    }
-
-    // packageId + "." + version, where version starts with a digit, so ZeroAlloc.Rest does not
-    // match ZeroAlloc.Rest.DependencyInjection.<version>.nupkg (both start with "ZeroAlloc.Rest.").
-    private static string? FindPackage(string feed, string packageId)
-    {
-        foreach (var path in Directory.GetFiles(feed, packageId + ".*.nupkg"))
-        {
-            var name = Path.GetFileNameWithoutExtension(path);
-            var remainder = name.Substring(packageId.Length + 1);
-            if (remainder.Length > 0 && char.IsDigit(remainder[0]))
-                return path;
-        }
-        return null;
     }
 }

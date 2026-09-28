@@ -8,26 +8,16 @@ public sealed class DuplicateGeneratorDiagnosticTests
     [Fact]
     public async Task Build_Fails_With_ZR9001_When_Both_Packages_Referenced()
     {
-        var repoRoot = ConsumerProcess.LocateRepoRoot();
-        var feed = Path.Combine(repoRoot, "artifacts", "local");
-        Assert.True(Directory.Exists(feed),
-            $"Local nupkg feed not found at {feed}. Run `dotnet pack -c Release -p:Version=0.0.0-dev -o artifacts/local` on src/ZeroAlloc.Rest and src/ZeroAlloc.Rest.Generator first.");
+        var feed = ConsumerProcess.LocateFeed();
 
-        // The "ZeroAlloc.Rest.*.nupkg" glob also matches every sibling package in the feed,
-        // "ZeroAlloc.Rest.Generator.<version>" and "ZeroAlloc.Rest.Tools.MSBuild.<version>",
-        // because `*` greedily eats the rest of the id. Keep only the file whose id ends where
-        // the version begins, with a digit. Enumeration order is no help: it differs across
-        // file systems, and on Linux ext4 it changes with the file names, so the version string
-        // alone decides which package comes first.
-        var restNupkg = Directory.GetFiles(feed, "ZeroAlloc.Rest.*.nupkg")
-            .Where(f => char.IsAsciiDigit(Path.GetFileName(f)["ZeroAlloc.Rest.".Length]))
-            .ToArray();
-        var genNupkg = Directory.GetFiles(feed, "ZeroAlloc.Rest.Generator.*.nupkg");
-        Assert.NotEmpty(restNupkg);
-        Assert.NotEmpty(genNupkg);
+        // ConsumerProcess.FindPackage keeps only the file whose id ends where the version
+        // begins, with a digit, so "ZeroAlloc.Rest" does not also match the sibling packages
+        // "ZeroAlloc.Rest.Generator.<version>" and "ZeroAlloc.Rest.Tools.MSBuild.<version>" that
+        // the plain "ZeroAlloc.Rest.*.nupkg" glob would otherwise catch.
+        var restNupkgPath = ConsumerProcess.FindPackage(feed, "ZeroAlloc.Rest");
+        _ = ConsumerProcess.FindPackage(feed, "ZeroAlloc.Rest.Generator");
 
-        var version = Path.GetFileNameWithoutExtension(restNupkg[0])
-            .Substring("ZeroAlloc.Rest.".Length);
+        var version = ConsumerProcess.GetPackageVersion(restNupkgPath, "ZeroAlloc.Rest");
 
         var workDir = Path.Combine(Path.GetTempPath(), "za-rest-dup-gen-" + Path.GetRandomFileName());
         Directory.CreateDirectory(workDir);
@@ -49,17 +39,7 @@ public sealed class DuplicateGeneratorDiagnosticTests
 
     private static void ScaffoldConsumer(string workDir, string feed, string version)
     {
-        File.WriteAllText(Path.Combine(workDir, "NuGet.config"),
-            $"""
-            <?xml version="1.0" encoding="utf-8"?>
-            <configuration>
-              <packageSources>
-                <clear />
-                <add key="local" value="{feed}" />
-                <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
-              </packageSources>
-            </configuration>
-            """);
+        ConsumerProcess.WriteNuGetConfig(workDir, feed);
 
         File.WriteAllText(Path.Combine(workDir, "Consumer.csproj"),
             $"""

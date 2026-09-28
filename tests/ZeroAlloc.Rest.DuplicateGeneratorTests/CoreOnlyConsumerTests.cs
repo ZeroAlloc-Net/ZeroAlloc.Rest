@@ -23,7 +23,7 @@ public sealed class CoreOnlyConsumerTests
         Directory.CreateDirectory(workDir);
         try
         {
-            WriteNuGetConfig(workDir, feed);
+            ConsumerProcess.WriteNuGetConfig(workDir, feed);
             WritePingApiFiles(workDir);
 
             File.WriteAllText(Path.Combine(workDir, "Consumer.csproj"),
@@ -72,13 +72,13 @@ public sealed class CoreOnlyConsumerTests
     public async Task ConsumerWithDependencyInjection_GetsAddMethod()
     {
         var (feed, version) = LocateFeedAndVersion();
-        Assert.NotEmpty(Directory.GetFiles(feed, DiPackageId + ".*.nupkg"));
+        _ = ConsumerProcess.FindPackage(feed, DiPackageId);
 
         var workDir = Path.Combine(Path.GetTempPath(), "za-rest-core-di-" + Path.GetRandomFileName());
         Directory.CreateDirectory(workDir);
         try
         {
-            WriteNuGetConfig(workDir, feed);
+            ConsumerProcess.WriteNuGetConfig(workDir, feed);
             WritePingApiFiles(workDir);
 
             File.WriteAllText(Path.Combine(workDir, "Consumer.csproj"),
@@ -217,21 +217,6 @@ public sealed class CoreOnlyConsumerTests
             """);
     }
 
-    private static void WriteNuGetConfig(string workDir, string feed)
-    {
-        File.WriteAllText(Path.Combine(workDir, "NuGet.config"),
-            $"""
-            <?xml version="1.0" encoding="utf-8"?>
-            <configuration>
-              <packageSources>
-                <clear />
-                <add key="local" value="{feed}" />
-                <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
-              </packageSources>
-            </configuration>
-            """);
-    }
-
     // The consumer's own project.assets.json after restore must have no Microsoft.Extensions.*
     // library, proving the core-only restore graph is what constraints.md promises: only
     // ZeroAlloc.Results and ZeroAlloc.Collections underneath ZeroAlloc.Rest.
@@ -258,32 +243,10 @@ public sealed class CoreOnlyConsumerTests
 
     private static (string Feed, string Version) LocateFeedAndVersion()
     {
-        var repoRoot = ConsumerProcess.LocateRepoRoot();
-        var feed = Path.Combine(repoRoot, "artifacts", "local");
-        Assert.True(Directory.Exists(feed),
-            $"Local nupkg feed not found at {feed}. Run `dotnet pack -c Release -p:Version=0.0.0-dev -o artifacts/local` " +
-            "on src/ZeroAlloc.Rest, src/ZeroAlloc.Rest.Generator, src/ZeroAlloc.Rest.Tools.MSBuild and " +
-            "src/ZeroAlloc.Rest.DependencyInjection first.");
-
-        var corePath = FindCorePackage(feed);
-        Assert.False(corePath is null, $"No {CorePackageId}.<version>.nupkg found in {feed}.");
-
-        var version = Path.GetFileNameWithoutExtension(corePath)!.Substring(CorePackageId.Length + 1);
+        var feed = ConsumerProcess.LocateFeed();
+        var corePath = ConsumerProcess.FindPackage(feed, CorePackageId);
+        var version = ConsumerProcess.GetPackageVersion(corePath, CorePackageId);
         return (feed, version);
-    }
-
-    // ZeroAlloc.Rest.*.nupkg where the remainder after "ZeroAlloc.Rest." starts with a digit, so
-    // ZeroAlloc.Rest.DependencyInjection.<version>.nupkg is not mistaken for the core package.
-    private static string? FindCorePackage(string feed)
-    {
-        foreach (var path in Directory.GetFiles(feed, CorePackageId + ".*.nupkg"))
-        {
-            var name = Path.GetFileNameWithoutExtension(path);
-            var remainder = name.Substring(CorePackageId.Length + 1);
-            if (remainder.Length > 0 && char.IsDigit(remainder[0]))
-                return path;
-        }
-        return null;
     }
 
     private static void TryDelete(string workDir)
