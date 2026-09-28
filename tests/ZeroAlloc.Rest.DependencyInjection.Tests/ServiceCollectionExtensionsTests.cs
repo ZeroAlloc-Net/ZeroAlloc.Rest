@@ -1,6 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
-using ZeroAlloc.Rest;
 
 namespace ZeroAlloc.Rest.DependencyInjection.Tests;
 
