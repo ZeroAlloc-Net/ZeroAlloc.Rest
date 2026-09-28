@@ -198,5 +198,41 @@ using (var refusingHttp = new System.Net.Http.HttpClient(new RefusingHandler()) 
     }
 }
 
+// Value-type responses over a real connection, read through a source-generated context: a
+// nullable int holding a value and holding null, and a long.
+{
+    using var server = new StubServer();
+    using var http = new System.Net.Http.HttpClient { BaseAddress = server.BaseAddress };
+    ICountApi counts = new CountApiClient(http, new ZeroAlloc.Rest.SystemTextJson.SystemTextJsonSerializer(CountJsonContext.Default));
+    using var timeout = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(30));
+
+    var serving = server.ServeAsync(200, "5", timeout.Token);
+    var count = await counts.TryGetCountAsync(timeout.Token).ConfigureAwait(false);
+    await serving.ConfigureAwait(false);
+    if (!count.IsSuccess || count.Value != 5)
+    {
+        Console.Error.WriteLine("AOT smoke: FAIL — an int? body of 5 should be a success of 5");
+        return 1;
+    }
+
+    serving = server.ServeAsync(200, "null", timeout.Token);
+    count = await counts.TryGetCountAsync(timeout.Token).ConfigureAwait(false);
+    await serving.ConfigureAwait(false);
+    if (!count.IsSuccess || count.Value is not null)
+    {
+        Console.Error.WriteLine("AOT smoke: FAIL — an int? body of JSON null should be a success of null");
+        return 1;
+    }
+
+    serving = server.ServeAsync(200, "9007199254740993", timeout.Token);
+    var total = await counts.GetTotalAsync(timeout.Token).ConfigureAwait(false);
+    await serving.ConfigureAwait(false);
+    if (total != 9007199254740993L)
+    {
+        Console.Error.WriteLine("AOT smoke: FAIL — a long body should read exactly");
+        return 1;
+    }
+}
+
 Console.WriteLine("AOT smoke: PASS");
 return 0;

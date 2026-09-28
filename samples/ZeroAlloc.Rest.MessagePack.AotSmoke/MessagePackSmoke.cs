@@ -40,6 +40,9 @@ internal static class MessagePackSmoke
             return "a built-in MessagePack type should round-trip";
         }
 
+        if (await ValueTypesAsync(serializer).ConfigureAwait(false) is { } valueTypeFailure)
+            return valueTypeFailure;
+
         using (var payload = new MemoryStream(s_parcelPayload))
         {
             var read = await serializer.DeserializeAsync<SmokeParcel>(payload).ConfigureAwait(false);
@@ -82,6 +85,23 @@ internal static class MessagePackSmoke
                     return "the missing-formatter error should name the type: " + ex;
             }
         }
+
+        return null;
+    }
+
+    // Nullable value types go through BuiltinResolver's nullable formatters: a value and a nil
+    // must both come back as they went in.
+    private static async Task<string?> ValueTypesAsync(IRestSerializer serializer)
+    {
+        if (await RoundTripAsync<int?>(serializer, 5).ConfigureAwait(false) != 5)
+            return "an int? holding a value should round-trip";
+
+        if (await RoundTripAsync<int?>(serializer, null).ConfigureAwait(false) is not null)
+            return "an int? holding null should round-trip as null";
+
+        var id = new Guid("6f9619ff-8b86-d011-b42d-00c04fc964ff");
+        if (await RoundTripAsync<Guid?>(serializer, id).ConfigureAwait(false) != id)
+            return "a Guid? holding a value should round-trip";
 
         return null;
     }

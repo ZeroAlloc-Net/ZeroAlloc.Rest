@@ -8,4 +8,8 @@ namespace ZeroAlloc.Rest.CoreOnly.AotSmoke;
 // reflection.
 [JsonSourceGenerationOptions(JsonSerializerDefaults.Web)]
 [JsonSerializable(typeof(PingResponse))]
+[JsonSerializable(typeof(int?))]
+[JsonSerializable(typeof(long))]
+[JsonSerializable(typeof(PingLevel))]
+[JsonSerializable(typeof(PingPoint?))]
 internal sealed partial class PingJsonContext : JsonSerializerContext;
