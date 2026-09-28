@@ -11,7 +11,7 @@ internal record MethodModel(
     EquatableArray<ParameterModel> Parameters,
     string? SerializerTypeName,
     EquatableArray<(string Name, string Value)> StaticHeaders,
-    LocationInfo Location,
+    LocationInfo? Location,
     string? ErrorTypeName,
     string? ErrorMapperTypeName,
     string? DeclaredErrorTypeName,

@@ -87,6 +87,51 @@ public class GeneratorCachingTests
         AssertAllCachedOrUnchanged(driver.GetRunResult());
     }
 
+    // ZeroAlloc-Net/.github#46: the model's diagnostic locations hold the syntax tree, which an edit to
+    // another file leaves as the same instance, so the model stays cached, and the cached output still
+    // reports ZRA002 at the same source location in Api.cs.
+    [Fact]
+    public void UnrelatedFileEdited_DiagnosticIsCachedAndStillReportedAtItsSource()
+    {
+        var compilation = CreateCompilation(Api, Unrelated);
+        var driver = CreateDriver().RunGenerators(compilation);
+        var before = Assert.Single(driver.GetRunResult().Diagnostics, d => d.Id == "ZRA002");
+
+        var unrelatedTree = compilation.SyntaxTrees.Single(t => t.FilePath == "Unrelated.cs");
+        var edited = compilation.ReplaceSyntaxTree(
+            unrelatedTree,
+            CSharpSyntaxTree.ParseText(Unrelated.Replace("=> 1;", "=> 2;"), path: "Unrelated.cs"));
+        driver = driver.RunGenerators(edited);
+
+        var runResult = driver.GetRunResult();
+        AssertAllCachedOrUnchanged(runResult);
+        var after = Assert.Single(runResult.Diagnostics, d => d.Id == "ZRA002");
+        Assert.Equal(LocationKind.SourceFile, after.Location.Kind);
+        Assert.Same(edited.SyntaxTrees.Single(t => t.FilePath == "Api.cs"), after.Location.SourceTree);
+        Assert.Equal(before.Location.SourceSpan, after.Location.SourceSpan);
+        Assert.Equal(before.Location.GetLineSpan(), after.Location.GetLineSpan());
+    }
+
+    // An edit above the interface moves the method, so its ZRA002 moves with it, into the new tree.
+    [Fact]
+    public void EditAboveTheInterface_MovesItsDiagnostic()
+    {
+        var compilation = CreateCompilation(Api, Unrelated);
+        var driver = CreateDriver().RunGenerators(compilation);
+        var before = Assert.Single(driver.GetRunResult().Diagnostics, d => d.Id == "ZRA002");
+
+        var apiTree = compilation.SyntaxTrees.Single(t => t.FilePath == "Api.cs");
+        var moved = CSharpSyntaxTree.ParseText(
+            Api.Replace("namespace MyApp;", "namespace MyApp;\n// two\n// more lines"), path: "Api.cs");
+        driver = driver.RunGenerators(compilation.ReplaceSyntaxTree(apiTree, moved));
+
+        var after = Assert.Single(driver.GetRunResult().Diagnostics, d => d.Id == "ZRA002");
+        Assert.Same(moved, after.Location.SourceTree);
+        Assert.Equal(
+            before.Location.GetLineSpan().StartLinePosition.Line + 2,
+            after.Location.GetLineSpan().StartLinePosition.Line);
+    }
+
     [Fact]
     public void InterfaceEdited_ClientModelIsModified()
     {
