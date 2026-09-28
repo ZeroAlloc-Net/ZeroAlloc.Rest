@@ -24,6 +24,7 @@ internal static class GeneratedCode
         MetadataReference.CreateFromFile(typeof(ZeroAlloc.Rest.SystemTextJson.SystemTextJsonSerializer).Assembly.Location),
         MetadataReference.CreateFromFile(typeof(Microsoft.Extensions.DependencyInjection.IServiceCollection).Assembly.Location),
         MetadataReference.CreateFromFile(typeof(Microsoft.Extensions.DependencyInjection.HttpClientFactoryServiceCollectionExtensions).Assembly.Location),
+        MetadataReference.CreateFromFile(typeof(ZeroAlloc.Rest.DependencyInjection.DependencyInjectionMarker).Assembly.Location),
     ];
 
     private static readonly CSharpParseOptions ParseOptions = new(LanguageVersion.Latest);

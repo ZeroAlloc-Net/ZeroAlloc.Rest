@@ -49,10 +49,3 @@ public static class RestSerializerServiceProviderExtensions
                 "or register an app-wide default with services.AddRestSerializer<T>().");
     }
 }
-
-/// <summary>
-/// Registered next to a per-client serializer, so a provider without keyed-service support can
-/// report that the client's serializer is unreachable instead of silently using another one.
-/// </summary>
-internal sealed class PerClientRestSerializer<TClient>
-    where TClient : class;

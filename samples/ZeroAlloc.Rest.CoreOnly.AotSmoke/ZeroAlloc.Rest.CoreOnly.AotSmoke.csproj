@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    A consumer of ZeroAlloc.Rest core alone, without ZeroAlloc.Rest.DependencyInjection: it builds the
+    generated client by hand. CI runs it under JIT and publishes it with Native AOT, and the target below
+    fails the build if any Microsoft.Extensions assembly is referenced. See #336.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <OptimizationPreference>Size</OptimizationPreference>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\ZeroAlloc.Rest\ZeroAlloc.Rest.csproj" />
+    <ProjectReference Include="..\..\src\ZeroAlloc.Rest.Generator\ZeroAlloc.Rest.Generator.csproj"
+                      OutputItemType="Analyzer" ReferenceOutputAssembly="false"
+                      UndefineProperties="PublishAot" />
+  </ItemGroup>
+  <Target Name="AssertNoMicrosoftExtensions" AfterTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <_MicrosoftExtensionsReference Include="@(ReferencePath)"
+                                     Condition="$([System.String]::Copy('%(Filename)').StartsWith('Microsoft.Extensions.'))" />
+    </ItemGroup>
+    <Error Condition="'@(_MicrosoftExtensionsReference)' != ''"
+           Text="The core-only sample references @(_MicrosoftExtensionsReference->'%(Filename)'), so ZeroAlloc.Rest core pulls in Microsoft.Extensions again. See #336." />
+  </Target>
+</Project>

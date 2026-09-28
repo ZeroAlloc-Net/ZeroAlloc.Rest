@@ -16,6 +16,14 @@ description: Testing ZeroAlloc.Rest API clients with WireMock.Net.
 dotnet add package WireMock.Net
 ```
 
+The test project builds a `ServiceCollection` directly rather than an ASP.NET Core host, so it needs
+its own reference to `ZeroAlloc.Rest.DependencyInjection` for `AddIUserApi`, which brings in
+`Microsoft.Extensions.DependencyInjection` for `ServiceCollection` itself transitively:
+
+```sh
+dotnet add package ZeroAlloc.Rest.DependencyInjection
+```
+
 ## Example test class
 
 ```csharp

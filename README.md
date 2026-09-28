@@ -10,10 +10,13 @@
 
 ## Install
 
-The source generator is bundled into the main package — a single `PackageReference` is all you need:
+The source generator is bundled into the main package. `ZeroAlloc.Rest` alone generates the client and
+its constructor; add `ZeroAlloc.Rest.DependencyInjection` for the generated `Add{I}` extension and
+`IHttpClientFactory` integration used below:
 
 ```sh
 dotnet add package ZeroAlloc.Rest
+dotnet add package ZeroAlloc.Rest.DependencyInjection
 dotnet add package ZeroAlloc.Rest.SystemTextJson
 ```
 
@@ -21,10 +24,14 @@ Or via `<PackageReference>`:
 
 ```xml
 <PackageReference Include="ZeroAlloc.Rest" Version="x.y.z" />
+<PackageReference Include="ZeroAlloc.Rest.DependencyInjection" Version="x.y.z" />
 <PackageReference Include="ZeroAlloc.Rest.SystemTextJson" Version="x.y.z" />
 ```
 
 > The standalone `ZeroAlloc.Rest.Generator` package is still published for backwards compatibility with existing direct PackageReferences, but new consumers should reference only `ZeroAlloc.Rest`.
+>
+> Building a client by hand instead of through DI? Skip `ZeroAlloc.Rest.DependencyInjection` — see
+> [Dependency Injection: Without dependency injection](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/blob/main/docs/dependency-injection.md#without-dependency-injection).
 
 ### Optional: resilience policies
 

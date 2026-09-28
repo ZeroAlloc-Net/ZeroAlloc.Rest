@@ -8,13 +8,16 @@
     <Project Path="src/ZeroAlloc.Rest.Tools.MSBuild/ZeroAlloc.Rest.Tools.MSBuild.csproj" />
     <Project Path="src/ZeroAlloc.Rest.Tools/ZeroAlloc.Rest.Tools.csproj" />
     <Project Path="src/ZeroAlloc.Rest.Resilience/ZeroAlloc.Rest.Resilience.csproj" />
+    <Project Path="src/ZeroAlloc.Rest.DependencyInjection/ZeroAlloc.Rest.DependencyInjection.csproj" />
   </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/ZeroAlloc.Rest.AotSmoke/ZeroAlloc.Rest.AotSmoke.csproj" />
+    <Project Path="samples/ZeroAlloc.Rest.CoreOnly.AotSmoke/ZeroAlloc.Rest.CoreOnly.AotSmoke.csproj" />
     <Project Path="samples/ZeroAlloc.Rest.MemoryPack.AotSmoke/ZeroAlloc.Rest.MemoryPack.AotSmoke.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/ZeroAlloc.Rest.Tests/ZeroAlloc.Rest.Tests.csproj" />
+    <Project Path="tests/ZeroAlloc.Rest.DependencyInjection.Tests/ZeroAlloc.Rest.DependencyInjection.Tests.csproj" />
     <Project Path="tests/ZeroAlloc.Rest.DuplicateGeneratorTests/ZeroAlloc.Rest.DuplicateGeneratorTests.csproj" />
     <Project Path="tests/ZeroAlloc.Rest.Generator.Tests/ZeroAlloc.Rest.Generator.Tests.csproj" />
     <Project Path="tests/ZeroAlloc.Rest.Integration.Tests/ZeroAlloc.Rest.Integration.Tests.csproj" />

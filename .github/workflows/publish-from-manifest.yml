@@ -54,11 +54,13 @@ jobs:
       # DuplicateGeneratorDiagnosticTests and MSBuildTaskPackageTests restore from a local
       # feed at artifacts/local and fail on their first assertion without one. Missing here,
       # this rescue workflow fails on exactly the release it exists to rescue.
+      # PackageDependencyTests and CoreOnlyConsumerTests also need the DI package alongside core.
       - name: Pack ZA.Rest packages into local feed (for the package consumer tests)
         run: |
           dotnet pack src/ZeroAlloc.Rest/ZeroAlloc.Rest.csproj --no-build -c Release -p:PackageVersion=${{ steps.version.outputs.version }} -o artifacts/local
           dotnet pack src/ZeroAlloc.Rest.Generator/ZeroAlloc.Rest.Generator.csproj --no-build -c Release -p:PackageVersion=${{ steps.version.outputs.version }} -o artifacts/local
           dotnet pack src/ZeroAlloc.Rest.Tools.MSBuild/ZeroAlloc.Rest.Tools.MSBuild.csproj --no-build -c Release -p:PackageVersion=${{ steps.version.outputs.version }} -o artifacts/local
+          dotnet pack src/ZeroAlloc.Rest.DependencyInjection/ZeroAlloc.Rest.DependencyInjection.csproj --no-build -c Release -p:PackageVersion=${{ steps.version.outputs.version }} -o artifacts/local
 
       - name: Test
         run: dotnet test --configuration Release --no-build

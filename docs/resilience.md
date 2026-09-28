@@ -9,7 +9,7 @@ dotnet add package ZeroAlloc.Rest.Resilience
 dotnet add package ZeroAlloc.Resilience
 ```
 
-The Resilience source generator ships inside the `ZeroAlloc.Resilience` package; there is no separate generator package to add. This page describes ZeroAlloc.Resilience 2.0 and later; retrying a failed `Result` needs 3.2.0 or later.
+The Resilience source generator ships inside the `ZeroAlloc.Resilience` package; there is no separate generator package to add. `ZeroAlloc.Rest.Resilience` depends on `ZeroAlloc.Rest.DependencyInjection`, so `AddRestResilience` and `IHttpClientFactory` integration are available without adding that package yourself. This page describes ZeroAlloc.Resilience 2.0 and later; retrying a failed `Result` needs 3.2.0 or later.
 
 ## Quick Start
 

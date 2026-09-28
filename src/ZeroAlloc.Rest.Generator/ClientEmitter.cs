@@ -12,7 +12,7 @@ internal static class ClientEmitter
     private static readonly string[] ReservedFieldNames =
         { "_activitySource", "_meter", "_requestsTotal", "_requestDurationMs", "_httpClient", "_serializer" };
 
-    internal static void Emit(SourceProductionContext ctx, ClientModel model)
+    internal static void Emit(SourceProductionContext ctx, ClientModel model, bool dependencyInjection)
     {
         foreach (var diagnostic in model.Diagnostics)
             ctx.ReportDiagnostic(diagnostic.ToDiagnostic());
@@ -65,7 +65,9 @@ internal static class ClientEmitter
             sb.AppendLine();
         }
 
-        sb.AppendLine($"{model.Accessibility} sealed partial class {model.ClassName} : {model.InterfaceName}, global::ZeroAlloc.Rest.IGeneratedRestClient<{model.ClassName}>");
+        sb.AppendLine(dependencyInjection
+            ? $"{model.Accessibility} sealed partial class {model.ClassName} : {model.InterfaceName}, global::ZeroAlloc.Rest.IGeneratedRestClient<{model.ClassName}>"
+            : $"{model.Accessibility} sealed partial class {model.ClassName} : {model.InterfaceName}");
         sb.AppendLine("{");
         sb.AppendLine("    private static readonly global::System.Diagnostics.ActivitySource _activitySource = new(\"ZeroAlloc.Rest\");");
         sb.AppendLine("    private static readonly global::System.Diagnostics.Metrics.Meter _meter = new(\"ZeroAlloc.Rest\");");
@@ -122,7 +124,8 @@ internal static class ClientEmitter
         sb.AppendLine("    }");
         sb.AppendLine();
 
-        EmitGeneratedClientMembers(sb, model, overrideSerializers, errorMappings);
+        if (dependencyInjection)
+            EmitGeneratedClientMembers(sb, model, overrideSerializers, errorMappings);
 
         foreach (var method in model.Methods)
             EmitMethod(ctx, sb, model.InterfaceName, method, serializerFieldMap, errorMapperFieldMap, model.MaxErrorBodyBytes);
@@ -155,8 +158,10 @@ internal static class ClientEmitter
     }
 
     // IGeneratedRestClient<TSelf>: how Add{I} and the Resilience bridge build the client and register
-    // its serializers, with no reflection or ActivatorUtilities. Implemented explicitly, so the client
-    // gains no public Create or AddSerializers that could clash with the interface's own methods.
+    // its serializers, with no reflection or ActivatorUtilities. They exist only with the
+    // ZeroAlloc.Rest.DependencyInjection package, since they call Microsoft.Extensions. Implemented
+    // explicitly, so the client gains no public Create or AddSerializers that could clash with the
+    // interface's own methods.
     private static void EmitGeneratedClientMembers(StringBuilder sb, ClientModel model, IReadOnlyList<string> overrideSerializers, IReadOnlyList<(string ErrorTypeName, string MapperTypeName, string MapperErrorTypeName)> errorMappings)
     {
         var self = $"global::ZeroAlloc.Rest.IGeneratedRestClient<{model.ClassName}>";
@@ -224,7 +229,7 @@ internal static class ClientEmitter
         {
             // UseSerializer is per client: keyed by the interface, it never touches the app-wide
             // IRestSerializer, so two clients cannot overwrite each other's serializer.
-            sb.AppendLine($"        global::ZeroAlloc.Rest.GeneratedRestClient.AddPerClientSerializer<{model.InterfaceName}>(services, options);");
+            sb.AppendLine($"        global::ZeroAlloc.Rest.GeneratedRestClientRegistration.AddPerClientSerializer<{model.InterfaceName}>(services, options);");
         }
         foreach (var st in overrideSerializers)
             sb.AppendLine($"        {TryAddSingleton}<{st}>(services);");

@@ -15,6 +15,7 @@ public class GeneratorInterfaceSerializerTests
         MetadataReference.CreateFromFile(typeof(ZeroAlloc.Rest.IRestSerializer).Assembly.Location),
         MetadataReference.CreateFromFile(typeof(Microsoft.Extensions.DependencyInjection.IServiceCollection).Assembly.Location),
         MetadataReference.CreateFromFile(typeof(Microsoft.Extensions.DependencyInjection.HttpClientFactoryServiceCollectionExtensions).Assembly.Location),
+        MetadataReference.CreateFromFile(typeof(ZeroAlloc.Rest.DependencyInjection.DependencyInjectionMarker).Assembly.Location),
     ];
 
     private const string SerializerSource = """
@@ -227,8 +228,8 @@ public class GeneratorInterfaceSerializerTests
         var (sources, _, _) = Run(JevApiSource);
         var di = sources["IJevApi.DI.g.cs"];
 
-        Assert.Contains("global::ZeroAlloc.Rest.GeneratedRestClient.AddSerializers<JevApiClient>(services, options);", di);
-        Assert.Contains("global::ZeroAlloc.Rest.GeneratedRestClient.Create<JevApiClient>(httpClient, sp)", di);
+        Assert.Contains("global::ZeroAlloc.Rest.GeneratedRestClientRegistration.AddSerializers<JevApiClient>(services, options);", di);
+        Assert.Contains("global::ZeroAlloc.Rest.GeneratedRestClientRegistration.Create<JevApiClient>(httpClient, sp)", di);
     }
 
     [Fact]

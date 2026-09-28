@@ -32,6 +32,11 @@ The `ContentType` property controls both the `Content-Type` header on requests a
 
 ## Choosing the serializer for a client
 
+`UseSerializer` and `AddRestSerializer` come from `ZeroAlloc.Rest.DependencyInjection`; see
+[Dependency Injection](dependency-injection.md). Building a client by hand instead? Pass the
+serializer straight to its constructor — see
+[Without dependency injection](dependency-injection.md#without-dependency-injection).
+
 Each generated client picks its serializer in this order. The first match wins:
 
 1. **Interface-level `[Serializer(typeof(T))]`.** It is fixed at compile time. The generated client resolves `T` from DI, and the generated `Add{I}` registers `T` with `TryAddSingleton<T>()`. The app-wide default does not apply to such a client, and calling `UseSerializer` for it throws an `InvalidOperationException` at registration, naming the interface and the attribute's type.

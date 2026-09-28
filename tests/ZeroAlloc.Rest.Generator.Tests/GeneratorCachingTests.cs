@@ -8,11 +8,15 @@ namespace ZeroAlloc.Rest.Generator.Tests;
 // and every compilation, including every IDE keystroke, regenerates every client.
 public class GeneratorCachingTests
 {
+    private static readonly MetadataReference DependencyInjectionReference =
+        MetadataReference.CreateFromFile(typeof(ZeroAlloc.Rest.DependencyInjection.DependencyInjectionMarker).Assembly.Location);
+
     private static readonly MetadataReference[] References =
     [
         .. Basic.Reference.Assemblies.Net100.References.All,
         MetadataReference.CreateFromFile(typeof(ZeroAlloc.Rest.HttpError).Assembly.Location),
         MetadataReference.CreateFromFile(typeof(ZeroAlloc.Results.Result<,>).Assembly.Location),
+        DependencyInjectionReference,
     ];
 
     // Covers every collection in the models: methods, parameters, static headers, error mappers
@@ -45,6 +49,9 @@ public class GeneratorCachingTests
 
     // The tracking name RestClientGenerator gives the step that produces each ClientModel.
     private const string ClientModelsStep = "ClientModels";
+
+    // The tracking name of the step that reads whether the DependencyInjection marker resolves.
+    private const string DependencyInjectionStep = "DependencyInjectionEnabled";
 
     private const string Unrelated = """
         namespace MyApp;
@@ -101,6 +108,50 @@ public class GeneratorCachingTests
             .SelectMany(step => step.Outputs)
             .Select(output => output.Reason);
         Assert.Contains(IncrementalStepRunReason.Modified, outputReasons);
+    }
+
+    // Issue #336: the marker lookup runs on every compilation, but yields the same bool, so an edit
+    // elsewhere leaves it, and every output that depends on it, cached.
+    [Fact]
+    public void UnrelatedFileEdited_DependencyInjectionStepIsCached()
+    {
+        var compilation = CreateCompilation(Api, Unrelated);
+        var driver = CreateDriver().RunGenerators(compilation);
+
+        var unrelatedTree = compilation.SyntaxTrees.Single(t => t.FilePath == "Unrelated.cs");
+        var edited = compilation.ReplaceSyntaxTree(
+            unrelatedTree,
+            CSharpSyntaxTree.ParseText(Unrelated.Replace("=> 1;", "=> 2;"), path: "Unrelated.cs"));
+        driver = driver.RunGenerators(edited);
+
+        var result = driver.GetRunResult().Results[0];
+        Assert.True(result.TrackedSteps.ContainsKey(DependencyInjectionStep));
+        var outputs = result.TrackedSteps[DependencyInjectionStep].SelectMany(step => step.Outputs).ToList();
+        Assert.NotEmpty(outputs);
+        Assert.All(outputs, output => AssertCachedOrUnchanged(output.Reason));
+    }
+
+    [Fact]
+    public void MarkerReferenceAdded_OutputIsModified()
+    {
+        var compilation = CreateCompilation(Api, Unrelated).RemoveReferences(DependencyInjectionReference);
+        var driver = CreateDriver().RunGenerators(compilation);
+        Assert.DoesNotContain(
+            driver.GetRunResult().Results[0].GeneratedSources,
+            s => s.HintName == "IJevApi.DI.g.cs");
+
+        driver = driver.RunGenerators(compilation.AddReferences(DependencyInjectionReference));
+
+        var result = driver.GetRunResult().Results[0];
+        Assert.Contains(result.GeneratedSources, s => s.HintName == "IJevApi.DI.g.cs");
+        var markerReasons = result.TrackedSteps[DependencyInjectionStep]
+            .SelectMany(step => step.Outputs)
+            .Select(output => output.Reason);
+        Assert.Contains(IncrementalStepRunReason.Modified, markerReasons);
+        var outputReasons = result.TrackedOutputSteps.SelectMany(kv => kv.Value)
+            .SelectMany(step => step.Outputs)
+            .Select(output => output.Reason);
+        Assert.Contains(outputReasons, reason => reason is IncrementalStepRunReason.New or IncrementalStepRunReason.Modified);
     }
 
     private static void AssertAllCachedOrUnchanged(GeneratorDriverRunResult runResult)

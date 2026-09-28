@@ -12,19 +12,12 @@ description: Build a complete CRUD REST client from scratch with ZeroAlloc.Rest.
 
 ## 1. Install packages
 
+`ZeroAlloc.Rest` bundles the source generator, so no separate analyzer reference is needed:
+
 ```sh
 dotnet add package ZeroAlloc.Rest
-dotnet add package ZeroAlloc.Rest.Generator
+dotnet add package ZeroAlloc.Rest.DependencyInjection
 dotnet add package ZeroAlloc.Rest.SystemTextJson
-```
-
-Add the generator as an analyzer in your `.csproj`:
-
-```xml
-<PackageReference Include="ZeroAlloc.Rest.Generator"
-                  Version="x.y.z"
-                  OutputItemType="Analyzer"
-                  ReferenceOutputAssembly="false" />
 ```
 
 ## 2. Define DTOs

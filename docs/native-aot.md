@@ -18,6 +18,14 @@ The generated client classes (`UserApiClient`, etc.) contain **no runtime reflec
 
 The `IsAotCompatible=true` property on `ZeroAlloc.Rest.csproj` enables the SDK's AOT compatibility analysis.
 
+`ZeroAlloc.Rest` itself depends only on `ZeroAlloc.Results` and `ZeroAlloc.Collections` — nothing
+under `Microsoft.Extensions`. A consumer that builds its client by hand, `new MyApiClient(httpClient,
+serializer)`, pulls in nothing else. Reference `ZeroAlloc.Rest.DependencyInjection` only when you want
+the generated `Add{I}` extension and `IHttpClientFactory` integration; see
+[Dependency Injection](dependency-injection.md) and
+[samples/ZeroAlloc.Rest.CoreOnly.AotSmoke](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/tree/main/samples/ZeroAlloc.Rest.CoreOnly.AotSmoke)
+for a worked core-only AOT publish.
+
 ## Serialization and AOT
 
 `IRestSerializer` carries no trim or AOT annotations, and generated clients carry no suppressions,

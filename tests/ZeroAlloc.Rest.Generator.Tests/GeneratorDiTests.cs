@@ -67,7 +67,7 @@ public class GeneratorDiTests
         var content = diFile.SourceText.ToString();
         Assert.Contains("AddHttpClient(nameof(IUserApi)", content);
         Assert.Contains(".AddTypedClient<IUserApi>(", content);
-        Assert.Contains("GeneratedRestClient.Create<UserApiClient>(httpClient, sp)", content);
+        Assert.Contains("GeneratedRestClientRegistration.Create<UserApiClient>(httpClient, sp)", content);
     }
 
     [Fact]
@@ -128,7 +128,8 @@ public class GeneratorDiTests
             "TestAssembly",
             new[] { CSharpSyntaxTree.ParseText(source) },
             Basic.Reference.Assemblies.Net100.References.All
-                .Append(MetadataReference.CreateFromFile(AttributesAssembly.Location)),
+                .Append(MetadataReference.CreateFromFile(AttributesAssembly.Location))
+                .Append(MetadataReference.CreateFromFile(typeof(ZeroAlloc.Rest.DependencyInjection.DependencyInjectionMarker).Assembly.Location)),
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
 
         var generator = new RestClientGenerator();

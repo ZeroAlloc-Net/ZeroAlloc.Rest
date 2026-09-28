@@ -44,7 +44,8 @@ URL escaping. Both get a
 
 Every method attribute also has a parameterless form. A missing route means an empty path, so
 the request goes to the `HttpClient`'s BaseAddress itself — useful when the base address already
-names the resource:
+names the resource. `AddIClient` below comes from `ZeroAlloc.Rest.DependencyInjection`; see
+[Dependency Injection](dependency-injection.md):
 
 ```csharp
 services.AddIClient(options => options.BaseAddress = new Uri("https://api.example.com/v2/eval"));
@@ -78,7 +79,7 @@ Give the method a route, or bind the parameter with `[Query]`, `[Header]` or `[B
 
 ## Base address
 
-The base address is set when registering the client in DI:
+The base address is set when registering the client in DI, through the generated `Add{I}` extension:
 
 ```csharp
 services.AddIUserApi(options =>

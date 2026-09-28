@@ -8,6 +8,16 @@ description: Generated AddI* DI extension, IHttpClientFactory integration, and C
 
 # Dependency Injection
 
+```sh
+dotnet add package ZeroAlloc.Rest.DependencyInjection
+```
+
+`ZeroAlloc.Rest` generates the client and its constructor on its own. `ZeroAlloc.Rest.DependencyInjection`
+adds everything on this page: the generated `Add{I}` extension, `AddRestSerializer`, `UseSerializer`
+and keyed per-client serializers. The generator emits `Add{I}` and the client's
+`IGeneratedRestClient<TSelf>` members only when this package is referenced; without it, use the
+client's constructor directly — see [Without dependency injection](#without-dependency-injection).
+
 ## Generated extension method
 
 For every interface annotated with `[ZeroAllocRestClient]`, the generator emits an `AddI{InterfaceName}` extension on `IServiceCollection`:
@@ -64,7 +74,7 @@ When the interface or a method carries `[Serializer(typeof(T))]`, `T` is registe
 static void global::ZeroAlloc.Rest.IGeneratedRestClient<UploadApiClient>.AddSerializers(
     IServiceCollection services, ZeroAllocClientOptions options)
 {
-    global::ZeroAlloc.Rest.GeneratedRestClient.AddPerClientSerializer<IUploadApi>(services, options);
+    global::ZeroAlloc.Rest.GeneratedRestClientRegistration.AddPerClientSerializer<IUploadApi>(services, options);
     ServiceCollectionDescriptorExtensions.TryAddSingleton<global::ZeroAlloc.Rest.MemoryPack.MemoryPackRestSerializer>(services);
 }
 ```
@@ -77,3 +87,22 @@ No manual registration is needed. The real output spells every type name out in 
 services.AddSingleton(new MemoryPackRestSerializer(types => types.Add<UploadDto>()));
 services.AddIUploadApi(options => options.BaseAddress = new Uri("https://api.example.com"));
 ```
+
+## Without dependency injection
+
+Without a reference to `ZeroAlloc.Rest.DependencyInjection`, the generator emits only the client
+class and its constructor — no `Add{I}`, no `IGeneratedRestClient<TSelf>` members. Build the client
+directly:
+
+```csharp
+var httpClient = new HttpClient { BaseAddress = new Uri("https://api.example.com") };
+var serializer = new SystemTextJsonSerializer(AppJsonContext.Default);
+var client = new UserApiClient(httpClient, serializer);
+```
+
+The constructor takes, in order: the `HttpClient`, the `IRestSerializer`, one `IRestSerializer` per
+distinct method-level `[Serializer]` type, then one `IHttpErrorMapper<E>` per mapped error type. This
+is the same constructor the DI package's generated `Add{I}` calls internally, so a library that ships
+a client this way pulls in nothing beyond `ZeroAlloc.Rest`, `ZeroAlloc.Results` and
+`ZeroAlloc.Collections` — no Microsoft.Extensions.Http. See
+[Long-running clients outside DI](advanced.md#long-running-clients-outside-di).

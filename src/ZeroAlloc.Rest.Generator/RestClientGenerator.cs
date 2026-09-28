@@ -9,6 +9,12 @@ public sealed class RestClientGenerator : IIncrementalGenerator
     internal const string ZeroAllocRestClientAttributeName =
         "ZeroAlloc.Rest.Attributes.ZeroAllocRestClientAttribute";
 
+    // Declared by ZeroAlloc.Rest.DependencyInjection. When it resolves, the generator emits the
+    // Add{I} registration and the client's IGeneratedRestClient members; without it, generated
+    // clients need nothing from Microsoft.Extensions.
+    internal const string DependencyInjectionMarkerName =
+        "ZeroAlloc.Rest.DependencyInjection.DependencyInjectionMarker";
+
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         var clientModels = context.SyntaxProvider
@@ -20,10 +26,20 @@ public sealed class RestClientGenerator : IIncrementalGenerator
             .Select(static (m, _) => m!)
             .WithTrackingName("ClientModels");
 
-        context.RegisterSourceOutput(clientModels, static (ctx, model) =>
+        // Reruns on every compilation, but yields an equal bool, so the outputs stay cached.
+        // GetTypeByMetadataName returns null when the name resolves in more than one referenced
+        // assembly, which would silently turn DI emission off; GetTypesByMetadataName reports every
+        // match instead, and the result stays a plain bool for caching.
+        var dependencyInjection = context.CompilationProvider
+            .Select(static (compilation, _) => !compilation.GetTypesByMetadataName(DependencyInjectionMarkerName).IsEmpty)
+            .WithTrackingName("DependencyInjectionEnabled");
+
+        context.RegisterSourceOutput(clientModels.Combine(dependencyInjection), static (ctx, pair) =>
         {
-            ClientEmitter.Emit(ctx, model);
-            DiEmitter.Emit(ctx, model);
+            var (model, dependencyInjectionEnabled) = pair;
+            ClientEmitter.Emit(ctx, model, dependencyInjectionEnabled);
+            if (dependencyInjectionEnabled)
+                DiEmitter.Emit(ctx, model);
         });
     }
 }

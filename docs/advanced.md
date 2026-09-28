@@ -448,7 +448,9 @@ To get failures as values instead of exceptions, return `UnitResult<HttpError>`;
 
 ## Long-running clients outside DI
 
-If you need a client outside of dependency injection (e.g., in a CLI tool):
+Building the client by hand this way needs only `ZeroAlloc.Rest` — no
+`ZeroAlloc.Rest.DependencyInjection` reference, and nothing under `Microsoft.Extensions`. If you need
+a client outside of dependency injection (e.g., in a CLI tool):
 
 ```csharp
 var httpClient = new HttpClient { BaseAddress = new Uri("https://api.example.com") };
@@ -459,4 +461,5 @@ var user = await client.GetUserAsync(1);
 
 The generated `UserApiClient` constructor takes `HttpClient` and `IRestSerializer` directly, plus one `IRestSerializer` parameter per method-level override type, plus one [`IHttpErrorMapper<E>`](advanced.md#your-own-error-type-errormapper) parameter for each error type its methods use, in that order, so it works without a DI container. When the interface carries `[Serializer(typeof(T))]`, pass a `T` as the main `IRestSerializer`. Pass each override parameter an instance of the type the method's `[Serializer]` names, and each mapper parameter an instance of that mapper.
 
-Every generated client also implements `IGeneratedRestClient<TSelf>`, explicitly, so the client's own surface is unchanged. Its static `Create(HttpClient, IServiceProvider)` builds the client with the serializer chosen by the rules in [Serialization](serialization.md#choosing-the-serializer-for-a-client), and its static `AddSerializers(IServiceCollection, ZeroAllocClientOptions)` registers the serializers the client needs and every declared [error mapper](advanced.md#your-own-error-type-errormapper). The generated `Add{I}` and `AddRestResilience` both use them. You rarely need to call them yourself.
+With `ZeroAlloc.Rest.DependencyInjection` referenced, every generated client also implements
+`IGeneratedRestClient<TSelf>`, explicitly, so the client's own surface is unchanged. Its static `Create(HttpClient, IServiceProvider)` builds the client with the serializer chosen by the rules in [Serialization](serialization.md#choosing-the-serializer-for-a-client), and its static `AddSerializers(IServiceCollection, ZeroAllocClientOptions)` registers the serializers the client needs and every declared [error mapper](advanced.md#your-own-error-type-errormapper). The generated `Add{I}` and `AddRestResilience` both use them. You rarely need to call them yourself. Without that package, none of `IGeneratedRestClient<TSelf>`, `Add{I}` or `AddSerializers` is emitted — only the client class and its constructor.

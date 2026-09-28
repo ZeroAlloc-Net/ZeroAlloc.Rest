@@ -3,7 +3,7 @@ id: migrating-to-v3
 title: Migrating to 3.0
 slug: /migrating-to-v3
 sidebar_position: 12
-description: ZeroAlloc.Rest 3.0 generates models, typed members and Result returns from OpenAPI specs, and makes IRestSerializer AOT-neutral.
+description: ZeroAlloc.Rest 3.0 generates models, typed members and Result returns from OpenAPI specs, splits DI into its own package, and makes IRestSerializer AOT-neutral.
 ---
 
 # Migrating to 3.0
@@ -11,9 +11,89 @@ description: ZeroAlloc.Rest 3.0 generates models, typed members and Result retur
 ## Who is affected
 
 - You generate clients with `zeroalloc generate` or `ZeroAlloc.Rest.Tools.MSBuild`: every section applies.
+- You call `Add{I}()`, `AddZeroAllocClient`, `AddRestSerializer` or `UseSerializer`: see
+  [DI registration moved](#di-registration-moved-to-zeroallocrestdependencyinjection).
+- You call `RestSerializerAdapter<T>`: see [it is removed](#restserializeradaptert-is-removed).
 - You implement `IRestSerializer`: see [Serializer annotations](#irestserializer-carries-no-trim-annotations).
 - You construct `SystemTextJsonSerializer` in a trimmed or Native AOT app: see [the constructors](#systemtextjsonserializer-reflection-constructors-are-annotated).
 - You pass `DateTime`, `double`, `bool` or enum values in routes, queries or headers: see [value formatting](#route-query-and-header-values-are-written-invariantly).
+
+## DI registration moved to `ZeroAlloc.Rest.DependencyInjection`
+
+`ZeroAlloc.Rest` no longer depends on anything under `Microsoft.Extensions`; it depends only on
+`ZeroAlloc.Results` and `ZeroAlloc.Collections`. The generated `Add{I}()` extension,
+`AddZeroAllocClient`, `AddRestSerializer<T>()`/`AddRestSerializer(instance)`, `UseSerializer` and
+keyed per-client serializers moved to a new package, `ZeroAlloc.Rest.DependencyInjection`. The
+generator emits `Add{I}()` and the client's `IGeneratedRestClient<TSelf>` members only when that
+package is referenced.
+
+If your app calls any of those members, add the package and change nothing else — every moved type
+keeps its `ZeroAlloc.Rest` namespace, so no `using` needs updating:
+
+```sh
+dotnet add package ZeroAlloc.Rest.DependencyInjection
+```
+
+An app already on `ZeroAlloc.Rest.Resilience` gets the DI package transitively, but
+`ZeroAlloc.Rest.Resilience` itself must be upgraded to 3.0 alongside core — the two cannot be mixed
+across major versions. `ZeroAlloc.Rest.Resilience` 2.x was compiled against the DI types that lived in
+the 2.x `ZeroAlloc.Rest.dll`, and core cannot type-forward them to the new package, so a 2.x
+`ZeroAlloc.Rest.Resilience` fails to compile against 3.0 and, if forced to load anyway, throws
+`TypeLoadException` at run time. The same applies to any other library compiled against those 2.x DI
+types, such as `IGeneratedRestClient` or `ZeroAllocClientOptions`: rebuild it against 3.0.
+
+A library that builds its client by hand needs nothing new. The generated constructor is unchanged:
+`HttpClient`, the `IRestSerializer`, one `IRestSerializer` per distinct method-level `[Serializer]`
+type, then one `IHttpErrorMapper<E>` per mapped error type, in that order:
+
+```csharp
+var client = new MyApiClient(httpClient, serializer);
+```
+
+Such a library now also drops Microsoft.Extensions.Http from its own dependency chain, since
+`ZeroAlloc.Rest` no longer brings it in. See
+[Long-running clients outside DI](advanced.md#long-running-clients-outside-di) and
+[Without dependency injection](dependency-injection.md#without-dependency-injection).
+
+## `RestSerializerAdapter<T>` is removed
+
+`RestSerializerAdapter<T>` and the `ZeroAlloc.Serialisation` package reference it needed are gone
+from `ZeroAlloc.Rest`. If you used it to bridge a `ZeroAlloc.Serialisation.ISerializer<T>` into
+`IRestSerializer`, write the same adapter yourself:
+
+```csharp
+using System.Buffers;
+using ZeroAlloc.Serialisation;
+
+public sealed class MyAdapter<T>(ISerializer<T> serializer) : IRestSerializer
+{
+    public string ContentType => "application/octet-stream";
+
+    public async ValueTask<TResult?> DeserializeAsync<TResult>(Stream stream, CancellationToken ct = default)
+    {
+        if (typeof(TResult) != typeof(T))
+            throw new InvalidOperationException($"{nameof(MyAdapter<T>)} can only deserialize {typeof(T).Name}, not {typeof(TResult).Name}.");
+
+        using var ms = new MemoryStream();
+        await stream.CopyToAsync(ms, ct);
+        return (TResult?)(object?)serializer.Deserialize(ms.GetBuffer().AsSpan(0, (int)ms.Length));
+    }
+
+    public async ValueTask SerializeAsync<TValue>(Stream stream, TValue value, CancellationToken ct = default)
+    {
+        if (value is not T typed)
+            throw new InvalidOperationException($"{nameof(MyAdapter<T>)} can only serialize {typeof(T).Name}, not {typeof(TValue).Name}.");
+
+        var buffer = new ArrayBufferWriter<byte>();
+        serializer.Serialize(buffer, typed);
+        await stream.WriteAsync(buffer.WrittenMemory, ct);
+    }
+}
+```
+
+For System.Text.Json over a source-generated context, use `SystemTextJsonSerializer` from
+`ZeroAlloc.Rest.SystemTextJson` instead: `new SystemTextJsonSerializer(MyJsonContext.Default)`. See
+[Serialization](serialization.md#systemtextjson).
 
 ## Generated methods return `Result`
 
