@@ -1,4 +1,1 @@
 #nullable enable
-ZeroAlloc.Rest.MemoryPack.MemoryPackRestSerializer.MemoryPackRestSerializer(System.Action<ZeroAlloc.Rest.MemoryPack.MemoryPackRestTypes!>! configure) -> void
-ZeroAlloc.Rest.MemoryPack.MemoryPackRestTypes
-ZeroAlloc.Rest.MemoryPack.MemoryPackRestTypes.Add<T>() -> ZeroAlloc.Rest.MemoryPack.MemoryPackRestTypes!

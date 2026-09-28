@@ -5,3 +5,5 @@ ZeroAlloc.Rest.SystemTextJson.SystemTextJsonSerializer.DeserializeAsync<T>(Syste
 ZeroAlloc.Rest.SystemTextJson.SystemTextJsonSerializer.SerializeAsync<T>(System.IO.Stream! stream, T value, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 ZeroAlloc.Rest.SystemTextJson.SystemTextJsonSerializer.SystemTextJsonSerializer() -> void
 ZeroAlloc.Rest.SystemTextJson.SystemTextJsonSerializer.SystemTextJsonSerializer(System.Text.Json.JsonSerializerOptions! options) -> void
+ZeroAlloc.Rest.SystemTextJson.SystemTextJsonSerializer.SystemTextJsonSerializer(System.Text.Json.Serialization.JsonSerializerContext! context) -> void
+ZeroAlloc.Rest.SystemTextJson.SystemTextJsonSerializer.SystemTextJsonSerializer(System.Text.Json.Serialization.Metadata.IJsonTypeInfoResolver! resolver, System.Text.Json.JsonSerializerOptions? options = null) -> void

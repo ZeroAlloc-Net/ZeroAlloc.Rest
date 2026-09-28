@@ -1,6 +1,8 @@
 #nullable enable
 override ZeroAlloc.Rest.Tools.MSBuild.GenerateRestClientTask.Execute() -> bool
 ZeroAlloc.Rest.Tools.MSBuild.GenerateRestClientTask
+ZeroAlloc.Rest.Tools.MSBuild.GenerateRestClientTask.GenerateModels.get -> bool
+ZeroAlloc.Rest.Tools.MSBuild.GenerateRestClientTask.GenerateModels.set -> void
 ZeroAlloc.Rest.Tools.MSBuild.GenerateRestClientTask.GenerateRestClientTask() -> void
 ZeroAlloc.Rest.Tools.MSBuild.GenerateRestClientTask.InterfaceName.get -> string!
 ZeroAlloc.Rest.Tools.MSBuild.GenerateRestClientTask.InterfaceName.set -> void
