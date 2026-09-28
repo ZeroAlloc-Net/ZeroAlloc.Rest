@@ -174,6 +174,8 @@ are called. Use `new SystemTextJsonSerializer(context)` or `new SystemTextJsonSe
 Both `MessagePackRestSerializer` constructors, `new MessagePackRestSerializer()` and
 `new MessagePackRestSerializer(options)`, carry the same two attributes: the standard resolver builds
 formatters with reflection, and the constructor cannot tell whether your options fall back to it.
+A later 3.x release adds `new MessagePackRestSerializer(resolver)` for a source-generated resolver,
+which carries neither; see [Serialization](serialization.md#messagepack).
 `MemoryPackRestSerializer` carries neither; it needs its types registered, below.
 
 ## MemoryPackRestSerializer needs its types registered

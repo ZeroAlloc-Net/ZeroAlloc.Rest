@@ -26,7 +26,7 @@ public interface IRestSerializer
 The interface carries no trim or AOT annotations, so generated clients call it without a
 suppression. An implementation that needs reflection marks its constructor with
 `[RequiresUnreferencedCode]` and `[RequiresDynamicCode]` instead, as the reflection-based
-`SystemTextJsonSerializer` constructors and both `MessagePackRestSerializer` constructors do.
+`SystemTextJsonSerializer` and `MessagePackRestSerializer` constructors do.
 
 The `ContentType` property controls both the `Content-Type` header on requests and the `Accept` header.
 
@@ -171,13 +171,39 @@ dotnet add package ZeroAlloc.Rest.MessagePack
 options.UseSerializer<MessagePackRestSerializer>();
 ```
 
-Both constructors carry `[RequiresUnreferencedCode]` and `[RequiresDynamicCode]`.
-`new MessagePackRestSerializer()` uses `MessagePackSerializerOptions.Standard`, which builds
-formatters with reflection and dynamic code, and `new MessagePackRestSerializer(options)` cannot
-tell whether the resolver on your options falls back to it. A trimmed or Native AOT build therefore
-warns wherever one is constructed, `UseSerializer<MessagePackRestSerializer>()` included. For
-Native AOT, use `SystemTextJsonSerializer` with a `JsonSerializerContext`, or `MemoryPackRestSerializer`
-with registered types.
+The parameterless and options constructors carry `[RequiresUnreferencedCode]` and
+`[RequiresDynamicCode]`. `new MessagePackRestSerializer()` uses `MessagePackSerializerOptions.Standard`,
+which builds formatters with reflection and dynamic code, and `new MessagePackRestSerializer(options)`
+cannot tell whether the resolver on your options falls back to it. A trimmed or Native AOT build
+therefore warns wherever one is constructed, `UseSerializer<MessagePackRestSerializer>()` included.
+
+For Native AOT, pass a resolver instead. MessagePack's source generator fills in a partial class
+marked `[GeneratedMessagePackResolver]` with formatters for your `[MessagePackObject]` types; compose
+it with the built-in formatters:
+
+```csharp
+[GeneratedMessagePackResolver]
+internal partial class AppMessagePackResolver;
+
+var resolver = CompositeResolver.Create(
+    Array.Empty<IMessagePackFormatter>(),
+    [AppMessagePackResolver.Instance, BuiltinResolver.Instance]);
+
+options.UseSerializer(new MessagePackRestSerializer(resolver));
+```
+
+`new MessagePackRestSerializer(resolver, options)` keeps the rest of your options, such as
+compression, and replaces only their resolver. This constructor carries no annotation and nothing
+falls back to the standard resolver: a type your resolver has no formatter for throws
+`MessagePackSerializationException`. Keep reflection-based resolvers such as `StandardResolver`,
+`DynamicGenericResolver` or `ContractlessStandardResolver` out of the composite, since they fail under
+Native AOT.
+
+The MessagePack assembly still reports its own trim and AOT warnings in a Native AOT publish, as
+`IL2104` and `IL3053`, whatever resolver you pass; see
+[#374](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/374).
+[samples/ZeroAlloc.Rest.MessagePack.AotSmoke](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/tree/main/samples/ZeroAlloc.Rest.MessagePack.AotSmoke)
+runs this path as a Native AOT binary.
 
 Content-Type: `application/x-msgpack`.
 

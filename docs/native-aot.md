@@ -47,11 +47,14 @@ so what the trimmer sees is exactly what your serializer does. Use one that need
   ```
 
 - MemoryPack, with every `[MemoryPackable]` type registered; see [Serialization](serialization.md#memorypack).
+- MessagePack, with a resolver built from a `[GeneratedMessagePackResolver]` class and the built-in
+  formatters; see [Serialization](serialization.md#messagepack). The MessagePack assembly itself
+  still reports trim and AOT warnings; see [#374](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/374).
 
 The parameterless and options constructors of `SystemTextJsonSerializer` use reflection and are
 marked `[RequiresUnreferencedCode]` and `[RequiresDynamicCode]`, so the build tells you where. So
-are both `MessagePackRestSerializer` constructors: MessagePack's standard resolver uses reflection,
-and the constructor cannot tell whether the options you pass fall back to it.
+are the parameterless and options `MessagePackRestSerializer` constructors: MessagePack's standard
+resolver uses reflection, and the constructor cannot tell whether the options you pass fall back to it.
 
 ## Publishing as Native AOT
 
@@ -78,7 +81,7 @@ workload must be installed, and ILC also needs the directory of `vswhere.exe` on
 
 ## AOT checklist
 
-- [ ] Use a source-generated `JsonSerializerContext`, such as the one generated from your OpenAPI spec, or MemoryPack with registered types
+- [ ] Use a source-generated `JsonSerializerContext`, such as the one generated from your OpenAPI spec, MemoryPack with registered types, or MessagePack with a source-generated resolver
 - [ ] Construct serializers without reflection: no IL2026 or IL3050 warning should remain; never suppress one
 - [ ] Set `PublishAot=true` in the publish profile
 - [ ] Test the native binary on the target OS — trim analysis may surface missing roots
