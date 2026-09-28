@@ -15,7 +15,7 @@ internal sealed class SchemaModelBuilder : ISchemaTypeNamer
     private static readonly string[] RecordMembers =
         ["EqualityContract", "Equals", "GetHashCode", "ToString", "PrintMembers", "Deconstruct", "GetType", "MemberwiseClone", "Finalize"];
 
-    private readonly List<OpenApiWarning> _warnings;
+    private readonly List<OpenApiDiagnostic> _warnings;
     private readonly HashSet<string> _typeNames;
     private readonly Dictionary<OpenApiSchema, TypeRef> _types = new(ReferenceEqualityComparer.Instance);
     private readonly Queue<(OpenApiSchema Schema, string Name, string Path)> _pending = new();
@@ -29,7 +29,7 @@ internal sealed class SchemaModelBuilder : ISchemaTypeNamer
 
     // reservedNames are the names the generated file already uses: the interface, the client the
     // source generator derives from it, and the JSON context.
-    internal SchemaModelBuilder(OpenApiDocument document, IEnumerable<string> reservedNames, List<OpenApiWarning> warnings)
+    internal SchemaModelBuilder(OpenApiDocument document, IEnumerable<string> reservedNames, List<OpenApiDiagnostic> warnings)
     {
         _warnings = warnings;
         _typeNames = new HashSet<string>(reservedNames, StringComparer.Ordinal);
@@ -92,7 +92,7 @@ internal sealed class SchemaModelBuilder : ISchemaTypeNamer
 
     // Issue #359: structurally identical inline unions share one type. The key holds everything
     // BuildUnion reads: oneOf or anyOf, and each variant in order with its type and the required
-    // properties the converter matches it by. The first occurrence names the type and gives it its
+    // properties and single-value enums the converter matches it by. The first occurrence names the type and gives it its
     // description; a later one, whatever its path or description, refers to that type. Titles,
     // descriptions and the union's own nullable are not part of the key: they change no generated
     // member, and nullable is declared on the property that uses the union.
@@ -116,7 +116,8 @@ internal sealed class SchemaModelBuilder : ISchemaTypeNamer
         {
             if (VariantKey(part) is not { } variant)
                 return null;
-            key.Append('|').Append(variant).Append('{').Append(string.Join(",", RequiredOf(part))).Append('}');
+            key.Append('|').Append(variant).Append('{').Append(string.Join(",", RequiredOf(part))).Append(';')
+                .Append(string.Join(",", ValuesOf(part).Select(v => v.WireName + "=" + v.Kind + ":" + v.Value))).Append('}');
         }
         return key.ToString();
     }
@@ -146,7 +147,7 @@ internal sealed class SchemaModelBuilder : ISchemaTypeNamer
         }
     }
 
-    public void Unsupported(string path, string reason) => _warnings.Add(OpenApiWarning.MappedToJsonElement(path, reason));
+    public void Unsupported(string path, string reason) => _warnings.Add(OpenApiDiagnostic.MappedToJsonElement(path, reason));
 
     // Builds every model registered so far, and those their properties register in turn.
     internal EquatableList<ModelDefinition> Build()
@@ -380,9 +381,66 @@ internal sealed class SchemaModelBuilder : ISchemaTypeNamer
             var type = TypeMapper.Map(part, contextName, path + keyword + i.ToString(CultureInfo.InvariantCulture), this);
             var kind = KindOf(part, type);
             var required = kind == JsonKind.Object ? RequiredOf(part) : EquatableList<string>.Empty;
-            variants.Add(new UnionVariantModel(CSharpNames.Unique(VariantName(part, type), used), type, kind, required));
+            var values = kind == JsonKind.Object ? ValuesOf(part) : EquatableList<UnionValueModel>.Empty;
+            variants.Add(new UnionVariantModel(CSharpNames.Unique(VariantName(part, type), used), type, kind, required, values));
         }
+        ReportIndistinguishable(name, path, isOneOf, variants);
         return new UnionModel(name, schema.Description, isOneOf, new EquatableList<UnionVariantModel>(variants));
+    }
+
+    // Issue #360: ZRT003 for each pair of object variants the converter cannot tell apart. Both
+    // require the same properties, so both pass the required-property filter for the same objects
+    // and score the same. For oneOf, the pair is reported unless a required property holds a
+    // different single-value enum in each: otherwise some object matches both and reading it
+    // throws. For anyOf, the first declared variant wins such an object, so the pair is reported
+    // when the later variant is never read: every value the earlier one requires, the later one
+    // requires too, so each object the later one matches, the earlier one matches as well.
+    private void ReportIndistinguishable(string name, string path, bool isOneOf, List<UnionVariantModel> variants)
+    {
+        for (var i = 0; i < variants.Count; i++)
+        {
+            var first = variants[i];
+            if (first.Kind != JsonKind.Object)
+                continue;
+            for (var j = i + 1; j < variants.Count; j++)
+            {
+                var second = variants[j];
+                if (second.Kind != JsonKind.Object || !first.RequiredWireNames.Equals(second.RequiredWireNames))
+                    continue;
+                if (isOneOf && !HaveDifferentRequiredValue(first, second))
+                {
+                    _warnings.Add(new OpenApiDiagnostic(OpenApiDiagnostic.IndistinguishableUnionVariants,
+                        $"Schema '{path}': oneOf variants '{first.Name}' and '{second.Name}' of union '{name}' cannot be told apart. "
+                        + "They require the same properties, and no required property holds a different single-value enum in each, "
+                        + "so reading a JSON object that matches both throws. " + IndistinguishableAdvice,
+                        OpenApiSeverity.Error));
+                }
+                else if (!isOneOf && first.Values.All(second.Values.Contains))
+                {
+                    _warnings.Add(new OpenApiDiagnostic(OpenApiDiagnostic.IndistinguishableUnionVariants,
+                        $"Schema '{path}': anyOf variants '{first.Name}' and '{second.Name}' of union '{name}' cannot be told apart. "
+                        + $"Every JSON object that matches '{second.Name}' also matches '{first.Name}', and the first declared variant "
+                        + $"always wins, so '{second.Name}' is never read. " + IndistinguishableAdvice));
+                }
+            }
+        }
+    }
+
+    private const string IndistinguishableAdvice
+        = "Add a discriminator, or a required property with a different single-value enum to each variant.";
+
+    // A property absent from the object passes the value filter, so only a required one separates
+    // the variants, and only when each variant gives it a value and no value is shared.
+    private static bool HaveDifferentRequiredValue(UnionVariantModel first, UnionVariantModel second)
+    {
+        foreach (var wireName in first.RequiredWireNames)
+        {
+            var mine = first.Values.Where(v => string.Equals(v.WireName, wireName, StringComparison.Ordinal)).ToList();
+            var theirs = second.Values.Where(v => string.Equals(v.WireName, wireName, StringComparison.Ordinal)).ToList();
+            if (mine.Count > 0 && theirs.Count > 0 && !mine.Exists(theirs.Contains))
+                return true;
+        }
+        return false;
     }
 
     private static string VariantName(OpenApiSchema part, TypeRef type)
@@ -436,6 +494,45 @@ internal sealed class SchemaModelBuilder : ISchemaTypeNamer
         }
         AddRequired(schema, required);
         return new EquatableList<string>(required);
+    }
+
+    // Issue #360: the single-value enums of an object variant's properties, its allOf parts included,
+    // which the converter checks before scoring required properties. A single-part wrapper declares
+    // no properties, so the part it wraps stands for it. Sorted, so the model is deterministic.
+    private static EquatableList<UnionValueModel> ValuesOf(OpenApiSchema schema)
+    {
+        var values = new List<UnionValueModel>();
+        AddValues(TypeMapper.Unwrap(schema), values);
+        return new EquatableList<UnionValueModel>(values
+            .Distinct()
+            .OrderBy(v => v.WireName, StringComparer.Ordinal)
+            .ThenBy(v => v.Value, StringComparer.Ordinal)
+            .ToList());
+    }
+
+    private static void AddValues(OpenApiSchema schema, List<UnionValueModel> values)
+    {
+        foreach (var (wireName, property) in schema.Properties)
+        {
+            if (SingleValue(wireName, TypeMapper.Unwrap(property)) is { } value)
+                values.Add(value);
+        }
+        foreach (var part in schema.AllOf)
+            AddValues(part, values);
+    }
+
+    private static UnionValueModel? SingleValue(string wireName, OpenApiSchema property)
+    {
+        if (property.Enum.Count != 1)
+            return null;
+        return property.Enum[0] switch
+        {
+            OpenApiString text => new UnionValueModel(wireName, JsonKind.String, text.Value),
+            OpenApiInteger number => new UnionValueModel(wireName, JsonKind.Number, number.Value.ToString(CultureInfo.InvariantCulture)),
+            OpenApiLong number => new UnionValueModel(wireName, JsonKind.Number, number.Value.ToString(CultureInfo.InvariantCulture)),
+            OpenApiBoolean flag => new UnionValueModel(wireName, JsonKind.Boolean, flag.Value ? "true" : "false"),
+            _ => null,
+        };
     }
 
     private static void AddRequired(OpenApiSchema schema, SortedSet<string> required)

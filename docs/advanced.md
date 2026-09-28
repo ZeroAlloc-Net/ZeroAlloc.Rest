@@ -355,9 +355,11 @@ ZRA005 comes from an analyzer in the generator package, so `#pragma warning disa
 
 ### OpenAPI code generation: ZRT diagnostics
 
-[OpenAPI code generation](openapi-codegen.md) reports its own warnings with a `ZRT` prefix. They
+[OpenAPI code generation](openapi-codegen.md) reports its own diagnostics with a `ZRT` prefix. They
 come from the `ZeroAlloc.Rest.Tools` CLI and the `ZeroAlloc.Rest.Tools.MSBuild` task, not the
 compiler, so they point at the spec file. `#pragma` and `.editorconfig` do not apply to them.
+A warning can be suppressed by its code. An error cannot: it fails generation, so the CLI exits
+with 1, the MSBuild task fails the build, and neither writes the generated file.
 
 #### ZRT001: Cookie parameter not emitted
 
@@ -389,6 +391,33 @@ Message: `Schema '#/components/schemas/Holder/properties/anything' is mapped to 
 
 To suppress it, add the code to `<NoWarn>` in the project that runs the MSBuild task, or pass
 `--nowarn ZRT002` to `zeroalloc generate`.
+
+#### ZRT003: Union variants cannot be told apart
+
+Severity: Error for `oneOf`, Warning for `anyOf`.
+
+A `oneOf` or `anyOf` without a `discriminator` has two object variants that its generated converter
+cannot tell apart. The converter keeps the object variants whose required properties are all
+present and whose single-value `enum` properties hold their value or are absent, then picks the
+variant with the most required properties; see [OpenAPI code generation](openapi-codegen.md). Two
+variants that require the same properties score the same, so only a single-value `enum` separates
+them:
+
+- **`oneOf`** is reported unless a required property holds a different single-value `enum` in each
+  variant. Otherwise a JSON object can match both, and the converter throws on it as ambiguous. It
+  is an error, because the generated client would fail on valid responses.
+- **`anyOf`** is reported when every object the later variant matches, the earlier one matches too,
+  because each single-value `enum` the earlier variant has, the later one has as well. The first
+  declared variant always wins, so the later one is never read.
+
+Each pair is reported once, naming the union and both variants. Fix the spec: add a
+`discriminator`, or give each variant a required property with a different single-value `enum`,
+such as `event: {type: string, enum: [labeled]}`.
+
+Message: `Schema '#/components/schemas/Timeline': anyOf variants 'Labeled' and 'Unlabeled' of union 'Timeline' cannot be told apart. Every JSON object that matches 'Unlabeled' also matches 'Labeled', and the first declared variant always wins, so 'Unlabeled' is never read. Add a discriminator, or a required property with a different single-value enum to each variant.`
+
+To suppress the `anyOf` warning, add the code to `<NoWarn>` in the project that runs the MSBuild
+task, or pass `--nowarn ZRT003` to `zeroalloc generate`. The `oneOf` error cannot be suppressed.
 
 ## Value formatting
 

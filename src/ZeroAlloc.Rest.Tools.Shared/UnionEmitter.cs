@@ -107,12 +107,35 @@ internal static class UnionEmitter
         sb.AppendLine("        }");
         sb.AppendLine("        return true;");
         sb.AppendLine("    }");
+        EmitValueChecks(sb, model);
         sb.AppendLine("}");
     }
 
-    // Parse once, filter by JSON kind, filter objects by required properties, then pick the variant
-    // matching the most required properties, earliest first on a tie. oneOf rejects more than one
-    // candidate as ambiguous; anyOf takes the pick.
+    // Issue #360: a property with a single-value enum passes when it holds that value, or is absent;
+    // HasAll already rejects an absent required property. No check allocates: TryGetProperty and ValueEquals compare
+    // the UTF-8 bytes in place. Only the overloads the variants use are emitted.
+    private static void EmitValueChecks(StringBuilder sb, UnionModel model)
+    {
+        var kinds = model.Variants.SelectMany(v => v.Values).Select(v => v.Kind).Distinct().ToList();
+        foreach (var kind in kinds.Order())
+        {
+            var (parameter, test) = kind switch
+            {
+                JsonKind.String => ("string", $"property.ValueKind == {Json}.JsonValueKind.String && property.ValueEquals(value)"),
+                JsonKind.Number => ("long", $"property.ValueKind == {Json}.JsonValueKind.Number && property.TryGetInt64(out var number) && number == value"),
+                _ => ("bool", $"property.ValueKind == (value ? {Json}.JsonValueKind.True : {Json}.JsonValueKind.False)"),
+            };
+            sb.AppendLine();
+            sb.Append("    private static bool IsAbsentOr(").Append(Json).Append(".JsonElement element, string name, ")
+                .Append(parameter).AppendLine(" value)");
+            sb.Append("        => !element.TryGetProperty(name, out var property) || (").Append(test).AppendLine(");");
+        }
+    }
+
+    // Parse once, filter by JSON kind, filter objects by required properties and by the values of
+    // their single-value enums, then pick the variant matching the most required properties,
+    // earliest first on a tie. oneOf rejects more than one candidate as ambiguous; anyOf takes the
+    // pick.
     private static void EmitRead(StringBuilder sb, UnionModel model)
     {
         sb.Append("    public override ").Append(model.Name).Append(" Read(ref ").Append(Json)
@@ -173,7 +196,19 @@ internal static class UnionEmitter
         sb.AppendLine("    }");
     }
 
-    private static string Accepts(UnionVariantModel variant, int index) => variant.Kind switch
+    private static string Accepts(UnionVariantModel variant, int index)
+        => variant.Kind == JsonKind.Object
+            ? AcceptsKind(variant, index) + string.Concat(variant.Values.Select(v => $" && IsAbsentOr(element, {CSharpNames.Literal(v.WireName)}, {ValueLiteral(v)})"))
+            : AcceptsKind(variant, index);
+
+    private static string ValueLiteral(UnionValueModel value) => value.Kind switch
+    {
+        JsonKind.String => CSharpNames.Literal(value.Value),
+        JsonKind.Number => value.Value + "L",
+        _ => value.Value,
+    };
+
+    private static string AcceptsKind(UnionVariantModel variant, int index) => variant.Kind switch
     {
         JsonKind.Object when variant.RequiredWireNames.Count > 0
             => $"kind == {Json}.JsonValueKind.Object && HasAll(element, Required{Index(index)})",

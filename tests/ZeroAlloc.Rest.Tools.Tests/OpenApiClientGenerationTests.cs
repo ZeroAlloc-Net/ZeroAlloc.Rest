@@ -141,9 +141,9 @@ public class OpenApiClientGenerationTests
                   enum: [available, sold]
         """;
 
-    private static (string Code, List<OpenApiWarning> Warnings) Generate(bool models = true)
+    private static (string Code, List<OpenApiDiagnostic> Warnings) Generate(bool models = true)
     {
-        var warnings = new List<OpenApiWarning>();
+        var warnings = new List<OpenApiDiagnostic>();
         var code = OpenApiInterfaceGenerator.Generate(PetsSpec, "MyApp", "IPetsApi", warnings, new GenerationOptions(models));
         return (code, warnings);
     }
@@ -348,7 +348,7 @@ public class OpenApiClientGenerationTests
                           schema:
                             type: string
             """;
-        var warnings = new List<OpenApiWarning>();
+        var warnings = new List<OpenApiDiagnostic>();
 
         var code = OpenApiInterfaceGenerator.Generate(Spec, "MyApp", "IPingApi", warnings, GenerationOptions.Default);
 
@@ -955,7 +955,7 @@ public class OpenApiClientGenerationTests
     [Fact]
     public void SchemasNamedLikeContextProperties_CompileClean_AndRoundTrip()
     {
-        var warnings = new List<OpenApiWarning>();
+        var warnings = new List<OpenApiDiagnostic>();
         var code = OpenApiInterfaceGenerator.Generate(ClashesSpec, "MyApp", "IClashesApi", warnings, GenerationOptions.Default);
 
         Assert.Empty(warnings);
@@ -1059,7 +1059,7 @@ public class OpenApiClientGenerationTests
                     bark:
                       type: boolean
             """;
-        var warnings = new List<OpenApiWarning>();
+        var warnings = new List<OpenApiDiagnostic>();
 
         var code = OpenApiInterfaceGenerator.Generate(Spec, "MyApp", "IPetApi", warnings, GenerationOptions.Default);
 

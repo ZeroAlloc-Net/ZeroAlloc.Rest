@@ -151,7 +151,7 @@ public class OpenApiRouteBindingTests
     [Fact]
     public void CookieParameter_IsSkipped_WithAWarning_InsteadOfBecomingARouteParameter()
     {
-        var warnings = new List<OpenApiWarning>();
+        var warnings = new List<OpenApiDiagnostic>();
         var code = OpenApiInterfaceGenerator.Generate(Spec("""
               /users/{id}:
                 get:
@@ -284,7 +284,7 @@ public class OpenApiRouteBindingTests
 
     private static string Generate(string spec)
     {
-        var warnings = new List<OpenApiWarning>();
+        var warnings = new List<OpenApiDiagnostic>();
         var code = OpenApiInterfaceGenerator.Generate(spec, "MyApp", "IMyApi", warnings);
         Assert.Empty(warnings);
         return code;

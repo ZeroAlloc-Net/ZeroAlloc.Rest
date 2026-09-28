@@ -76,6 +76,67 @@ public class CommandLineTests
         Assert.DoesNotContain("ZRT001", stderr);
     }
 
+    // Issue #360: a union whose variants cannot be told apart. With oneOf, ZRT003 is an error: it is
+    // printed as one, --nowarn does not suppress it, the tool fails, and no file is written.
+    internal static string AmbiguousUnionSpec(string keyword) => $$"""
+        openapi: 3.0.0
+        info:
+          title: Test
+          version: "1"
+        paths:
+          /events:
+            get:
+              operationId: getEvent
+              responses:
+                '200':
+                  description: OK
+                  content:
+                    application/json:
+                      schema:
+                        $ref: '#/components/schemas/Timeline'
+        components:
+          schemas:
+            Labeled:
+              type: object
+              required: [event]
+              properties:
+                event:
+                  type: string
+            Unlabeled:
+              type: object
+              required: [event]
+              properties:
+                event:
+                  type: string
+            Timeline:
+              {{keyword}}:
+                - $ref: '#/components/schemas/Labeled'
+                - $ref: '#/components/schemas/Unlabeled'
+        """;
+
+    [Fact]
+    public void OneOfAmbiguousUnion_IsAZrt003Error_ThatFailsTheTool()
+    {
+        var (exitCode, stderr, output) = Run(AmbiguousUnionSpec("oneOf"), "--nowarn", "ZRT003");
+
+        Assert.Equal(1, exitCode);
+        Assert.Contains("error ZRT003: Schema '#/components/schemas/Timeline': oneOf variants 'Labeled' and 'Unlabeled'", stderr);
+        Assert.Equal("", output);
+    }
+
+    [Fact]
+    public void AnyOfAmbiguousUnion_IsAZrt003Warning_ThatNoWarnSuppresses()
+    {
+        var (exitCode, stderr, output) = Run(AmbiguousUnionSpec("anyOf"));
+        var (suppressedExitCode, suppressedStderr, _) = Run(AmbiguousUnionSpec("anyOf"), "--nowarn", "ZRT003");
+
+        Assert.Equal(0, exitCode);
+        Assert.Contains("warning ZRT003: Schema '#/components/schemas/Timeline': anyOf variants 'Labeled' and 'Unlabeled'", stderr);
+        Assert.Contains("public sealed record Timeline", output);
+        Assert.Equal(0, suppressedExitCode);
+        Assert.DoesNotContain("ZRT003", suppressedStderr);
+    }
+
     [Theory]
     [InlineData(new string[0], true)]
     [InlineData(new[] { "--models", "true" }, true)]

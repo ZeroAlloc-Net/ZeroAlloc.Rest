@@ -118,9 +118,13 @@ ZeroAlloc type as `global::`, so a schema named `Task` or `Header` cannot shadow
   anywhere in the JSON object.
 - **`oneOf`/`anyOf` without one** is a union wrapper, such as `PetOrError`, with one `As{Variant}`
   property per variant plus `Match` and `Switch`. Its converter keeps the variants whose JSON kind
-  matches and, for objects, whose required properties are all present, then picks the one matching
-  the most required properties, the first declared on a tie. For `oneOf`, more than one match is
-  ambiguous and throws `JsonException`; for `anyOf` the pick wins.
+  matches and, for objects, whose required properties are all present and whose properties with a
+  single-value `enum`, such as `event: {type: string, enum: [labeled]}`, hold that value or are
+  absent. It then picks the one matching the most required properties, the first declared on a
+  tie. For `oneOf`, more than one match is ambiguous and throws `JsonException`; for `anyOf` the
+  pick wins. Two object variants the converter cannot tell apart are reported at generation time
+  as [ZRT003](advanced.md#zrt003-union-variants-cannot-be-told-apart): an error for `oneOf`, a
+  warning for `anyOf`.
 - **Identical inline unions share one type.** Two inline `oneOf`/`anyOf` schemas with the same
   keyword and the same variants in the same order, each a `$ref` or an inline primitive or array of
   one, generate one type. The first occurrence in the spec names it and gives it its description; a
@@ -182,13 +186,18 @@ The metadata is `OutputPath`, not `Output`: MSBuild reserves `Output` as an item
 The package is a development dependency, so it does not flow to projects that reference yours. The
 task runs under the .NET MSBuild that `dotnet build` uses.
 
-## Warnings
+## Warnings and errors
 
 When the spec has something the interface cannot express, generation still succeeds and reports a
 warning with a `ZRT` code, listed under [Diagnostics](advanced.md#openapi-code-generation-zrt-diagnostics).
 The MSBuild task logs it against the spec file, and `<NoWarn>` in the project suppresses it. The
 `zeroalloc generate` CLI writes it to stderr, and `--nowarn ZRT001`, or `--nowarn ZRT001,ZRT002`,
 suppresses it there.
+
+When the generated code would be wrong, such as a `oneOf` whose variants cannot be told apart,
+[ZRT003](advanced.md#zrt003-union-variants-cannot-be-told-apart), generation fails with an error
+instead. The MSBuild task fails the build, the CLI exits with 1, neither writes the file, and
+neither `<NoWarn>` nor `--nowarn` suppresses it. Fix the spec.
 
 ## Workflow recommendation
 

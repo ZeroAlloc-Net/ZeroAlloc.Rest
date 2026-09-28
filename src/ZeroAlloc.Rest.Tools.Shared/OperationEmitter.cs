@@ -15,7 +15,7 @@ internal static class OperationEmitter
     // serializable receives the request and response types, which the JSON context registers.
     internal static void Emit(
         StringBuilder sb, string path, OpenApiPathItem pathItem, OperationType operationType, OpenApiOperation operation,
-        ISchemaTypeNamer namer, List<string> serializable, List<OpenApiWarning> warnings)
+        ISchemaTypeNamer namer, List<string> serializable, List<OpenApiDiagnostic> warnings)
     {
         var httpAttr = operationType switch
         {
@@ -180,12 +180,12 @@ internal static class OperationEmitter
 
     // A parameter the interface cannot bind: a comment for the emitted method, and a warning.
     // Only a cookie parameter gets here; the OpenAPI reader rejects a parameter with no location.
-    private static (string Comment, OpenApiWarning Warning) Skipped(OpenApiParameter param, string operationName)
+    private static (string Comment, OpenApiDiagnostic Warning) Skipped(OpenApiParameter param, string operationName)
     {
         // ZeroAlloc.Rest binds no cookies. Emitted without an attribute, a cookie parameter became
         // a route parameter with no token, and its value was never sent.
         return ($"// Cookie parameter '{param.Name}' is not emitted: ZeroAlloc.Rest has no cookie binding.",
-            new OpenApiWarning(OpenApiWarning.CookieParameterNotEmitted,
+            new OpenApiDiagnostic(OpenApiDiagnostic.CookieParameterNotEmitted,
                 $"Operation '{operationName}': cookie parameter '{param.Name}' is not emitted, because "
                     + "ZeroAlloc.Rest has no cookie binding. Send the cookie from the HttpClient, for example "
                     + "with a CookieContainer on its handler."));

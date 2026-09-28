@@ -5,7 +5,7 @@ namespace ZeroAlloc.Rest.Tools;
 // The namer for --models false, design decision 16: a $ref is its bare PascalCase name, which a
 // hand-written DTO in the same namespace satisfies, and an inline schema that would need a model
 // has no type, so it maps to JsonElement with ZRT002.
-internal sealed class ReferenceOnlyNamer(List<OpenApiWarning> warnings) : ISchemaTypeNamer
+internal sealed class ReferenceOnlyNamer(List<OpenApiDiagnostic> warnings) : ISchemaTypeNamer
 {
     public TypeRef Named(OpenApiSchema schema, string contextName, string path)
     {
@@ -15,5 +15,5 @@ internal sealed class ReferenceOnlyNamer(List<OpenApiWarning> warnings) : ISchem
         return TypeRef.JsonElement;
     }
 
-    public void Unsupported(string path, string reason) => warnings.Add(OpenApiWarning.MappedToJsonElement(path, reason));
+    public void Unsupported(string path, string reason) => warnings.Add(OpenApiDiagnostic.MappedToJsonElement(path, reason));
 }
