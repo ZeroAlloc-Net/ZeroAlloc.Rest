@@ -1,4 +1,5 @@
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Xunit;
 
 namespace ZeroAlloc.Rest.Generator.Tests;
@@ -74,6 +75,40 @@ public class GeneratorDependencyInjectionTests
         Assert.Contains("IGeneratedRestClient<ThingApiClient>", client);
         Assert.Contains("global::ZeroAlloc.Rest.GeneratedRestClientRegistration.AddPerClientSerializer<IThingApi>", client);
         Assert.Empty(run.Problems);
+    }
+
+    // #336 review: GetTypeByMetadataName returns null when a name resolves in more than one
+    // referenced assembly, which would silently turn DI emission off. Two assemblies that each
+    // declare the marker type must still enable it.
+    [Fact]
+    public void MarkerDeclaredInTwoReferencedAssemblies_StillEmitsDiOutput()
+    {
+        var run = GeneratorHarness.RunAll(Api, [.. WithDependencyInjection, BuildDuplicateMarkerAssembly()]);
+
+        var di = Source(run, "IThingApi.DI.g.cs");
+        Assert.Contains("AddIThingApi", di);
+        Assert.Empty(run.Problems);
+    }
+
+    private static MetadataReference BuildDuplicateMarkerAssembly()
+    {
+        const string source = """
+            namespace ZeroAlloc.Rest.DependencyInjection;
+            public static class DependencyInjectionMarker;
+            """;
+
+        var compilation = CSharpCompilation.Create(
+            "DuplicateDependencyInjectionMarkerAssembly",
+            [CSharpSyntaxTree.ParseText(source)],
+            Basic.Reference.Assemblies.Net100.References.All,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        using var ms = new System.IO.MemoryStream();
+        var result = compilation.Emit(ms);
+        if (!result.Success)
+            throw new System.InvalidOperationException(string.Join('\n', result.Diagnostics));
+        ms.Position = 0;
+        return MetadataReference.CreateFromStream(ms);
     }
 
     [Fact]

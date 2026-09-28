@@ -27,8 +27,11 @@ public sealed class RestClientGenerator : IIncrementalGenerator
             .WithTrackingName("ClientModels");
 
         // Reruns on every compilation, but yields an equal bool, so the outputs stay cached.
+        // GetTypeByMetadataName returns null when the name resolves in more than one referenced
+        // assembly, which would silently turn DI emission off; GetTypesByMetadataName reports every
+        // match instead, and the result stays a plain bool for caching.
         var dependencyInjection = context.CompilationProvider
-            .Select(static (compilation, _) => compilation.GetTypeByMetadataName(DependencyInjectionMarkerName) is not null)
+            .Select(static (compilation, _) => !compilation.GetTypesByMetadataName(DependencyInjectionMarkerName).IsEmpty)
             .WithTrackingName("DependencyInjectionEnabled");
 
         context.RegisterSourceOutput(clientModels.Combine(dependencyInjection), static (ctx, pair) =>
