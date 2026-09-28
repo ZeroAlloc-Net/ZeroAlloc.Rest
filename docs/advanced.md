@@ -130,7 +130,7 @@ A reference type in a nullable-oblivious context, such as an interface under `#n
 counts as non-nullable: its `Task<Pet>` or `Result<Pet, E>` method rejects an empty body. To accept
 one, enable nullable annotations for the interface and declare `Pet?`.
 
-Failures that become an `HttpError` are still traced as failures: the span status is set to `Error` and the request duration is recorded, as for an exception that propagates.
+Failures that become an `HttpError` are still traced as failures: the span status is set to `Error` and the request duration is recorded, as for an exception that propagates. Cancellation you asked for is not a failure: the span keeps status `Unset` and is tagged `rest.cancelled` = `true`.
 
 Consuming the result:
 
