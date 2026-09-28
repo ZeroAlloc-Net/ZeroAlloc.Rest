@@ -59,6 +59,10 @@ jobs:
       - name: Test
         run: dotnet test ZeroAlloc.Rest.slnx --no-build -c Release --logger "trx" --results-directory ./test-results
 
+      # The core-only consumer under JIT: ZeroAlloc.Rest without the DI package; see #336.
+      - name: Run core-only consumer (JIT)
+        run: dotnet run --no-build -c Release --project samples/ZeroAlloc.Rest.CoreOnly.AotSmoke
+
       - name: Upload test results
         uses: actions/upload-artifact@v7
         if: always()
@@ -110,6 +114,44 @@ jobs:
 
       - name: Run AOT binary
         run: ./aot-out/ZeroAlloc.Rest.AotSmoke
+
+  aot-smoke-core:
+    runs-on: ubuntu-latest
+    # Publishes samples/ZeroAlloc.Rest.CoreOnly.AotSmoke with PublishAot=true and fails on any trim
+    # or AOT warning. Proves that ZeroAlloc.Rest core alone, without
+    # ZeroAlloc.Rest.DependencyInjection, still produces a generated client that survives ILC; see
+    # #336.
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          # Installs the SDK global.json pins. Without it the job never installs
+          # that SDK at all and only works when the runner image happens to ship one
+          # satisfying the pin, which is how a publish failed on a lagging image.
+          global-json-file: global.json
+          dotnet-version: '10.0.x'
+
+      - name: Install AOT native toolchain
+        run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
+
+      - name: Restore
+        run: dotnet restore samples/ZeroAlloc.Rest.CoreOnly.AotSmoke/ZeroAlloc.Rest.CoreOnly.AotSmoke.csproj
+
+      - name: Publish AOT
+        run: |
+          set -o pipefail
+          dotnet publish samples/ZeroAlloc.Rest.CoreOnly.AotSmoke/ZeroAlloc.Rest.CoreOnly.AotSmoke.csproj -r linux-x64 -c Release -o ./aot-core-out 2>&1 | tee publish.log
+          if grep -E "warning IL[0-9]+" publish.log; then
+            echo "::error::The core-only AOT smoke has trim or AOT warnings."
+            exit 1
+          fi
+
+      - name: Run AOT binary
+        run: ./aot-core-out/ZeroAlloc.Rest.CoreOnly.AotSmoke
 
   aot-smoke-memorypack:
     runs-on: ubuntu-latest
