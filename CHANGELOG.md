@@ -1,5 +1,34 @@
 # Changelog
 
+## [3.1.0](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v3.0.0...v3.1.0) (2026-09-28)
+
+
+### Features
+
+* add an AOT-safe resolver constructor to MessagePackRestSerializer ([#377](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/377)) ([1146e16](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/1146e1616824017228c2ecc0e4fd8466614ed525)), closes [#361](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/361)
+
+
+### Bug Fixes
+
+* count the required properties a wrapper adds around a union variant ([eb54677](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/eb5467730077e39ddecef89cad2d6907fcf2621a))
+* generate structurally identical inline unions once ([eb54677](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/eb5467730077e39ddecef89cad2d6907fcf2621a))
+* leave the span status Unset when the caller cancels a request ([#379](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/379)) ([931a98e](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/931a98e69a28553263fb703cdfa0bda5dcb289c7)), closes [#376](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/376)
+* record rest.request_duration_ms once when a call fails after the response ([#375](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/375)) ([8f7f954](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/8f7f9541e9a6a18a260b3152bf67359f8f075024))
+* report ZRA diagnostics at source locations that #pragma can suppress ([#384](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/384)) ([2cf6443](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/2cf6443419c5efcde631b252a131ae8e77d85e45))
+* send one header value per element for a collection-typed [Header] parameter ([#373](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/373)) ([5a995d8](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/5a995d8131b472d019ef27dcead09c7c0ec4af24)), closes [#356](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/356)
+* tell apart union variants by single-value enums and report ZRT003 ([#380](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/380)) ([e4fb684](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/e4fb68402dc9d7d645d742dd0842b16660369eb5))
+* trace and time request body serialization failures ([#382](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/382)) ([a73e81d](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/a73e81ddedf9bb145a905356b4b8e1ec50e10596)), closes [#378](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/378)
+
+
+### Performance Improvements
+
+* serialize request bodies into a pooled buffer ([#368](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/368)) ([3ac43c5](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/3ac43c546a7b5fb7895ef37ad8af0f8e6cdcd2ab))
+
+
+### Tests
+
+* cover value types in the AOT smoke ([#383](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/383)) ([814c2bf](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/814c2bf4b6879a730e60fcf5a99bfeb0aceab348))
+
 ## [3.0.0](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v2.2.0...v3.0.0) (2026-09-28)
 
 

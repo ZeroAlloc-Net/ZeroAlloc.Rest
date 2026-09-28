@@ -2,6 +2,7 @@
 override ZeroAlloc.Rest.HttpError.Equals(object? obj) -> bool
 override ZeroAlloc.Rest.HttpError.GetHashCode() -> int
 override ZeroAlloc.Rest.HttpError.ToString() -> string!
+static ZeroAlloc.Rest.GeneratedRestClient.CreateBodyContentAsync<T>(ZeroAlloc.Rest.IRestSerializer! serializer, T value, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<System.Net.Http.HttpContent!>
 static ZeroAlloc.Rest.GeneratedRestClient.ReadErrorBodyAsync(System.Net.Http.HttpContent! content, int maxBytes, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<(System.ReadOnlyMemory<byte> Body, bool Truncated)>
 static ZeroAlloc.Rest.HttpError.operator !=(ZeroAlloc.Rest.HttpError? left, ZeroAlloc.Rest.HttpError? right) -> bool
 static ZeroAlloc.Rest.HttpError.operator ==(ZeroAlloc.Rest.HttpError? left, ZeroAlloc.Rest.HttpError? right) -> bool

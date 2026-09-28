@@ -3,5 +3,6 @@ ZeroAlloc.Rest.MessagePack.MessagePackRestSerializer
 ZeroAlloc.Rest.MessagePack.MessagePackRestSerializer.ContentType.get -> string!
 ZeroAlloc.Rest.MessagePack.MessagePackRestSerializer.DeserializeAsync<T>(System.IO.Stream! stream, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<T?>
 ZeroAlloc.Rest.MessagePack.MessagePackRestSerializer.MessagePackRestSerializer() -> void
+ZeroAlloc.Rest.MessagePack.MessagePackRestSerializer.MessagePackRestSerializer(MessagePack.IFormatterResolver! resolver, MessagePack.MessagePackSerializerOptions? options = null) -> void
 ZeroAlloc.Rest.MessagePack.MessagePackRestSerializer.MessagePackRestSerializer(MessagePack.MessagePackSerializerOptions! options) -> void
 ZeroAlloc.Rest.MessagePack.MessagePackRestSerializer.SerializeAsync<T>(System.IO.Stream! stream, T value, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
