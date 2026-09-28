@@ -301,8 +301,13 @@ internal static class ClientEmitter
         // Every local the generated method declares starts with "__", and every parameter is emitted
         // through Identifier, so a parameter named url, request, response or @class still compiles.
         EmitUrlBuilding(sb, method.Route, pathParams, queryParams, method.EvaluatedRouteTokens);
-        EmitRequestCreation(sb, method, headerParams, bodyParam, formBodyParam, ctArg, serializerExpr);
-        EmitSendAndResponse(sb, method, ctParam is null ? null : Identifier(ctParam), serializerExpr, maxErrorBodyBytes, errorMapperField);
+        EmitRequestCreation(sb, method, headerParams, formBodyParam, serializerExpr);
+        // Serializing a [Body] is part of the call, so it runs inside the method's try: a serializer
+        // failure or a caller cancellation is traced and timed like any other.
+        var bodyStatement = bodyParam is null
+            ? null
+            : $"__request.Content = await global::ZeroAlloc.Rest.GeneratedRestClient.CreateBodyContentAsync({serializerExpr}, {Identifier(bodyParam)}, {ctArg}).ConfigureAwait(false);";
+        EmitSendAndResponse(sb, method, ctParam is null ? null : Identifier(ctParam), bodyStatement, serializerExpr, maxErrorBodyBytes, errorMapperField);
 
         sb.AppendLine("    }");
         sb.AppendLine();
@@ -486,8 +491,7 @@ internal static class ClientEmitter
     }
 
     private static void EmitRequestCreation(StringBuilder sb, MethodModel method,
-        List<ParameterModel> headerParams, ParameterModel? bodyParam, ParameterModel? formBodyParam,
-        string ctArg, string serializerExpr)
+        List<ParameterModel> headerParams, ParameterModel? formBodyParam, string serializerExpr)
     {
         sb.AppendLine($"        using var __request = new System.Net.Http.HttpRequestMessage(");
         sb.AppendLine($"            System.Net.Http.HttpMethod.{Capitalize(method.HttpMethod)},");
@@ -534,13 +538,6 @@ internal static class ClientEmitter
             }
         }
 
-        if (bodyParam != null)
-        {
-            // Serialized into a pooled buffer that the request owns: disposing the request returns it.
-            // The helper returns the buffer itself when the serializer throws or is cancelled.
-            sb.AppendLine($"        __request.Content = await global::ZeroAlloc.Rest.GeneratedRestClient.CreateBodyContentAsync({serializerExpr}, {Identifier(bodyParam)}, {ctArg}).ConfigureAwait(false);");
-        }
-
         if (formBodyParam != null)
         {
             sb.AppendLine($"        __request.Content = new System.Net.Http.FormUrlEncodedContent({Identifier(formBodyParam)});");
@@ -548,7 +545,8 @@ internal static class ClientEmitter
     }
 
     // callerToken is the name of the method's CancellationToken parameter, or null when it has none.
-    private static void EmitSendAndResponse(StringBuilder sb, MethodModel method, string? callerToken, string serializerExpr, int maxErrorBodyBytes, string? errorMapperField)
+    // bodyStatement serializes the [Body] parameter into the request, or is null when there is none.
+    private static void EmitSendAndResponse(StringBuilder sb, MethodModel method, string? callerToken, string? bodyStatement, string serializerExpr, int maxErrorBodyBytes, string? errorMapperField)
     {
         var ctArg = callerToken ?? "default";
         if (errorMapperField != null)
@@ -556,8 +554,21 @@ internal static class ClientEmitter
         // Set once the response's duration is recorded, so a failure after that point does not
         // record the duration a second time.
         sb.AppendLine("        var __durationRecorded = false;");
+        // A Result method tells a serializer failure from a failure of the send by where it
+        // happened, not by its type: a serializer may throw anything, an HttpRequestException too.
+        var guardBody = bodyStatement != null && method.ReturnsResult;
+        if (guardBody)
+            sb.AppendLine("        var __writingBody = true;");
         sb.AppendLine("        try");
         sb.AppendLine("        {");
+        if (bodyStatement != null)
+        {
+            // Serialized into a pooled buffer that the request owns: disposing the request returns
+            // it. The helper returns the buffer itself when the serializer throws or is cancelled.
+            sb.AppendLine($"            {bodyStatement}");
+            if (guardBody)
+                sb.AppendLine("            __writingBody = false;");
+        }
         sb.AppendLine($"            using var __response = await _httpClient.SendAsync(__request, {ctArg}).ConfigureAwait(false);");
         sb.AppendLine("            var __statusCode = (int)__response.StatusCode;");
         sb.AppendLine("            var __serverAddress = __request.RequestUri?.Host ?? string.Empty;");
@@ -587,6 +598,8 @@ internal static class ClientEmitter
             sb.AppendLine("            throw;");
             sb.AppendLine("        }");
         }
+        if (guardBody)
+            EmitBodySerializationCatch(sb, method);
         if (method.ReturnsResult)
             EmitResultCatches(sb, method);
         sb.AppendLine("        catch (global::System.Exception __ex)");
@@ -596,6 +609,19 @@ internal static class ClientEmitter
         sb.AppendLine("        }");
         if (errorMapperField != null)
             EmitMapping(sb, method, errorMapperField);
+    }
+
+    // A Result method returns a request body the serializer could not write as a Deserialization
+    // failure with no response, the kind for any serializer failure. Cancellation is left to the
+    // method's cancellation catches, as it is for reading the response body: the caller's still
+    // throws, and any other is a Timeout.
+    private static void EmitBodySerializationCatch(StringBuilder sb, MethodModel method)
+    {
+        sb.AppendLine("        catch (global::System.Exception __ex) when (__writingBody && __ex is not global::System.OperationCanceledException)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            __RecordFailure(__activity, __ex, __sw, __httpMethod, __RestMethodTag, __durationRecorded);");
+        EmitFailure(sb, "            ", method, "__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Deserialization, null, __ex)");
+        sb.AppendLine("        }");
     }
 
     // A Result-returning method returns a failure for a timeout or a transport error instead of
@@ -882,8 +908,10 @@ internal static class ClientEmitter
         sb.AppendLine("        }");
         sb.AppendLine("        else");
         sb.AppendLine("        {");
-        sb.AppendLine("            // No response arrived. An HttpRequestException may still carry a status code.");
-        sb.AppendLine("            statusCode = exception is global::System.Net.Http.HttpRequestException { StatusCode: { } requestStatus }");
+        // Only a Transport failure's HttpRequestException comes from the send. A serializer that
+        // throws one while writing the request body has no status to report.
+        sb.AppendLine("            // No response arrived. A Transport failure's HttpRequestException may still carry a status code.");
+        sb.AppendLine("            statusCode = kind == global::ZeroAlloc.Rest.HttpErrorKind.Transport && exception is global::System.Net.Http.HttpRequestException { StatusCode: { } requestStatus }");
         sb.AppendLine("                ? requestStatus");
         sb.AppendLine("                : (global::System.Net.HttpStatusCode)0;");
         sb.AppendLine("        }");

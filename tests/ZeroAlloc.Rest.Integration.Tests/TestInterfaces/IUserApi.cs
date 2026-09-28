@@ -19,6 +19,9 @@ public interface IUserApi
     [Post("/users")]
     Task<UserDto> CreateUserAsync([Body] CreateUserRequest body, CancellationToken ct = default);
 
+    [Post("/users/result")]
+    Task<Result<UserDto, ZeroAlloc.Rest.HttpError>> CreateUserResultAsync([Body] CreateUserRequest body, CancellationToken ct = default);
+
     [Get("/users")]
     Task<List<UserDto>> ListUsersAsync([Query] string? name = null, CancellationToken ct = default);
 

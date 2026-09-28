@@ -111,6 +111,24 @@ public sealed class RequestBodyTests
     }
 
     [Fact]
+    public async Task Content_IsDisposed_WhenAResultMethodReturnsAFailure()
+    {
+        HttpContent? content = null;
+        using var httpClient = CreateHttpClient((request, _) =>
+        {
+            content = request.Content;
+            throw new HttpRequestException("connection refused");
+        });
+        IUserApi client = new UserApiClient(httpClient, new SystemTextJsonSerializer());
+
+        var result = await client.CreateUserResultAsync(new CreateUserRequest("Bob"));
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(HttpErrorKind.Transport, result.Error.Kind);
+        await AssertDisposedAsync(content);
+    }
+
+    [Fact]
     public async Task Content_IsDisposed_WhenTheCallerCancels()
     {
         HttpContent? content = null;
