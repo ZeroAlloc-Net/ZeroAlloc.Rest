@@ -36,19 +36,18 @@ public sealed class GenerateRestClientTask : Task
         try
         {
             string content;
-            var warnings = new List<OpenApiWarning>();
+            var diagnostics = new List<OpenApiDiagnostic>();
             var options = new GenerationOptions(GenerateModels);
             if (Spec.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || Spec.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-                content = System.Threading.Tasks.Task.Run(() => OpenApiInterfaceGenerator.GenerateFromUrlAsync(Spec, Namespace, InterfaceName, warnings, options, CancellationToken.None))
+                content = System.Threading.Tasks.Task.Run(() => OpenApiInterfaceGenerator.GenerateFromUrlAsync(Spec, Namespace, InterfaceName, diagnostics, options, CancellationToken.None))
                     .GetAwaiter().GetResult();
             else
-                content = System.Threading.Tasks.Task.Run(() => OpenApiInterfaceGenerator.GenerateFromFileAsync(Spec, Namespace, InterfaceName, warnings, options, CancellationToken.None))
+                content = System.Threading.Tasks.Task.Run(() => OpenApiInterfaceGenerator.GenerateFromFileAsync(Spec, Namespace, InterfaceName, diagnostics, options, CancellationToken.None))
                     .GetAwaiter().GetResult();
 
-            // Reported against the spec, the file to change to resolve them, under their ZRT code,
-            // which NoWarn suppresses.
-            foreach (var warning in warnings)
-                Log.LogWarning(null, warning.Code, null, Spec, 0, 0, 0, 0, warning.Message);
+            // An error means the generated code would be wrong, so nothing is written.
+            if (!Report(diagnostics))
+                return false;
 
             // The task runs before every compile. Rewriting an unchanged file would bump its timestamp
             // and make CoreCompile rerun on every build.
@@ -69,5 +68,25 @@ public sealed class GenerateRestClientTask : Task
             Log.LogError($"ZeroAlloc.Rest generation failed: {ex}");
             return false;
         }
+    }
+
+    // Reported against the spec, the file to change to resolve them, under their ZRT code, which
+    // NoWarn suppresses for a warning. Returns false when any is an error.
+    private bool Report(List<OpenApiDiagnostic> diagnostics)
+    {
+        var succeeded = true;
+        foreach (var diagnostic in diagnostics)
+        {
+            if (diagnostic.Severity == OpenApiSeverity.Error)
+            {
+                Log.LogError(null, diagnostic.Code, null, Spec, 0, 0, 0, 0, diagnostic.Message);
+                succeeded = false;
+            }
+            else
+            {
+                Log.LogWarning(null, diagnostic.Code, null, Spec, 0, 0, 0, 0, diagnostic.Message);
+            }
+        }
+        return succeeded;
     }
 }

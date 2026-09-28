@@ -28,10 +28,10 @@ internal static class ModelFixture
         return document;
     }
 
-    internal static (EquatableList<ModelDefinition> Models, List<OpenApiWarning> Warnings) Build(string schemasYaml)
+    internal static (EquatableList<ModelDefinition> Models, List<OpenApiDiagnostic> Warnings) Build(string schemasYaml)
     {
         var document = Parse(schemasYaml);
-        var warnings = new List<OpenApiWarning>();
+        var warnings = new List<OpenApiDiagnostic>();
         var builder = new SchemaModelBuilder(document, ReservedNames, warnings);
         foreach (var (id, schema) in document.Components.Schemas)
             TypeMapper.Map(schema, id, "#/components/schemas/" + id, builder);

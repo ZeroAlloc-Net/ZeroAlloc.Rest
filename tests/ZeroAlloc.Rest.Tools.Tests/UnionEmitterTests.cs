@@ -243,6 +243,122 @@ public class UnionEmitterTests
             code);
     }
 
+    // Issue #360: variants that require the same properties are told apart by a property with a
+    // single-value enum. A candidate whose such property holds another value is dropped before the
+    // required-property score. The value may be a string, through a $ref or inline, an integer or
+    // a boolean.
+    private static string DiscriminatedSpec(string keyword) => DiscriminatedTemplate.Replace("{keyword}", keyword, StringComparison.Ordinal);
+
+    private const string DiscriminatedTemplate = """
+                LabeledName:
+                  type: string
+                  enum: [labeled]
+                Labeled:
+                  type: object
+                  required: [event, id]
+                  properties:
+                    event:
+                      $ref: '#/components/schemas/LabeledName'
+                    id:
+                      type: integer
+                Unlabeled:
+                  type: object
+                  required: [event, id]
+                  properties:
+                    event:
+                      type: string
+                      enum: [unlabeled]
+                    id:
+                      type: integer
+                Timeline:
+                  {keyword}:
+                    - $ref: '#/components/schemas/Labeled'
+                    - $ref: '#/components/schemas/Unlabeled'
+                V1:
+                  type: object
+                  required: [version]
+                  properties:
+                    version:
+                      type: integer
+                      enum: [1]
+                V2:
+                  type: object
+                  required: [version]
+                  properties:
+                    version:
+                      type: integer
+                      enum: [2]
+                Versioned:
+                  {keyword}:
+                    - $ref: '#/components/schemas/V1'
+                    - $ref: '#/components/schemas/V2'
+                On:
+                  type: object
+                  required: [enabled]
+                  properties:
+                    enabled:
+                      type: boolean
+                      enum: [true]
+                Off:
+                  type: object
+                  required: [enabled]
+                  properties:
+                    enabled:
+                      type: boolean
+                      enum: [false]
+                Toggle:
+                  {keyword}:
+                    - $ref: '#/components/schemas/On'
+                    - $ref: '#/components/schemas/Off'
+            """;
+
+    [Theory]
+    [InlineData("oneOf", "Timeline", "{\"event\":\"labeled\",\"id\":1}", "Labeled:1")]
+    [InlineData("oneOf", "Timeline", "{\"event\":\"unlabeled\",\"id\":2}", "Unlabeled:2")]
+    [InlineData("anyOf", "Timeline", "{\"event\":\"unlabeled\",\"id\":2}", "Unlabeled:2")]
+    [InlineData("oneOf", "Versioned", "{\"version\":2}", "V2")]
+    [InlineData("anyOf", "Versioned", "{\"version\":1}", "V1")]
+    [InlineData("oneOf", "Toggle", "{\"enabled\":false}", "Off")]
+    [InlineData("anyOf", "Toggle", "{\"enabled\":true}", "On")]
+    public void SingleValueEnum_PicksTheVariantWhoseValueMatches(string keyword, string union, string json, string expected)
+    {
+        var match = union switch
+        {
+            "Timeline" => """value.Match(labeled => "Labeled:" + labeled.Id, unlabeled => "Unlabeled:" + unlabeled.Id)""",
+            "Versioned" => """value.Match(v1 => "V1", v2 => "V2")""",
+            _ => """value.Match(on => "On", off => "Off")""",
+        };
+        var output = GeneratedCode.Compile(ModelFixture.Emit(DiscriminatedSpec(keyword)), Probe($$"""
+            var value = JsonSerializer.Deserialize({{Quote(json)}}, MyApiJsonContext.Default.{{union}})!;
+            var text = {{match}};
+            var written = JsonSerializer.Serialize(value, MyApiJsonContext.Default.{{union}});
+            return written == {{Quote(json)}} ? text : "wrote " + written;
+            """));
+
+        Assert.Equal(expected, output.RunProbe());
+    }
+
+    // A value no variant declares, or a value of another JSON kind, matches no variant.
+    [Theory]
+    [InlineData("{\"event\":\"closed\",\"id\":1}")]
+    [InlineData("{\"event\":1,\"id\":1}")]
+    public void SingleValueEnum_WithAnotherValue_MatchesNoVariant(string json)
+    {
+        var output = GeneratedCode.Compile(ModelFixture.Emit(DiscriminatedSpec("anyOf")), Probe($$"""
+            try
+            {
+                JsonSerializer.Deserialize({{Quote(json)}}, MyApiJsonContext.Default.Timeline);
+                return "read";
+            }
+            catch (JsonException exception)
+            {
+                return exception.Message;
+            }
+            """));
+
+        Assert.Equal("The JSON value matches no variant of Timeline.", output.RunProbe());
+    }
+
     [Fact]
     public void Writing_RequiresExactlyOneValue()
     {

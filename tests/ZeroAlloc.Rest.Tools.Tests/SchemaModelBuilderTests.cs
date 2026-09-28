@@ -339,7 +339,7 @@ public class SchemaModelBuilderTests
                   allOf:
                     - $ref: '#/components/schemas/A'
             """;
-        var warnings = new List<OpenApiWarning>();
+        var warnings = new List<OpenApiDiagnostic>();
 
         OpenApiInterfaceGenerator.Generate(Spec, "MyApp", "ILoopApi", warnings, GenerationOptions.Default);
 
@@ -511,10 +511,10 @@ public class SchemaModelBuilderTests
 
         Assert.Equal(
             new UnionModel("Result", null, IsOneOf: true, List(
-                new UnionVariantModel("Pet", Model("Pet"), JsonKind.Object, List("id", "name")),
-                new UnionVariantModel("Error", Model("Error"), JsonKind.Object, List("code")),
-                new UnionVariantModel("Int64", TypeRef.Long, JsonKind.Number, EquatableList<string>.Empty),
-                new UnionVariantModel("StringList", new TypeRef("global::System.Collections.Generic.List<string>", TypeRefKind.List, false), JsonKind.Array, EquatableList<string>.Empty))),
+                new UnionVariantModel("Pet", Model("Pet"), JsonKind.Object, List("id", "name"), NoValues),
+                new UnionVariantModel("Error", Model("Error"), JsonKind.Object, List("code"), NoValues),
+                new UnionVariantModel("Int64", TypeRef.Long, JsonKind.Number, EquatableList<string>.Empty, NoValues),
+                new UnionVariantModel("StringList", new TypeRef("global::System.Collections.Generic.List<string>", TypeRefKind.List, false), JsonKind.Array, EquatableList<string>.Empty, NoValues))),
             models[2]);
     }
 
@@ -589,7 +589,7 @@ public class SchemaModelBuilderTests
 
         var union = Assert.IsType<UnionModel>(models.Single(m => m is UnionModel));
         Assert.Equal(List("extra", "id"), union.Variants[0].RequiredWireNames);
-        Assert.Equal(new UnionVariantModel("String", TypeRef.String, JsonKind.String, EquatableList<string>.Empty), union.Variants[1]);
+        Assert.Equal(new UnionVariantModel("String", TypeRef.String, JsonKind.String, EquatableList<string>.Empty, NoValues), union.Variants[1]);
     }
 
     // A single-part wrapper around a $ref stands for it, but the properties it requires still decide
@@ -617,7 +617,7 @@ public class SchemaModelBuilderTests
             """);
 
         var union = Assert.IsType<UnionModel>(models.Single(m => m is UnionModel));
-        Assert.Equal(new UnionVariantModel("Pet", Model("Pet"), JsonKind.Object, List("id", "name")), union.Variants[0]);
+        Assert.Equal(new UnionVariantModel("Pet", Model("Pet"), JsonKind.Object, List("id", "name"), NoValues), union.Variants[0]);
     }
 
     [Fact]
@@ -806,6 +806,150 @@ public class SchemaModelBuilderTests
 
         Assert.Equal(new[] { "Outcome", "PetOrError" }, models.OfType<UnionModel>().Select(u => u.Name), StringComparer.Ordinal);
     }
+
+    // Issue #360: object variants the converter cannot tell apart are reported as ZRT003. For oneOf
+    // it is an error, since every object matching both throws; for anyOf a warning, since the first
+    // declared variant always wins.
+    private static string Events(string keyword, string labeledEvent = "type: string", string unlabeledEvent = "type: string", string required = "[event, id]") => $$"""
+                Labeled:
+                  type: object
+                  required: {{required}}
+                  properties:
+                    event:
+                      {{labeledEvent}}
+                    id:
+                      type: integer
+                Unlabeled:
+                  type: object
+                  required: {{required}}
+                  properties:
+                    event:
+                      {{unlabeledEvent}}
+                    id:
+                      type: integer
+                Timeline:
+                  {{keyword}}:
+                    - $ref: '#/components/schemas/Labeled'
+                    - $ref: '#/components/schemas/Unlabeled'
+            """;
+
+    private const string LabeledValue = "{ type: string, enum: [labeled] }";
+    private const string UnlabeledValue = "{ type: string, enum: [unlabeled] }";
+
+    [Fact]
+    public void OneOf_VariantsRequiringTheSameProperties_AreAZrt003Error()
+    {
+        var (_, warnings) = Build(Events("oneOf"));
+
+        var diagnostic = Assert.Single(warnings);
+        Assert.Equal("ZRT003", diagnostic.Code);
+        Assert.Equal(OpenApiSeverity.Error, diagnostic.Severity);
+        Assert.Equal(
+            "Schema '#/components/schemas/Timeline': oneOf variants 'Labeled' and 'Unlabeled' of union 'Timeline' "
+            + "cannot be told apart. They require the same properties, and no required property holds a different "
+            + "single-value enum in each, so reading a JSON object that matches both throws. Add a discriminator, "
+            + "or a required property with a different single-value enum to each variant.",
+            diagnostic.Message);
+    }
+
+    [Fact]
+    public void AnyOf_VariantsRequiringTheSameProperties_AreAZrt003Warning()
+    {
+        var (_, warnings) = Build(Events("anyOf"));
+
+        var diagnostic = Assert.Single(warnings);
+        Assert.Equal("ZRT003", diagnostic.Code);
+        Assert.Equal(OpenApiSeverity.Warning, diagnostic.Severity);
+        Assert.Equal(
+            "Schema '#/components/schemas/Timeline': anyOf variants 'Labeled' and 'Unlabeled' of union 'Timeline' "
+            + "cannot be told apart. Every JSON object that matches 'Unlabeled' also matches 'Labeled', and the first "
+            + "declared variant always wins, so 'Unlabeled' is never read. Add a discriminator, or a required property "
+            + "with a different single-value enum to each variant.",
+            diagnostic.Message);
+    }
+
+    [Theory]
+    [InlineData("oneOf")]
+    [InlineData("anyOf")]
+    public void VariantsWithDifferentSingleValueEnums_AreToldApart(string keyword)
+    {
+        var (models, warnings) = Build(Events(keyword, LabeledValue, UnlabeledValue));
+
+        Assert.Empty(warnings);
+        var union = Assert.IsType<UnionModel>(models.Single(m => m is UnionModel));
+        Assert.Equal(List(new UnionValueModel("event", JsonKind.String, "labeled")), union.Variants[0].Values);
+        Assert.Equal(List(new UnionValueModel("event", JsonKind.String, "unlabeled")), union.Variants[1].Values);
+    }
+
+    // A value on a property that is not required does not tell oneOf variants apart: an object
+    // without the property matches both. With anyOf, such an object reads as the first variant, and
+    // one holding the second variant's value reads as the second, so neither is reported.
+    [Fact]
+    public void SingleValueEnum_OnAPropertyThatIsNotRequired_DoesNotTellOneOfVariantsApart()
+    {
+        var (_, oneOf) = Build(Events("oneOf", LabeledValue, UnlabeledValue, required: "[id]"));
+        var (_, anyOf) = Build(Events("anyOf", LabeledValue, UnlabeledValue, required: "[id]"));
+
+        var diagnostic = Assert.Single(oneOf);
+        Assert.Equal("ZRT003", diagnostic.Code);
+        Assert.Equal(OpenApiSeverity.Error, diagnostic.Severity);
+        Assert.Empty(anyOf);
+    }
+
+    // With anyOf, a later variant with a value is never read when an earlier one without a value
+    // takes everything it matches. The other way round, the earlier variant takes only its value,
+    // and the later one is read for every other.
+    [Fact]
+    public void AnyOf_OnlyAVariantThatIsNeverRead_IsReported()
+    {
+        var (_, earlierHasValue) = Build(Events("anyOf", labeledEvent: LabeledValue));
+        var (_, laterHasValue) = Build(Events("anyOf", unlabeledEvent: UnlabeledValue));
+
+        Assert.Empty(earlierHasValue);
+        var diagnostic = Assert.Single(laterHasValue);
+        Assert.Equal("ZRT003", diagnostic.Code);
+        Assert.Contains("so 'Unlabeled' is never read", diagnostic.Message, StringComparison.Ordinal);
+    }
+
+    // With oneOf, a value on one variant alone still leaves an object both variants match.
+    [Fact]
+    public void OneOf_AValueOnOneVariantOnly_IsStillAnError()
+    {
+        var (_, warnings) = Build(Events("oneOf", labeledEvent: LabeledValue));
+
+        Assert.Equal(OpenApiSeverity.Error, Assert.Single(warnings).Severity);
+    }
+
+    // Each pair is reported once, in declaration order, and only object variants are compared.
+    [Fact]
+    public void EveryIndistinguishablePair_IsReportedOnce()
+    {
+        var (_, warnings) = Build(Events("oneOf") + Environment.NewLine + """
+                Other:
+                  type: object
+                  required: [event, id]
+                  properties:
+                    event:
+                      type: string
+                    id:
+                      type: integer
+                Wider:
+                  oneOf:
+                    - $ref: '#/components/schemas/Labeled'
+                    - $ref: '#/components/schemas/Unlabeled'
+                    - $ref: '#/components/schemas/Other'
+                    - type: string
+                    - type: string
+            """);
+
+        Assert.All(warnings, w => Assert.Equal("ZRT003", w.Code));
+        Assert.Equal(
+            new[] { "'Labeled' and 'Unlabeled' of union 'Timeline'", "'Labeled' and 'Unlabeled' of union 'Wider'", "'Labeled' and 'Other' of union 'Wider'", "'Unlabeled' and 'Other' of union 'Wider'" },
+            warnings.Select(w => w.Message[(w.Message.IndexOf("variants ", StringComparison.Ordinal) + 9)..w.Message.IndexOf(" cannot", StringComparison.Ordinal)]),
+            StringComparer.Ordinal);
+    }
+
+    private static readonly EquatableList<UnionValueModel> NoValues = EquatableList<UnionValueModel>.Empty;
 
     private static RecordModel Record(EquatableList<ModelDefinition> models, string name)
         => Assert.IsType<RecordModel>(Assert.Single(models, m => string.Equals(m.Name, name, StringComparison.Ordinal)));

@@ -136,7 +136,7 @@ internal sealed class PetOrErrorConverter : JsonConverter<PetOrError> { … }
 
 1. Parse the value once into a `JsonDocument`.
 2. **Filter by JSON kind:** object, array, string, number or bool.
-3. **Filter object candidates** to those whose required properties are all present.
+3. **Filter object candidates** to those whose required properties are all present, and whose properties with a single-value `enum` hold that value or are absent. A string, integer or boolean value counts. This is what tells apart variants that require the same properties, such as events with `event: {type: string, enum: [labeled]}`.
 4. **Pick the best match:** the most matched required properties wins. Declaration order breaks any remaining tie.
 5. **Apply the oneOf/anyOf rule:** for `oneOf`, more than one candidate after step 3 is **ambiguous** and throws `JsonException`; for `anyOf`, the step 4 winner is used.
 6. **Deserialize** the chosen variant through the generated context's `JsonTypeInfo<T>`, with no reflection.
@@ -146,6 +146,7 @@ internal sealed class PetOrErrorConverter : JsonConverter<PetOrError> { … }
 **Validity rules:**
 - The tool emits the converter as **source**, not from a generator, so STJ source-gen sees the `[JsonConverter]` attribute. The cross-generator blind spot does not apply.
 - Unions of primitives are supported the same way; the JSON kind decides.
+- **ZRT003, issue #360:** two object variants that require the same properties are reported at generation time when step 3 cannot separate them. For `oneOf` it is an error unless a required property holds a different single-value `enum` in each, since otherwise an object can match both and step 5 throws. For `anyOf` it is a warning when the later variant is never read: each single-value `enum` of the earlier variant is one of the later's, so the earlier one takes every object the later one matches.
 
 ### 5.7 Unsupported shapes
 

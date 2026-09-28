@@ -45,21 +45,30 @@ generateCommand.SetAction(async (parseResult, ct) =>
     var options = new GenerationOptions(parseResult.GetValue(modelsOption));
 
     string content;
-    var warnings = new List<OpenApiWarning>();
+    var diagnostics = new List<OpenApiDiagnostic>();
     if (spec.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
         spec.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-        content = await OpenApiInterfaceGenerator.GenerateFromUrlAsync(spec, ns, iface, warnings, options, ct).ConfigureAwait(false);
+        content = await OpenApiInterfaceGenerator.GenerateFromUrlAsync(spec, ns, iface, diagnostics, options, ct).ConfigureAwait(false);
     else
-        content = await OpenApiInterfaceGenerator.GenerateFromFileAsync(spec, ns, iface, warnings, options, ct).ConfigureAwait(false);
+        content = await OpenApiInterfaceGenerator.GenerateFromFileAsync(spec, ns, iface, diagnostics, options, ct).ConfigureAwait(false);
 
-    // The canonical "file: warning CODE: message" form, which build logs and IDEs recognise.
-    foreach (var warning in warnings.Where(w => !noWarn.Contains(w.Code)))
-        await Console.Error.WriteLineAsync($"{spec}: warning {warning.Code}: {warning.Message}").ConfigureAwait(false);
+    // The canonical "file: warning CODE: message" form, which build logs and IDEs recognise. --nowarn
+    // suppresses a warning, never an error.
+    foreach (var diagnostic in diagnostics.Where(d => d.Severity == OpenApiSeverity.Error || !noWarn.Contains(d.Code)))
+    {
+        var severity = diagnostic.Severity == OpenApiSeverity.Error ? "error" : "warning";
+        await Console.Error.WriteLineAsync($"{spec}: {severity} {diagnostic.Code}: {diagnostic.Message}").ConfigureAwait(false);
+    }
+
+    // An error means the generated code would be wrong, so nothing is written.
+    if (diagnostics.Exists(d => d.Severity == OpenApiSeverity.Error))
+        return 1;
 
     var dir = Path.GetDirectoryName(output);
     if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
     await File.WriteAllTextAsync(output, content, ct).ConfigureAwait(false);
     Console.WriteLine($"Generated: {output}");
+    return 0;
 });
 
 var root = new RootCommand("ZeroAlloc.Rest code generation tools");

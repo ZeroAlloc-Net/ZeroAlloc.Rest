@@ -142,6 +142,53 @@ public class GenerateRestClientTaskTests
         }
     }
 
+    // Issue #360: ZRT003 is a build error for a oneOf whose variants cannot be told apart, and the
+    // task writes nothing; for anyOf it is a warning, and the file is generated.
+    [Theory]
+    [InlineData("oneOf", false)]
+    [InlineData("anyOf", true)]
+    public void AmbiguousUnion_IsReportedAsZrt003(string keyword, bool succeeds)
+    {
+        var dir = Directory.CreateTempSubdirectory().FullName;
+        try
+        {
+            var spec = Path.Combine(dir, "openapi.yaml");
+            File.WriteAllText(spec, CommandLineTests.AmbiguousUnionSpec(keyword));
+            var output = Path.Combine(dir, "IMyApi.g.cs");
+            var engine = new RecordingBuildEngine();
+            var task = new GenerateRestClientTask
+            {
+                BuildEngine = engine,
+                Spec = spec,
+                OutputPath = output,
+                Namespace = "MyApp",
+                InterfaceName = "IMyApi",
+            };
+
+            Assert.Equal(succeeds, task.Execute());
+            Assert.Equal(succeeds, File.Exists(output));
+            if (succeeds)
+            {
+                var warning = Assert.Single(engine.Warnings);
+                Assert.Equal("ZRT003", warning.Code);
+                Assert.Equal(spec, warning.File);
+                Assert.Empty(engine.Errors);
+            }
+            else
+            {
+                var error = Assert.Single(engine.Errors);
+                Assert.Equal("ZRT003", error.Code);
+                Assert.Equal(spec, error.File);
+                Assert.Contains("oneOf variants 'Labeled' and 'Unlabeled'", error.Message);
+                Assert.Empty(engine.Warnings);
+            }
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
     private sealed class RecordingBuildEngine : IBuildEngine
     {
         public List<BuildWarningEventArgs> Warnings { get; } = new();

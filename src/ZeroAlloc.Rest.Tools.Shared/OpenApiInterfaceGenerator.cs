@@ -9,15 +9,15 @@ namespace ZeroAlloc.Rest.Tools;
 internal static class OpenApiInterfaceGenerator
 {
     internal static string Generate(string yamlOrJson, string @namespace, string interfaceName)
-        => Generate(yamlOrJson, @namespace, interfaceName, new List<OpenApiWarning>(), GenerationOptions.Default);
+        => Generate(yamlOrJson, @namespace, interfaceName, new List<OpenApiDiagnostic>(), GenerationOptions.Default);
 
-    internal static string Generate(string yamlOrJson, string @namespace, string interfaceName, List<OpenApiWarning> warnings)
+    internal static string Generate(string yamlOrJson, string @namespace, string interfaceName, List<OpenApiDiagnostic> warnings)
         => Generate(yamlOrJson, @namespace, interfaceName, warnings, GenerationOptions.Default);
 
     // Spec §3: one file per spec, in this order: the interface, the models it references, and the
     // JSON context covering both. Adds a warning for each part of the spec the file leaves out or
     // cannot type, so that the CLI and the MSBuild task can report it.
-    internal static string Generate(string yamlOrJson, string @namespace, string interfaceName, List<OpenApiWarning> warnings, GenerationOptions options)
+    internal static string Generate(string yamlOrJson, string @namespace, string interfaceName, List<OpenApiDiagnostic> warnings, GenerationOptions options)
     {
         var document = Parse(yamlOrJson);
         var baseName = WithoutInterfacePrefix(interfaceName);
@@ -69,10 +69,10 @@ internal static class OpenApiInterfaceGenerator
     internal static Task<string> GenerateFromFileAsync(
         string filePath, string @namespace, string interfaceName,
         CancellationToken ct = default)
-        => GenerateFromFileAsync(filePath, @namespace, interfaceName, new List<OpenApiWarning>(), GenerationOptions.Default, ct);
+        => GenerateFromFileAsync(filePath, @namespace, interfaceName, new List<OpenApiDiagnostic>(), GenerationOptions.Default, ct);
 
     internal static async Task<string> GenerateFromFileAsync(
-        string filePath, string @namespace, string interfaceName, List<OpenApiWarning> warnings,
+        string filePath, string @namespace, string interfaceName, List<OpenApiDiagnostic> warnings,
         GenerationOptions options, CancellationToken ct)
     {
         var content = await File.ReadAllTextAsync(filePath, ct).ConfigureAwait(false);
@@ -82,10 +82,10 @@ internal static class OpenApiInterfaceGenerator
     internal static Task<string> GenerateFromUrlAsync(
         string url, string @namespace, string interfaceName,
         CancellationToken ct = default)
-        => GenerateFromUrlAsync(url, @namespace, interfaceName, new List<OpenApiWarning>(), GenerationOptions.Default, ct);
+        => GenerateFromUrlAsync(url, @namespace, interfaceName, new List<OpenApiDiagnostic>(), GenerationOptions.Default, ct);
 
     internal static async Task<string> GenerateFromUrlAsync(
-        string url, string @namespace, string interfaceName, List<OpenApiWarning> warnings,
+        string url, string @namespace, string interfaceName, List<OpenApiDiagnostic> warnings,
         GenerationOptions options, CancellationToken ct)
     {
         using var http = new HttpClient();
