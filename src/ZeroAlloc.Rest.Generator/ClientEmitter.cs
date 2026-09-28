@@ -265,7 +265,7 @@ internal static class ClientEmitter
 
         if (bodyParam != null && formBodyParam != null)
         {
-            ctx.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.ConflictingBody, method.Location.ToLocation(), method.Name));
+            ctx.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.ConflictingBody, method.Location?.ToLocation(), method.Name));
             // Still emit valid (if incomplete) code so compilation continues
             formBodyParam = null; // suppress the FormBody branch
         }
