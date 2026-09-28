@@ -497,8 +497,24 @@ internal static class ClientEmitter
         // TryAddWithoutValidation sends a null value as an empty header, so a parameter that can be
         // null is added only when it has a value: a null argument means "no header". A non-nullable
         // value type always has one, and comparing it with null would not compile cleanly.
+        // A collection adds each non-null element as one value of the header, which HttpClient sends
+        // comma-joined, the RFC 9110 list syntax; a null or empty collection sends no header.
         foreach (var h in headerParams)
         {
+            if (h.IsCollection)
+            {
+                sb.AppendLine($"        if ({Identifier(h)} != null)");
+                sb.AppendLine("        {");
+                sb.AppendLine($"            foreach (var __item in {Identifier(h)})");
+                sb.AppendLine("            {");
+                if (h.Format is not { ElementIsNullable: false })
+                    sb.AppendLine("                if (__item == null) continue;");
+                sb.AppendLine($"                __request.Headers.TryAddWithoutValidation(\"{h.HeaderName}\", __FormatValue(__item));");
+                sb.AppendLine("            }");
+                sb.AppendLine("        }");
+                continue;
+            }
+
             var addHeader = $"__request.Headers.TryAddWithoutValidation(\"{h.HeaderName}\", __FormatValue({Identifier(h)}));";
             if (h.IsNullable)
             {
