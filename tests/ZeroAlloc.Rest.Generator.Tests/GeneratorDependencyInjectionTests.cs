@@ -41,6 +41,12 @@ public class GeneratorDependencyInjectionTests
     [Fact]
     public void WithoutMarker_EmitsClientAndConstructorOnly()
     {
+        // The core-only reference set is honest only while core itself pulls in nothing from
+        // Microsoft.Extensions.
+        Assert.DoesNotContain(
+            typeof(ZeroAlloc.Rest.HttpError).Assembly.GetReferencedAssemblies(),
+            a => a.Name!.StartsWith("Microsoft.Extensions", System.StringComparison.Ordinal));
+
         var run = GeneratorHarness.RunAll(Api, CoreOnly);
 
         Assert.DoesNotContain(run.GeneratedSources, s => s.HintName.EndsWith(".DI.g.cs", System.StringComparison.Ordinal));
@@ -60,8 +66,13 @@ public class GeneratorDependencyInjectionTests
     {
         var run = GeneratorHarness.RunAll(Api, WithDependencyInjection);
 
-        Assert.Contains("AddIThingApi", Source(run, "IThingApi.DI.g.cs"));
-        Assert.Contains("IGeneratedRestClient<ThingApiClient>", Source(run, "IThingApi.g.cs"));
+        var di = Source(run, "IThingApi.DI.g.cs");
+        Assert.Contains("AddIThingApi", di);
+        Assert.Contains("global::ZeroAlloc.Rest.GeneratedRestClientRegistration.AddSerializers<ThingApiClient>", di);
+        Assert.Contains("global::ZeroAlloc.Rest.GeneratedRestClientRegistration.Create<ThingApiClient>", di);
+        var client = Source(run, "IThingApi.g.cs");
+        Assert.Contains("IGeneratedRestClient<ThingApiClient>", client);
+        Assert.Contains("global::ZeroAlloc.Rest.GeneratedRestClientRegistration.AddPerClientSerializer<IThingApi>", client);
         Assert.Empty(run.Problems);
     }
 

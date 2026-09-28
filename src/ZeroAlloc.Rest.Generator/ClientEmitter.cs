@@ -229,7 +229,7 @@ internal static class ClientEmitter
         {
             // UseSerializer is per client: keyed by the interface, it never touches the app-wide
             // IRestSerializer, so two clients cannot overwrite each other's serializer.
-            sb.AppendLine($"        global::ZeroAlloc.Rest.GeneratedRestClient.AddPerClientSerializer<{model.InterfaceName}>(services, options);");
+            sb.AppendLine($"        global::ZeroAlloc.Rest.GeneratedRestClientRegistration.AddPerClientSerializer<{model.InterfaceName}>(services, options);");
         }
         foreach (var st in overrideSerializers)
             sb.AppendLine($"        {TryAddSingleton}<{st}>(services);");

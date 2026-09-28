@@ -169,7 +169,7 @@ public sealed class SerializerCombinationTests
         services.AddIHostApi(o => o.BaseAddress = BaseAddress);
 
         using var provider = services.BuildServiceProvider();
-        var client = GeneratedRestClient.Create<HostApiClient>(new HttpClient(), new NonKeyedServiceProvider(provider));
+        var client = GeneratedRestClientRegistration.Create<HostApiClient>(new HttpClient(), new NonKeyedServiceProvider(provider));
 
         Assert.NotNull(client);
     }
@@ -183,7 +183,7 @@ public sealed class SerializerCombinationTests
 
         using var provider = services.BuildServiceProvider();
         var ex = Assert.Throws<InvalidOperationException>(() =>
-            GeneratedRestClient.Create<HostApiClient>(new HttpClient(), new NonKeyedServiceProvider(provider)));
+            GeneratedRestClientRegistration.Create<HostApiClient>(new HttpClient(), new NonKeyedServiceProvider(provider)));
 
         Assert.Contains(typeof(IHostApi).FullName!, ex.Message, StringComparison.Ordinal);
         Assert.Contains("keyed services", ex.Message, StringComparison.Ordinal);
@@ -198,7 +198,7 @@ public sealed class SerializerCombinationTests
 
         using var provider = services.BuildServiceProvider();
         var ex = Assert.Throws<InvalidOperationException>(() =>
-            GeneratedRestClient.Create<HostApiClient>(new HttpClient(), new NonKeyedServiceProvider(provider)));
+            GeneratedRestClientRegistration.Create<HostApiClient>(new HttpClient(), new NonKeyedServiceProvider(provider)));
 
         Assert.Contains("AddRestSerializer", ex.Message, StringComparison.Ordinal);
     }

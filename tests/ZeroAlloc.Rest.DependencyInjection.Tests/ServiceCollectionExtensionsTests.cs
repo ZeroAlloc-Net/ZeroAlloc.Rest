@@ -2,16 +2,16 @@ using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using ZeroAlloc.Rest;
 
-namespace ZeroAlloc.Rest.Tests;
+namespace ZeroAlloc.Rest.DependencyInjection.Tests;
 
 // Minimal stub serializer for tests
 file sealed class StubSerializer : IRestSerializer
 {
     public string ContentType => "application/json";
 
-    public ValueTask<T?> DeserializeAsync<T>(Stream stream, CancellationToken ct) => ValueTask.FromResult(default(T));
+    public ValueTask<T?> DeserializeAsync<T>(Stream stream, CancellationToken ct = default) => ValueTask.FromResult(default(T));
 
-    public ValueTask SerializeAsync<T>(Stream stream, T value, CancellationToken ct) => ValueTask.CompletedTask;
+    public ValueTask SerializeAsync<T>(Stream stream, T value, CancellationToken ct = default) => ValueTask.CompletedTask;
 }
 
 public class ServiceCollectionExtensionsTests

@@ -19,7 +19,6 @@ public class SerializerAotAnnotationTests
         typeof(SystemTextJsonSerializer),
         typeof(MemoryPackRestSerializer),
         typeof(MessagePackRestSerializer),
-        typeof(RestSerializerAdapter<string>),
     };
 
     [Theory]

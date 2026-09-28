@@ -4,9 +4,10 @@ using Microsoft.Extensions.DependencyInjection;
 namespace ZeroAlloc.Rest;
 
 /// <summary>
-/// Implemented by every client the ZeroAlloc.Rest generator emits. Its static members let the
-/// generated <c>Add{I}</c> and integrations such as the Resilience bridge register and build a
-/// client without reflection or <c>ActivatorUtilities</c>.
+/// Implemented by every client the ZeroAlloc.Rest generator emits in a project that references
+/// ZeroAlloc.Rest.DependencyInjection. Its static members let the generated <c>Add{I}</c> and
+/// integrations such as the Resilience bridge register and build a client without reflection or
+/// <c>ActivatorUtilities</c>.
 /// </summary>
 /// <typeparam name="TSelf">The generated client type.</typeparam>
 [EditorBrowsable(EditorBrowsableState.Never)]

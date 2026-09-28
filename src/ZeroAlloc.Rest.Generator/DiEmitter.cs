@@ -30,17 +30,17 @@ internal static class DiEmitter
         sb.AppendLine("    {");
         sb.AppendLine("        var options = new ZeroAllocClientOptions();");
         sb.AppendLine("        configure?.Invoke(options);");
-        sb.AppendLine($"        global::ZeroAlloc.Rest.GeneratedRestClient.AddSerializers<{model.ClassName}>(services, options);");
+        sb.AppendLine($"        global::ZeroAlloc.Rest.GeneratedRestClientRegistration.AddSerializers<{model.ClassName}>(services, options);");
 
         // A named client plus a typed-client factory that calls the client's static Create, through
-        // GeneratedRestClient because the client implements it explicitly, so the
+        // GeneratedRestClientRegistration because the client implements it explicitly, so the
         // serializer is resolved per client with no reflection or ActivatorUtilities.
         sb.AppendLine($"        return services.AddHttpClient(nameof({model.InterfaceName}), client =>");
         sb.AppendLine("        {");
         sb.AppendLine("            if (options.BaseAddress is not null)");
         sb.AppendLine("                client.BaseAddress = options.BaseAddress;");
         sb.AppendLine("        })");
-        sb.AppendLine($"        .AddTypedClient<{model.InterfaceName}>(static (httpClient, sp) => global::ZeroAlloc.Rest.GeneratedRestClient.Create<{model.ClassName}>(httpClient, sp));");
+        sb.AppendLine($"        .AddTypedClient<{model.InterfaceName}>(static (httpClient, sp) => global::ZeroAlloc.Rest.GeneratedRestClientRegistration.Create<{model.ClassName}>(httpClient, sp));");
         sb.AppendLine("    }");
         sb.AppendLine("}");
 

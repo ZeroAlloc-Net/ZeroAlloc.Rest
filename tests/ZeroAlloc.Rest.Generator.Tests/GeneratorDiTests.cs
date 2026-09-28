@@ -67,7 +67,7 @@ public class GeneratorDiTests
         var content = diFile.SourceText.ToString();
         Assert.Contains("AddHttpClient(nameof(IUserApi)", content);
         Assert.Contains(".AddTypedClient<IUserApi>(", content);
-        Assert.Contains("GeneratedRestClient.Create<UserApiClient>(httpClient, sp)", content);
+        Assert.Contains("GeneratedRestClientRegistration.Create<UserApiClient>(httpClient, sp)", content);
     }
 
     [Fact]

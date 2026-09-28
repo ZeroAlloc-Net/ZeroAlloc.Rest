@@ -228,8 +228,8 @@ public class GeneratorInterfaceSerializerTests
         var (sources, _, _) = Run(JevApiSource);
         var di = sources["IJevApi.DI.g.cs"];
 
-        Assert.Contains("global::ZeroAlloc.Rest.GeneratedRestClient.AddSerializers<JevApiClient>(services, options);", di);
-        Assert.Contains("global::ZeroAlloc.Rest.GeneratedRestClient.Create<JevApiClient>(httpClient, sp)", di);
+        Assert.Contains("global::ZeroAlloc.Rest.GeneratedRestClientRegistration.AddSerializers<JevApiClient>(services, options);", di);
+        Assert.Contains("global::ZeroAlloc.Rest.GeneratedRestClientRegistration.Create<JevApiClient>(httpClient, sp)", di);
     }
 
     [Fact]
