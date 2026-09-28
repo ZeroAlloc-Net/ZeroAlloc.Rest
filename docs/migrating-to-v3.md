@@ -34,8 +34,13 @@ keeps its `ZeroAlloc.Rest` namespace, so no `using` needs updating:
 dotnet add package ZeroAlloc.Rest.DependencyInjection
 ```
 
-An app already on `ZeroAlloc.Rest.Resilience` gets the DI package transitively; no action needed
-there.
+An app already on `ZeroAlloc.Rest.Resilience` gets the DI package transitively, but
+`ZeroAlloc.Rest.Resilience` itself must be upgraded to 3.0 alongside core — the two cannot be mixed
+across major versions. `ZeroAlloc.Rest.Resilience` 2.x was compiled against the DI types that lived in
+the 2.x `ZeroAlloc.Rest.dll`, and core cannot type-forward them to the new package, so a 2.x
+`ZeroAlloc.Rest.Resilience` fails to compile against 3.0 and, if forced to load anyway, throws
+`TypeLoadException` at run time. The same applies to any other library compiled against those 2.x DI
+types, such as `IGeneratedRestClient` or `ZeroAllocClientOptions`: rebuild it against 3.0.
 
 A library that builds its client by hand needs nothing new. The generated constructor is unchanged:
 `HttpClient`, the `IRestSerializer`, one `IRestSerializer` per distinct method-level `[Serializer]`
@@ -66,15 +71,21 @@ public sealed class MyAdapter<T>(ISerializer<T> serializer) : IRestSerializer
 
     public async ValueTask<TResult?> DeserializeAsync<TResult>(Stream stream, CancellationToken ct = default)
     {
+        if (typeof(TResult) != typeof(T))
+            throw new InvalidOperationException($"{nameof(MyAdapter<T>)} can only deserialize {typeof(T).Name}, not {typeof(TResult).Name}.");
+
         using var ms = new MemoryStream();
         await stream.CopyToAsync(ms, ct);
-        return (TResult?)(object?)serializer.Deserialize(ms.ToArray());
+        return (TResult?)(object?)serializer.Deserialize(ms.GetBuffer().AsSpan(0, (int)ms.Length));
     }
 
     public async ValueTask SerializeAsync<TValue>(Stream stream, TValue value, CancellationToken ct = default)
     {
+        if (value is not T typed)
+            throw new InvalidOperationException($"{nameof(MyAdapter<T>)} can only serialize {typeof(T).Name}, not {typeof(TValue).Name}.");
+
         var buffer = new ArrayBufferWriter<byte>();
-        serializer.Serialize(buffer, (T)(object)value!);
+        serializer.Serialize(buffer, typed);
         await stream.WriteAsync(buffer.WrittenMemory, ct);
     }
 }

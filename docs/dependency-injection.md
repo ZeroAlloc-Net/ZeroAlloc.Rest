@@ -74,7 +74,7 @@ When the interface or a method carries `[Serializer(typeof(T))]`, `T` is registe
 static void global::ZeroAlloc.Rest.IGeneratedRestClient<UploadApiClient>.AddSerializers(
     IServiceCollection services, ZeroAllocClientOptions options)
 {
-    global::ZeroAlloc.Rest.GeneratedRestClient.AddPerClientSerializer<IUploadApi>(services, options);
+    global::ZeroAlloc.Rest.GeneratedRestClientRegistration.AddPerClientSerializer<IUploadApi>(services, options);
     ServiceCollectionDescriptorExtensions.TryAddSingleton<global::ZeroAlloc.Rest.MemoryPack.MemoryPackRestSerializer>(services);
 }
 ```

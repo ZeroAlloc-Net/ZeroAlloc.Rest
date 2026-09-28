@@ -24,13 +24,14 @@ description: Publish a ZeroAlloc.Rest client application as a Native AOT binary.
 dotnet new console -n AotDemo
 cd AotDemo
 dotnet add package ZeroAlloc.Rest
-dotnet add package ZeroAlloc.Rest.Generator
 dotnet add package ZeroAlloc.Rest.DependencyInjection
 dotnet add package ZeroAlloc.Rest.SystemTextJson
 ```
 
-`ZeroAlloc.Rest.DependencyInjection` brings in `Microsoft.Extensions.Http` for `AddIUserApi` and
-`IHttpClientFactory`. A console app needs it explicitly — an ASP.NET Core host already references it.
+`ZeroAlloc.Rest` bundles the source generator, so no separate analyzer reference is needed. Every
+app that calls a generated `Add{I}` extension, console or ASP.NET Core, needs
+`ZeroAlloc.Rest.DependencyInjection` — it is what generates `Add{I}` and brings in
+`Microsoft.Extensions.Http` for `IHttpClientFactory`.
 
 ## 2. Configure the project for AOT
 

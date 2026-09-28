@@ -218,8 +218,9 @@ public sealed class CoreOnlyConsumerTests
     }
 
     // The consumer's own project.assets.json after restore must have no Microsoft.Extensions.*
-    // library, proving the core-only restore graph is what constraints.md promises: only
-    // ZeroAlloc.Results and ZeroAlloc.Collections underneath ZeroAlloc.Rest.
+    // library, proving the core-only restore graph is what docs/plans/2026-09-27-split-di.md,
+    // Global Constraints, promises: only ZeroAlloc.Results and ZeroAlloc.Collections underneath
+    // ZeroAlloc.Rest.
     private static void AssertNoMicrosoftExtensionsInRestoreGraph(string workDir)
     {
         var assetsPath = Path.Combine(workDir, "obj", "project.assets.json");

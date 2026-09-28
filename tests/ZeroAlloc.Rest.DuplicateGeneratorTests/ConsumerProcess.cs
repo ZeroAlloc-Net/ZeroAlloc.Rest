@@ -52,9 +52,10 @@ internal static class ConsumerProcess
     // start with a digit, so "ZeroAlloc.Rest" does not match a sibling such as
     // "ZeroAlloc.Rest.DependencyInjection.<version>.nupkg" or "ZeroAlloc.Rest.Generator.<version>.nupkg".
     // Fails the calling test, naming the files, if the feed holds none or more than one version
-    // of the package: constraints.md promises exactly one version per package in the feed, and a
-    // second one, left over from an earlier run at a different version, would otherwise be picked
-    // silently by whatever order the file system happens to enumerate in.
+    // of the package: docs/plans/2026-09-27-split-di.md, Global Constraints, promises exactly one
+    // version per package in the feed, and a second one, left over from an earlier run at a
+    // different version, would otherwise be picked silently by whatever order the file system
+    // happens to enumerate in.
     public static string FindPackage(string feed, string packageId)
     {
         var matches = Directory.GetFiles(feed, packageId + ".*.nupkg")
