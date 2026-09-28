@@ -14,7 +14,10 @@ description: Generate a ZeroAllocRestClient interface from an existing OpenAPI 3
 
 ```sh
 dotnet add package ZeroAlloc.Rest.Tools.MSBuild
+dotnet add package ZeroAlloc.Rest.DependencyInjection
 ```
+
+Add `ZeroAlloc.Rest.DependencyInjection` for the generated `AddIMyApi` extension used in step 5.
 
 ## 2. Add the spec to your project
 

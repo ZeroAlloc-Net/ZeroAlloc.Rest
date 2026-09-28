@@ -10,11 +10,12 @@ description: Install ZeroAlloc.Rest, register the DI extension, and make your fi
 
 ## Installation
 
-Install the three core packages:
+Install the core packages:
 
 ```sh
 dotnet add package ZeroAlloc.Rest
 dotnet add package ZeroAlloc.Rest.Generator
+dotnet add package ZeroAlloc.Rest.DependencyInjection
 dotnet add package ZeroAlloc.Rest.SystemTextJson
 ```
 
@@ -26,8 +27,13 @@ The generator package must be referenced as an analyzer so that the SDK does not
                   Version="x.y.z"
                   OutputItemType="Analyzer"
                   ReferenceOutputAssembly="false" />
+<PackageReference Include="ZeroAlloc.Rest.DependencyInjection" Version="x.y.z" />
 <PackageReference Include="ZeroAlloc.Rest.SystemTextJson" Version="x.y.z" />
 ```
+
+`ZeroAlloc.Rest.DependencyInjection` is what generates the `AddI{Interface}` extension used below and
+adds `Microsoft.Extensions.Http`. Skip it if you build the client by hand instead; see
+[Dependency Injection: Without dependency injection](dependency-injection.md#without-dependency-injection).
 
 ## Define an interface
 
@@ -83,7 +89,8 @@ public class UserService(IUserApi api)
 Given the interface above, the generator writes two files at compile time:
 
 - `IUserApi.g.cs` — `UserApiClient : IUserApi` with typed HTTP calls
-- `IUserApi.DI.g.cs` — `AddIUserApi(IServiceCollection, Action<ZeroAllocClientOptions>)` extension
+- `IUserApi.DI.g.cs` — `AddIUserApi(IServiceCollection, Action<ZeroAllocClientOptions>)` extension,
+  emitted only when `ZeroAlloc.Rest.DependencyInjection` is referenced
 
 You can inspect the generated code in Visual Studio via **Analyzers → ZeroAlloc.Rest.Generator → Generated files**.
 

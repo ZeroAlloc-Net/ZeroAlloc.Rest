@@ -15,6 +15,7 @@ description: Build a complete CRUD REST client from scratch with ZeroAlloc.Rest.
 ```sh
 dotnet add package ZeroAlloc.Rest
 dotnet add package ZeroAlloc.Rest.Generator
+dotnet add package ZeroAlloc.Rest.DependencyInjection
 dotnet add package ZeroAlloc.Rest.SystemTextJson
 ```
 

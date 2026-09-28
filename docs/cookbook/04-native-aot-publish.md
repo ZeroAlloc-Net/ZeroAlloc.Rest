@@ -25,9 +25,12 @@ dotnet new console -n AotDemo
 cd AotDemo
 dotnet add package ZeroAlloc.Rest
 dotnet add package ZeroAlloc.Rest.Generator
+dotnet add package ZeroAlloc.Rest.DependencyInjection
 dotnet add package ZeroAlloc.Rest.SystemTextJson
-dotnet add package Microsoft.Extensions.Http
 ```
+
+`ZeroAlloc.Rest.DependencyInjection` brings in `Microsoft.Extensions.Http` for `AddIUserApi` and
+`IHttpClientFactory`. A console app needs it explicitly — an ASP.NET Core host already references it.
 
 ## 2. Configure the project for AOT
 

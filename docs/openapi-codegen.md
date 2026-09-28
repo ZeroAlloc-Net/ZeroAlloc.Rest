@@ -124,6 +124,12 @@ ZeroAlloc type as `global::`, so a schema named `Task` or `Header` cannot shadow
 
 ### Using the generated client
 
+`AddIPetStoreClient` comes from `ZeroAlloc.Rest.DependencyInjection`:
+
+```sh
+dotnet add package ZeroAlloc.Rest.DependencyInjection
+```
+
 ```csharp
 services.AddIPetStoreClient(o =>
 {

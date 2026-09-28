@@ -78,7 +78,8 @@ Give the method a route, or bind the parameter with `[Query]`, `[Header]` or `[B
 
 ## Base address
 
-The base address is set when registering the client in DI:
+The base address is set when registering the client in DI, through the generated `Add{I}` extension
+from `ZeroAlloc.Rest.DependencyInjection`; see [Dependency Injection](dependency-injection.md):
 
 ```csharp
 services.AddIUserApi(options =>

@@ -27,6 +27,7 @@ ULID / UUIDv7 / Snowflake / sequential string.
 ```sh
 dotnet add package ZeroAlloc.Rest
 dotnet add package ZeroAlloc.Rest.Generator
+dotnet add package ZeroAlloc.Rest.DependencyInjection
 dotnet add package ZeroAlloc.Rest.SystemTextJson
 dotnet add package ZeroAlloc.ValueObjects
 ```

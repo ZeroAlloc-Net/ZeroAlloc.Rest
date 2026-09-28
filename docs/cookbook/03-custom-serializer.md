@@ -52,6 +52,9 @@ public sealed class XmlRestSerializer : IRestSerializer
 
 ## 2. Use as the default serializer
 
+`AddILegacyApi` and `UseSerializer` come from `ZeroAlloc.Rest.DependencyInjection`; see
+[Dependency Injection](../dependency-injection.md).
+
 ```csharp
 builder.Services.AddILegacyApi(options =>
 {
