@@ -113,8 +113,9 @@ var user = result.Value;
 ```
 
 A non-success status, a transport failure, a timeout and a body that cannot be read, an unknown enum
-value included, come back as an `HttpError`. Cancellation you asked for and a request body that
-cannot be serialized still throw; see [What still throws](advanced.md#what-still-throws).
+value included, come back as an `HttpError`, and so does a request body the serializer cannot write,
+as a `Deserialization` failure with status code `0`. Cancellation you asked for still throws; see
+[What still throws](advanced.md#what-still-throws).
 
 ## An empty or null success body is no longer a null `T`
 

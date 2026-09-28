@@ -81,9 +81,7 @@ public class GeneratorEmissionTests
         var output = GetGeneratedSource(source, "IOrderApi.g.cs");
         // Issue #362: the body is serialized into a pooled buffer that the request owns, not into
         // an unpooled MemoryStream wrapped in StreamContent.
-        Assert.Contains(
-            "__request.Content = await global::ZeroAlloc.Rest.GeneratedRestClient.CreateBodyContentAsync(_serializer, body, ct).ConfigureAwait(false);",
-            output);
+        Assert.Contains(BodyStatement, output);
         Assert.DoesNotContain("MemoryStream", output);
         Assert.DoesNotContain("StreamContent", output);
     }
@@ -627,6 +625,88 @@ public class GeneratorEmissionTests
 
         Assert.DoesNotContain("__RecordCancellation", output);
         Assert.DoesNotContain("rest.cancelled", output);
+    }
+
+    private const string BodyStatement =
+        "__request.Content = await global::ZeroAlloc.Rest.GeneratedRestClient.CreateBodyContentAsync(_serializer, body, ct).ConfigureAwait(false);";
+
+    [Fact]
+    public void Generator_TaskOfT_Body_IsSerializedInsideTheTry()
+    {
+        // Issue #378: serializing the body is part of the call, so a serializer failure reaches the
+        // method's catches and is traced and timed. A Task of T method needs no guard: the general
+        // catch records the failure and rethrows.
+        var source = """
+            using ZeroAlloc.Rest.Attributes;
+            namespace MyApp;
+            [ZeroAllocRestClient]
+            public interface IOrderApi
+            {
+                [Post("/orders")]
+                System.Threading.Tasks.Task<string> CreateAsync([Body] string body, System.Threading.CancellationToken ct = default);
+            }
+            """;
+        var output = GetGeneratedSource(source, "IOrderApi.g.cs");
+
+        var tryIndex = output.IndexOf("        try", StringComparison.Ordinal);
+        var bodyIndex = output.IndexOf(BodyStatement, StringComparison.Ordinal);
+        var sendIndex = output.IndexOf("_httpClient.SendAsync(", StringComparison.Ordinal);
+        Assert.True(tryIndex >= 0, "The method's try is missing.");
+        Assert.True(tryIndex < bodyIndex, "The body must be serialized inside the method's try.");
+        Assert.True(bodyIndex < sendIndex, "The body must be serialized before the send.");
+        Assert.DoesNotContain("__writingBody", output);
+    }
+
+    [Fact]
+    public void Generator_ResultBody_SerializationFailure_IsADeserializationFailure()
+    {
+        // A Result method returns a serializer failure as a Deserialization HttpError with no
+        // response. The guard is a flag, not an exception type, so the catch sits after the caller
+        // cancellation catch and before the Timeout and Transport catches, and leaves cancellation
+        // to them.
+        var source = """
+            using ZeroAlloc.Rest;
+            using ZeroAlloc.Rest.Attributes;
+            using ZeroAlloc.Results;
+            namespace MyApp;
+            [ZeroAllocRestClient]
+            public interface IOrderApi
+            {
+                [Post("/orders")]
+                System.Threading.Tasks.Task<Result<string, HttpError>> CreateAsync([Body] string body, System.Threading.CancellationToken ct = default);
+            }
+            """;
+        var output = GetGeneratedSourceWithResults(source, "IOrderApi.g.cs");
+
+        const string BodyCatch = "catch (global::System.Exception __ex) when (__writingBody && __ex is not global::System.OperationCanceledException)";
+        var guardIndex = output.IndexOf("var __writingBody = true;", StringComparison.Ordinal);
+        var tryIndex = output.IndexOf("        try", StringComparison.Ordinal);
+        var bodyIndex = output.IndexOf(BodyStatement, StringComparison.Ordinal);
+        var clearIndex = output.IndexOf("__writingBody = false;", StringComparison.Ordinal);
+        var sendIndex = output.IndexOf("_httpClient.SendAsync(", StringComparison.Ordinal);
+        var callerCatch = output.IndexOf("catch (global::System.OperationCanceledException) when (ct.IsCancellationRequested)", StringComparison.Ordinal);
+        var bodyCatch = output.IndexOf(BodyCatch, StringComparison.Ordinal);
+        var timeoutCatch = output.IndexOf("catch (global::System.OperationCanceledException __ex)", StringComparison.Ordinal);
+        var transportCatch = output.IndexOf("catch (global::System.Net.Http.HttpRequestException __ex)", StringComparison.Ordinal);
+
+        Assert.True(guardIndex >= 0 && guardIndex < tryIndex, "The guard is set before the try.");
+        Assert.True(tryIndex < bodyIndex && bodyIndex < clearIndex && clearIndex < sendIndex,
+            "The body is serialized inside the try, and the guard is cleared before the send.");
+        Assert.True(callerCatch >= 0 && callerCatch < bodyCatch, "The caller-cancellation catch must come first.");
+        Assert.True(bodyCatch < timeoutCatch && bodyCatch < transportCatch,
+            "The serialization catch must come before the Timeout and Transport catches.");
+
+        var bodyCatchBlock = output.Substring(bodyCatch, timeoutCatch - bodyCatch);
+        Assert.Contains("__RecordFailure(__activity, __ex, __sw, __httpMethod, __RestMethodTag, __durationRecorded);", bodyCatchBlock);
+        Assert.Contains("__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Deserialization, null, __ex)", bodyCatchBlock);
+    }
+
+    [Fact]
+    public void Generator_ResultWithoutBody_EmitsNoSerializationGuard()
+    {
+        var output = GetGeneratedSourceWithResults(ResultApiSource, "IUserApi.g.cs");
+
+        Assert.DoesNotContain("__writingBody", output);
     }
 
     [Theory]

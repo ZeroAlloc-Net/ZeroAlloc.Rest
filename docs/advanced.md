@@ -35,6 +35,7 @@ The generated client returns `Result<T, HttpError>.Success(value)` on a 2xx resp
 | The request times out, for example through `HttpClient.Timeout` | `Timeout` | `0` | Empty | The `OperationCanceledException` or `TaskCanceledException` |
 | The body of a 2xx response cannot be deserialized | `Deserialization` | The response status | The response and content headers | Whatever the serializer threw: a `JsonException`, a `MemoryPackSerializationException`, a `MessagePackSerializationException` and so on |
 | The body of a 2xx response is empty, as a 204's is, or JSON `null`, and `T` does not accept null | `Deserialization` | The response status | The response and content headers | An `InvalidOperationException` whose message names the method and says to declare `T?` |
+| The serializer cannot write the `[Body]` value, so nothing is sent | `Deserialization` | `0` | Empty | Whatever the serializer threw |
 
 `HttpError` exposes:
 
@@ -100,10 +101,9 @@ It accepts delta-seconds (`120`) and HTTP-dates (`Wed, 21 Oct 2015 07:28:00 GMT`
 
 ### What still throws
 
-Only transport, timeout and response-deserialization failures become an `HttpError`. These still throw from a `Result<T, HttpError>` method:
+Only transport, timeout and serializer failures become an `HttpError`. These still throw from a `Result<T, HttpError>` method:
 
-- **Cancellation you asked for.** When the method's `CancellationToken` is cancelled, the `OperationCanceledException` propagates. Cancellation is not an error. Any other cancellation, such as `HttpClient.Timeout`, counts as a `Timeout`. A method without a `CancellationToken` parameter has no caller cancellation, so every cancellation it sees is a `Timeout`.
-- **Serializing the request body.** A `[Body]` value the serializer cannot write is a bug in the call, not a failure of the server.
+- **Cancellation you asked for.** When the method's `CancellationToken` is cancelled, the `OperationCanceledException` propagates, whether it happens while the request body is serialized, while the request is sent, or while the response is read. Cancellation is not an error. Any other cancellation, such as `HttpClient.Timeout`, counts as a `Timeout`. A method without a `CancellationToken` parameter has no caller cancellation, so every cancellation it sees is a `Timeout`.
 - **Everything else**, such as an argument the client cannot put in the URL, or an exception from your own `DelegatingHandler` that is not an `HttpRequestException`.
 
 A method generated from an OpenAPI spec is a `Result` or `UnitResult` method, so these rules apply to every generated operation.

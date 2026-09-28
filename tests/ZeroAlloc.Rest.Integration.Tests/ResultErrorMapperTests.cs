@@ -69,6 +69,9 @@ public interface IMappedApi
 
     [Get("/things/{id}/plain")]
     Task<Result<UserDto, HttpError>> GetPlainThingAsync(int id, CancellationToken ct = default);
+
+    [Post("/things")]
+    Task<Result<UserDto, DomainError>> CreateThingAsync([Body] CreateUserRequest body, CancellationToken ct = default);
 }
 
 [ZeroAllocRestClient]

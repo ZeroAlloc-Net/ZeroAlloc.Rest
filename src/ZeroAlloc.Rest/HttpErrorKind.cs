@@ -19,8 +19,11 @@ public enum HttpErrorKind
     Timeout = 2,
 
     /// <summary>
-    /// The server answered with a success status code, but the serializer could not read the body.
-    /// <see cref="HttpError.StatusCode"/> and <see cref="HttpError.Headers"/> hold the real response values.
+    /// The serializer failed. Either the server answered with a success status code and the
+    /// serializer could not read the body, and then <see cref="HttpError.StatusCode"/> and
+    /// <see cref="HttpError.Headers"/> hold the real response values; or the serializer could not
+    /// write the request body, and then no request was sent, so the status code is <c>0</c> and
+    /// the headers are empty. <see cref="HttpError.Exception"/> is whatever the serializer threw.
     /// </summary>
     Deserialization = 3,
 }
