@@ -1,3 +1,1 @@
 #nullable enable
-ZeroAlloc.Rest.Tools.MSBuild.GenerateRestClientTask.GenerateModels.get -> bool
-ZeroAlloc.Rest.Tools.MSBuild.GenerateRestClientTask.GenerateModels.set -> void

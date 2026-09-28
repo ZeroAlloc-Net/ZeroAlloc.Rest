@@ -1,19 +1,11 @@
 #nullable enable
-const ZeroAlloc.Rest.ServiceCollectionExtensions.DefaultClientName = "ZeroAllocClient" -> string!
 override ZeroAlloc.Rest.HttpError.Equals(object? obj) -> bool
 override ZeroAlloc.Rest.HttpError.GetHashCode() -> int
 override ZeroAlloc.Rest.HttpError.ToString() -> string!
-static ZeroAlloc.Rest.GeneratedRestClient.AddPerClientSerializer<TInterface>(Microsoft.Extensions.DependencyInjection.IServiceCollection! services, ZeroAlloc.Rest.ZeroAllocClientOptions! options) -> void
-static ZeroAlloc.Rest.GeneratedRestClient.AddSerializers<TClient>(Microsoft.Extensions.DependencyInjection.IServiceCollection! services, ZeroAlloc.Rest.ZeroAllocClientOptions! options) -> void
-static ZeroAlloc.Rest.GeneratedRestClient.Create<TClient>(System.Net.Http.HttpClient! httpClient, System.IServiceProvider! services) -> TClient!
 static ZeroAlloc.Rest.GeneratedRestClient.ReadErrorBodyAsync(System.Net.Http.HttpContent! content, int maxBytes, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<(System.ReadOnlyMemory<byte> Body, bool Truncated)>
 static ZeroAlloc.Rest.HttpError.operator !=(ZeroAlloc.Rest.HttpError? left, ZeroAlloc.Rest.HttpError? right) -> bool
 static ZeroAlloc.Rest.HttpError.operator ==(ZeroAlloc.Rest.HttpError? left, ZeroAlloc.Rest.HttpError? right) -> bool
 static ZeroAlloc.Rest.HttpErrorExtensions.GetRetryAfter(this ZeroAlloc.Rest.HttpError! error, System.TimeProvider? timeProvider = null) -> System.TimeSpan?
-static ZeroAlloc.Rest.RestSerializerServiceProviderExtensions.GetRequiredRestSerializer<TClient>(this System.IServiceProvider! services) -> ZeroAlloc.Rest.IRestSerializer!
-static ZeroAlloc.Rest.ServiceCollectionExtensions.AddRestSerializer(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, ZeroAlloc.Rest.IRestSerializer! serializer) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
-static ZeroAlloc.Rest.ServiceCollectionExtensions.AddRestSerializer<TSerializer>(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
-static ZeroAlloc.Rest.ServiceCollectionExtensions.AddZeroAllocClient(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Action<ZeroAlloc.Rest.ZeroAllocClientOptions!>! configure) -> ZeroAlloc.Rest.ZeroAllocClientBuilder!
 ZeroAlloc.Rest.Attributes.BodyAttribute
 ZeroAlloc.Rest.Attributes.BodyAttribute.BodyAttribute() -> void
 ZeroAlloc.Rest.Attributes.DeleteAttribute
@@ -85,30 +77,9 @@ ZeroAlloc.Rest.HttpErrorKind.Deserialization = 3 -> ZeroAlloc.Rest.HttpErrorKind
 ZeroAlloc.Rest.HttpErrorKind.Status = 0 -> ZeroAlloc.Rest.HttpErrorKind
 ZeroAlloc.Rest.HttpErrorKind.Timeout = 2 -> ZeroAlloc.Rest.HttpErrorKind
 ZeroAlloc.Rest.HttpErrorKind.Transport = 1 -> ZeroAlloc.Rest.HttpErrorKind
-ZeroAlloc.Rest.IGeneratedRestClient<TSelf>
-ZeroAlloc.Rest.IGeneratedRestClient<TSelf>.AddSerializers(Microsoft.Extensions.DependencyInjection.IServiceCollection! services, ZeroAlloc.Rest.ZeroAllocClientOptions! options) -> void
-ZeroAlloc.Rest.IGeneratedRestClient<TSelf>.Create(System.Net.Http.HttpClient! httpClient, System.IServiceProvider! services) -> TSelf!
 ZeroAlloc.Rest.IHttpErrorMapper<TError>
 ZeroAlloc.Rest.IHttpErrorMapper<TError>.Map(ZeroAlloc.Rest.HttpError! error) -> TError
 ZeroAlloc.Rest.IRestSerializer
 ZeroAlloc.Rest.IRestSerializer.ContentType.get -> string!
 ZeroAlloc.Rest.IRestSerializer.DeserializeAsync<T>(System.IO.Stream! stream, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<T?>
 ZeroAlloc.Rest.IRestSerializer.SerializeAsync<T>(System.IO.Stream! stream, T value, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
-ZeroAlloc.Rest.RestSerializerAdapter<T>
-ZeroAlloc.Rest.RestSerializerAdapter<T>.ContentType.get -> string!
-ZeroAlloc.Rest.RestSerializerAdapter<T>.DeserializeAsync<TResult>(System.IO.Stream! stream, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<TResult?>
-ZeroAlloc.Rest.RestSerializerAdapter<T>.RestSerializerAdapter(ZeroAlloc.Serialisation.ISerializer<T>! serializer, string! contentType) -> void
-ZeroAlloc.Rest.RestSerializerAdapter<T>.SerializeAsync<TValue>(System.IO.Stream! stream, TValue value, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
-ZeroAlloc.Rest.RestSerializerServiceProviderExtensions
-ZeroAlloc.Rest.ServiceCollectionExtensions
-ZeroAlloc.Rest.ZeroAllocClientBuilder
-ZeroAlloc.Rest.ZeroAllocClientBuilder.ConfigureHttpClient(System.Action<System.Net.Http.HttpClient!>! configure) -> ZeroAlloc.Rest.ZeroAllocClientBuilder!
-ZeroAlloc.Rest.ZeroAllocClientBuilder.ZeroAllocClientBuilder(Microsoft.Extensions.DependencyInjection.IHttpClientBuilder! httpClientBuilder) -> void
-ZeroAlloc.Rest.ZeroAllocClientOptions
-ZeroAlloc.Rest.ZeroAllocClientOptions.BaseAddress.get -> System.Uri?
-ZeroAlloc.Rest.ZeroAllocClientOptions.BaseAddress.set -> void
-ZeroAlloc.Rest.ZeroAllocClientOptions.SerializerInstance.get -> ZeroAlloc.Rest.IRestSerializer?
-ZeroAlloc.Rest.ZeroAllocClientOptions.SerializerType.get -> System.Type?
-ZeroAlloc.Rest.ZeroAllocClientOptions.UseSerializer(ZeroAlloc.Rest.IRestSerializer! serializer) -> void
-ZeroAlloc.Rest.ZeroAllocClientOptions.UseSerializer<TSerializer>() -> void
-ZeroAlloc.Rest.ZeroAllocClientOptions.ZeroAllocClientOptions() -> void
