@@ -55,6 +55,8 @@ Task<UserDto> CreateUserAsync([Body] CreateUserRequest body, CancellationToken c
 
 Only one `[Body]` parameter per method is supported.
 
+The serializer writes the body into a buffer rented from `ArrayPool<byte>.Shared`, and the request sends it with its `Content-Length`. Disposing the request clears the buffer and returns it to the pool, also when the send fails or is cancelled. A send that is still copying the body at that moment, such as an HTTP/2 upload the server answered early, keeps the buffer until the copy ends. The serializer gets a seekable stream, so a serializer that seeks or reads back what it wrote works as it did with a `MemoryStream`.
+
 ## Header parameters
 
 Decorated with `[Header("Header-Name")]`. The value is added to the request headers:

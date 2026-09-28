@@ -513,19 +513,9 @@ internal static class ClientEmitter
 
         if (bodyParam != null)
         {
-            sb.AppendLine("        var __bodyStream = new System.IO.MemoryStream();");
-            sb.AppendLine("        try");
-            sb.AppendLine("        {");
-            sb.AppendLine($"            await {serializerExpr}.SerializeAsync(__bodyStream, {Identifier(bodyParam)}, {ctArg}).ConfigureAwait(false);");
-            sb.AppendLine("        }");
-            sb.AppendLine("        catch");
-            sb.AppendLine("        {");
-            sb.AppendLine("            __bodyStream.Dispose();");
-            sb.AppendLine("            throw;");
-            sb.AppendLine("        }");
-            sb.AppendLine("        __bodyStream.Position = 0;");
-            sb.AppendLine("        __request.Content = new System.Net.Http.StreamContent(__bodyStream);");
-            sb.AppendLine($"        __request.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue({serializerExpr}.ContentType);");
+            // Serialized into a pooled buffer that the request owns: disposing the request returns it.
+            // The helper returns the buffer itself when the serializer throws or is cancelled.
+            sb.AppendLine($"        __request.Content = await global::ZeroAlloc.Rest.GeneratedRestClient.CreateBodyContentAsync({serializerExpr}, {Identifier(bodyParam)}, {ctArg}).ConfigureAwait(false);");
         }
 
         if (formBodyParam != null)

@@ -79,8 +79,13 @@ public class GeneratorEmissionTests
             }
             """;
         var output = GetGeneratedSource(source, "IOrderApi.g.cs");
-        Assert.Contains("SerializeAsync", output);
-        Assert.Contains("StreamContent", output);
+        // Issue #362: the body is serialized into a pooled buffer that the request owns, not into
+        // an unpooled MemoryStream wrapped in StreamContent.
+        Assert.Contains(
+            "__request.Content = await global::ZeroAlloc.Rest.GeneratedRestClient.CreateBodyContentAsync(_serializer, body, ct).ConfigureAwait(false);",
+            output);
+        Assert.DoesNotContain("MemoryStream", output);
+        Assert.DoesNotContain("StreamContent", output);
     }
 
     [Fact]
@@ -792,6 +797,7 @@ public class GeneratorEmissionTests
         var output = GetGeneratedSource(source, "ITokenApi.g.cs");
         Assert.Contains("FormUrlEncodedContent", output);
         Assert.DoesNotContain("SerializeAsync", output);
+        Assert.DoesNotContain("CreateBodyContentAsync", output);
         Assert.DoesNotContain("StreamContent", output);
     }
 
