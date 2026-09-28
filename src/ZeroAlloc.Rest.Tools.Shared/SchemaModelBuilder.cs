@@ -21,6 +21,9 @@ internal sealed class SchemaModelBuilder : ISchemaTypeNamer
     private readonly Queue<(OpenApiSchema Schema, string Name, string Path)> _pending = new();
     private readonly List<ModelDefinition> _models = [];
 
+    // The type of each inline union by its structural key; see InlineUnionKey.
+    private readonly Dictionary<string, TypeRef> _inlineUnions = new(StringComparer.Ordinal);
+
     // Each variant of a discriminated oneOf or anyOf, with its base.
     private readonly Dictionary<OpenApiSchema, OpenApiSchema> _baseOf = new(ReferenceEqualityComparer.Instance);
 
@@ -72,11 +75,75 @@ internal sealed class SchemaModelBuilder : ISchemaTypeNamer
             _types.Add(schema, TypeRef.JsonElement);
             return TypeRef.JsonElement;
         }
+        var unionKey = InlineUnionKey(schema);
+        if (unionKey is not null && _inlineUnions.TryGetValue(unionKey, out var shared))
+        {
+            _types.Add(schema, shared);
+            return shared;
+        }
         var name = Reserve(schema.Reference?.Id ?? UnionName(schema) ?? contextName);
         var type = new TypeRef(name, TypeRefKind.Model, IsValueType: TypeMapper.IsEnum(schema));
         _types.Add(schema, type);
+        if (unionKey is not null)
+            _inlineUnions.Add(unionKey, type);
         _pending.Enqueue((schema, name, schemaPath));
         return type;
+    }
+
+    // Issue #359: structurally identical inline unions share one type. The key holds everything
+    // BuildUnion reads: oneOf or anyOf, and each variant in order with its type and the required
+    // properties the converter matches it by. The first occurrence names the type and gives it its
+    // description; a later one, whatever its path or description, refers to that type. Titles,
+    // descriptions and the union's own nullable are not part of the key: they change no generated
+    // member, and nullable is declared on the property that uses the union.
+    //
+    // Only a union whose every variant is a $ref, or an inline primitive or array of such, has a
+    // key. An inline object, map, wrapper or nested union variant has none, so such a union keeps a
+    // type of its own: it would generate an inline type per occurrence, and a wrapper may add
+    // required properties the plain $ref does not have. A component union has no key either: it
+    // keeps its own name.
+    private static string? InlineUnionKey(OpenApiSchema schema)
+    {
+        if (schema.Reference is not null || schema.Discriminator is not null || TypeMapper.IsEnum(schema)
+            || schema.AllOf.Count > 0 || schema.Properties.Count > 0 || schema.Not is not null)
+            return null;
+        var isOneOf = schema.OneOf.Count > 0;
+        var parts = isOneOf ? schema.OneOf : schema.AnyOf;
+        if (parts.Count < 2 || (isOneOf && schema.AnyOf.Count > 0))
+            return null;
+        var key = new System.Text.StringBuilder(isOneOf ? "oneOf" : "anyOf");
+        foreach (var part in parts)
+        {
+            if (VariantKey(part) is not { } variant)
+                return null;
+            key.Append('|').Append(variant).Append('{').Append(string.Join(",", RequiredOf(part))).Append('}');
+        }
+        return key.ToString();
+    }
+
+    // A $ref is its schema id; an inline primitive its type and format; an inline array its item's
+    // key and whether the item is nullable, which the list's element type records. Anything else,
+    // and anything TypeMapper would report as unsupported, has no key.
+    private static string? VariantKey(OpenApiSchema part)
+    {
+        if (part.Reference?.Id is { } id)
+            return TypeMapper.NeedsModel(part) ? "$ref:" + id : PrimitiveKey(part) is { } primitive ? "$ref:" + id + ":" + primitive : null;
+        return TypeMapper.NeedsModel(part) ? null : PrimitiveKey(part);
+    }
+
+    private static string? PrimitiveKey(OpenApiSchema schema)
+    {
+        if (schema.Not is not null || schema.AdditionalProperties is not null)
+            return null;
+        switch (schema.Type)
+        {
+            case "integer" or "number" or "boolean" or "string":
+                return schema.Type + ":" + schema.Format;
+            case "array" when schema.Items is not null && VariantKey(schema.Items) is { } item:
+                return "array[" + item + (schema.Items.Nullable ? "?" : "") + "]";
+            default:
+                return null;
+        }
     }
 
     public void Unsupported(string path, string reason) => _warnings.Add(OpenApiWarning.MappedToJsonElement(path, reason));
@@ -358,10 +425,16 @@ internal sealed class SchemaModelBuilder : ISchemaTypeNamer
 
     // The required properties of an object variant, its allOf parts included, sorted so the model is
     // deterministic. A recursive allOf never gets here: Named mapped it to JsonElement, kind Any.
+    // A single-part wrapper stands for its part, but what it requires still counts.
     private static EquatableList<string> RequiredOf(OpenApiSchema schema)
     {
         var required = new SortedSet<string>(StringComparer.Ordinal);
-        AddRequired(TypeMapper.Unwrap(schema), required);
+        while (TypeMapper.SingleWrapped(schema) is { } wrapped)
+        {
+            required.UnionWith(schema.Required);
+            schema = wrapped.Part;
+        }
+        AddRequired(schema, required);
         return new EquatableList<string>(required);
     }
 

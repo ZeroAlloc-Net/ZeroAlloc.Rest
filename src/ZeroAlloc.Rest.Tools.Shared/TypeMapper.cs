@@ -60,7 +60,7 @@ internal static class TypeMapper
     // Design decision 7: allOf, oneOf or anyOf with one part and nothing else, which specs use to
     // attach nullable or a description to a $ref, stands for that part. A named component is never
     // a wrapper: it gets its own type.
-    private static (OpenApiSchema Part, string Suffix)? SingleWrapped(OpenApiSchema schema)
+    internal static (OpenApiSchema Part, string Suffix)? SingleWrapped(OpenApiSchema schema)
     {
         if (schema.Reference is not null || schema.Properties.Count > 0 || schema.Discriminator is not null)
             return null;
