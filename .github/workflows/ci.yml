@@ -78,6 +78,8 @@ jobs:
 
   aot-smoke:
     runs-on: ubuntu-latest
+    # A typical run takes about a minute; a hung publish or smoke fails well before the default six hours.
+    timeout-minutes: 15
     # Publishes samples/ZeroAlloc.Rest.AotSmoke with PublishAot=true and fails on any trim or AOT
     # warning. Verifies the generator-emitted REST client types survive ILC, resolves clients
     # through both the generated Add{I} and the Resilience bridge, and sends real requests over a
@@ -113,10 +115,13 @@ jobs:
           fi
 
       - name: Run AOT binary
-        run: ./aot-out/ZeroAlloc.Rest.AotSmoke
+        # A hang is killed after two minutes and fails the step with exit code 124.
+        run: timeout --kill-after=10s 120s ./aot-out/ZeroAlloc.Rest.AotSmoke
 
   aot-smoke-core:
     runs-on: ubuntu-latest
+    # A typical run takes about a minute; a hung publish or smoke fails well before the default six hours.
+    timeout-minutes: 15
     # Publishes samples/ZeroAlloc.Rest.CoreOnly.AotSmoke with PublishAot=true and fails on any trim
     # or AOT warning. Proves that ZeroAlloc.Rest core alone, without
     # ZeroAlloc.Rest.DependencyInjection, still produces a generated client that survives ILC; see
@@ -151,10 +156,13 @@ jobs:
           fi
 
       - name: Run AOT binary
-        run: ./aot-core-out/ZeroAlloc.Rest.CoreOnly.AotSmoke
+        # A hang is killed after two minutes and fails the step with exit code 124.
+        run: timeout --kill-after=10s 120s ./aot-core-out/ZeroAlloc.Rest.CoreOnly.AotSmoke
 
   aot-smoke-memorypack:
     runs-on: ubuntu-latest
+    # A typical run takes about a minute; a hung publish or smoke fails well before the default six hours.
+    timeout-minutes: 15
     # Publishes samples/ZeroAlloc.Rest.MemoryPack.AotSmoke with PublishAot=true and runs it: the
     # Native AOT proof that MemoryPackRestSerializer's explicit type registration works without
     # MemoryPack's reflection-based formatter lookup, and that a missing registration is reported.
@@ -198,10 +206,13 @@ jobs:
           echo "Every IL warning comes from MemoryPack.Core."
 
       - name: Run AOT binary
-        run: ./aot-mp-out/ZeroAlloc.Rest.MemoryPack.AotSmoke
+        # A hang is killed after two minutes and fails the step with exit code 124.
+        run: timeout --kill-after=10s 120s ./aot-mp-out/ZeroAlloc.Rest.MemoryPack.AotSmoke
 
   aot-smoke-messagepack:
     runs-on: ubuntu-latest
+    # A typical run takes about a minute; a hung publish or smoke fails well before the default six hours.
+    timeout-minutes: 15
     # Publishes samples/ZeroAlloc.Rest.MessagePack.AotSmoke with PublishAot=true and runs it: the
     # Native AOT proof that MessagePackRestSerializer's resolver constructor works with a
     # source-generated resolver and never falls back to MessagePack's reflection-based resolvers.
@@ -247,7 +258,8 @@ jobs:
           echo "Every IL warning comes from MessagePack."
 
       - name: Run AOT binary
-        run: ./aot-msgpack-out/ZeroAlloc.Rest.MessagePack.AotSmoke
+        # A hang is killed after two minutes and fails the step with exit code 124.
+        run: timeout --kill-after=10s 120s ./aot-msgpack-out/ZeroAlloc.Rest.MessagePack.AotSmoke
 
   # A release PR must mark everything it releases as shipped: the analyzer rules in
   # AnalyzerReleases.Unshipped.md and the API in every PublicAPI.Unshipped.txt. The
