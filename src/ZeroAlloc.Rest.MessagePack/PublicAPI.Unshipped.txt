@@ -1,2 +1,1 @@
 #nullable enable
-ZeroAlloc.Rest.MessagePack.MessagePackRestSerializer.MessagePackRestSerializer(MessagePack.IFormatterResolver! resolver, MessagePack.MessagePackSerializerOptions? options = null) -> void
