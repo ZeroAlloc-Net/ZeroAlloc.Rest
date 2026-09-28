@@ -477,8 +477,10 @@ internal static class ModelExtractor
             bool isNullable = !param.Type.IsValueType
                 || param.Type.OriginalDefinition.SpecialType == Microsoft.CodeAnalysis.SpecialType.System_Nullable_T;
 
+            // A query or header collection sends each element as its own value, so its format is the
+            // element's. String is IEnumerable<char> but is a single value.
             bool isCollection = false;
-            if (kind == ParameterKind.Query
+            if (kind is ParameterKind.Query or ParameterKind.Header
                 && param.Type.SpecialType != Microsoft.CodeAnalysis.SpecialType.System_String)
             {
                 // Check if the type itself is IEnumerable<T>

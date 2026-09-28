@@ -80,6 +80,48 @@ public class GeneratorValueFormatTests
         Assert.Contains("if (__item == null) continue;", Section(client, "StringsAsync", "__FormatValue("));
     }
 
+    // Issue #356: a collection-typed [Header] parameter sent its collection's type name, such as
+    // System.String[], as the header value. Each element is added as its own value of the header,
+    // formatted like a single value; a null collection or a null element adds nothing.
+    [Fact]
+    public void CollectionHeaders_AddOneValuePerElement_AndCompileWithoutWarnings()
+    {
+        var run = GeneratorHarness.Run("""
+            using System.Collections.Generic;
+            using System.Threading.Tasks;
+            using ZeroAlloc.Rest.Attributes;
+            namespace MyApp;
+            [ZeroAllocRestClient]
+            public interface IHeaderListApi
+            {
+                [Get("/a")] Task<string> IntsAsync([Header("X-Ids")] List<int> ids);
+                [Get("/b")] Task<string> NullableIntsAsync([Header("X-Maybe")] int?[]? maybe);
+                [Get("/c")] Task<string> StringsAsync([Header("X-Tags")] IEnumerable<string?> tags);
+            }
+            """, "IHeaderListApi.g.cs");
+
+        Assert.Empty(run.GeneratorDiagnostics);
+        Assert.Empty(run.Problems);
+        var client = run.GeneratedSource;
+        Assert.DoesNotContain("__FormatValue(ids)", client);
+        Assert.DoesNotContain("__FormatValue(tags)", client);
+        Assert.DoesNotContain("List<int> value)", client);
+        Assert.DoesNotContain("[] value)", client);
+        Assert.Contains("private static string __FormatValue(int value)", client);
+        Assert.Contains("private static string __FormatValue(string value) => value;", client);
+
+        var ints = Section(client, "IntsAsync", "NullableIntsAsync");
+        Assert.Contains("foreach (var __item in ids)", ints);
+        Assert.Contains("__request.Headers.TryAddWithoutValidation(\"X-Ids\", __FormatValue(__item));", ints);
+        Assert.DoesNotContain("if (__item == null) continue;", ints);
+        var maybe = Section(client, "NullableIntsAsync", "StringsAsync");
+        Assert.Contains("if (maybe != null)", maybe);
+        Assert.Contains("if (__item == null) continue;", maybe);
+        var strings = Section(client, "StringsAsync", "private static string __FormatValue(");
+        Assert.Contains("if (__item == null) continue;", strings);
+        Assert.Contains("__request.Headers.TryAddWithoutValidation(\"X-Tags\", __FormatValue(__item));", strings);
+    }
+
     // Ruling F7: a spec can define a model named Uri in the client's namespace, so the escape call
     // is fully qualified. Enum members with a keyword name or sharing a value also compile.
     [Fact]
