@@ -569,7 +569,9 @@ internal static class ClientEmitter
             if (guardBody)
                 sb.AppendLine("            __writingBody = false;");
         }
-        sb.AppendLine($"            using var __response = await _httpClient.SendAsync(__request, {ctArg}).ConfigureAwait(false);");
+        // A streamed response is disposed by this using on every path, which disposes its stream.
+        var completion = method.StreamResponses ? "global::System.Net.Http.HttpCompletionOption.ResponseHeadersRead, " : string.Empty;
+        sb.AppendLine($"            using var __response = await _httpClient.SendAsync(__request, {completion}{ctArg}).ConfigureAwait(false);");
         sb.AppendLine("            var __statusCode = (int)__response.StatusCode;");
         sb.AppendLine("            var __serverAddress = __request.RequestUri?.Host ?? string.Empty;");
         sb.AppendLine("            __activity?.SetTag(\"http.status_code\", __statusCode);");
@@ -667,7 +669,11 @@ internal static class ClientEmitter
             var resultType = ResultTypeName(method);
             sb.AppendLine($"{indent}if (__response.IsSuccessStatusCode)");
             sb.AppendLine($"{indent}{{");
-            sb.AppendLine($"{i1}var __responseStream = await __response.Content.ReadAsStreamAsync({ctArg}).ConfigureAwait(false);");
+            // A buffered body is opened outside the try, since opening it reads nothing. A streamed
+            // body is opened inside it: that reads from the connection, and a failure there is part
+            // of reading the body.
+            if (!method.StreamResponses)
+                sb.AppendLine($"{i1}var __responseStream = await __response.Content.ReadAsStreamAsync({ctArg}).ConfigureAwait(false);");
             // Only the deserialize call is guarded: whatever the serializer throws, a JsonException or
             // a MemoryPack or MessagePack exception, means the body could not be read. Cancellation
             // is left to the method's cancellation catches.
@@ -677,6 +683,7 @@ internal static class ClientEmitter
                 // through to the single mapping site after the method's try.
                 sb.AppendLine($"{i1}try");
                 sb.AppendLine($"{i1}{{");
+                EmitOpenStreamedBody(sb, method, i2, ctArg);
                 EmitEmptyBodyCheck(sb, method, i2);
                 sb.AppendLine($"{i2}{method.InnerTypeName} __content = {ReadBody(method, serializerExpr, ctArg)};");
                 sb.AppendLine($"{i2}return {resultType}.Success(__content);");
@@ -687,6 +694,7 @@ internal static class ClientEmitter
                 sb.AppendLine($"{i1}{method.InnerTypeName} __content;");
                 sb.AppendLine($"{i1}try");
                 sb.AppendLine($"{i1}{{");
+                EmitOpenStreamedBody(sb, method, i2, ctArg);
                 EmitEmptyBodyCheck(sb, method, i2);
                 sb.AppendLine($"{i2}__content = {ReadBody(method, serializerExpr, ctArg)};");
                 sb.AppendLine($"{i1}}}");
@@ -707,10 +715,22 @@ internal static class ClientEmitter
         else
         {
             sb.AppendLine($"{indent}__response.EnsureSuccessStatusCode();");
-            sb.AppendLine($"{indent}var __responseStream = await __response.Content.ReadAsStreamAsync().ConfigureAwait(false);");
+            if (method.StreamResponses)
+                EmitOpenStreamedBody(sb, method, indent, ctArg);
+            else
+                sb.AppendLine($"{indent}var __responseStream = await __response.Content.ReadAsStreamAsync().ConfigureAwait(false);");
             EmitEmptyBodyCheck(sb, method, indent);
             sb.AppendLine($"{indent}return {ReadBody(method, serializerExpr, ctArg)};");
         }
+    }
+
+    // A streamed body is not seekable, so the helper hands an empty one over as an empty seekable
+    // stream: the empty-body checks below, and the serializers' own, then behave as when buffered.
+    private static void EmitOpenStreamedBody(StringBuilder sb, MethodModel method, string indent, string ctArg)
+    {
+        if (!method.StreamResponses)
+            return;
+        sb.AppendLine($"{indent}var __responseStream = await global::ZeroAlloc.Rest.GeneratedRestClient.ReadResponseStreamAsync(__response.Content, {ctArg}).ConfigureAwait(false);");
     }
 
     // A success body of JSON null, or an empty one such as a 204's, has no value. A T that accepts

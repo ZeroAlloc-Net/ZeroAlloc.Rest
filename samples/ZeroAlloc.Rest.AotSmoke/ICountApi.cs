@@ -15,4 +15,12 @@ public interface ICountApi
 
     [Get("/total")]
     Task<long> GetTotalAsync(CancellationToken ct = default);
+
+    // Issue #362: the same reads with StreamResponses, which send with ResponseHeadersRead and
+    // deserialize from the connection's stream.
+    [Get("/count", StreamResponses = true)]
+    Task<Result<int?, HttpError>> TryGetCountStreamedAsync(CancellationToken ct = default);
+
+    [Get("/total", StreamResponses = true)]
+    Task<long> GetTotalStreamedAsync(CancellationToken ct = default);
 }

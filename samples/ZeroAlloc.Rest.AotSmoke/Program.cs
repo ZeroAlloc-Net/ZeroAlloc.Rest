@@ -234,5 +234,74 @@ using (var refusingHttp = new System.Net.Http.HttpClient(new RefusingHandler()) 
     }
 }
 
+// Issue #362: StreamResponses over a real connection, with and without a Content-Length. A body of
+// unknown length goes through the read-ahead that finds an empty one. JSON null and an empty body
+// take the empty-body paths, an unreadable body is a Deserialization failure, and a 404 keeps its
+// error body.
+{
+    using var server = new StubServer();
+    using var http = new System.Net.Http.HttpClient { BaseAddress = server.BaseAddress };
+    ICountApi counts = new CountApiClient(http, new ZeroAlloc.Rest.SystemTextJson.SystemTextJsonSerializer(CountJsonContext.Default));
+    using var timeout = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(30));
+
+    foreach (var chunked in new[] { false, true })
+    {
+        var serving = server.ServeAsync(200, "5", chunked, timeout.Token);
+        var count = await counts.TryGetCountStreamedAsync(timeout.Token).ConfigureAwait(false);
+        await serving.ConfigureAwait(false);
+        if (!count.IsSuccess || count.Value != 5)
+        {
+            Console.Error.WriteLine($"AOT smoke: FAIL — a streamed int? body of 5 should be a success of 5, chunked: {chunked}");
+            return 1;
+        }
+
+        serving = server.ServeAsync(200, "null", chunked, timeout.Token);
+        count = await counts.TryGetCountStreamedAsync(timeout.Token).ConfigureAwait(false);
+        await serving.ConfigureAwait(false);
+        if (!count.IsSuccess || count.Value is not null)
+        {
+            Console.Error.WriteLine($"AOT smoke: FAIL — a streamed int? body of JSON null should be a success of null, chunked: {chunked}");
+            return 1;
+        }
+
+        serving = server.ServeAsync(200, "", chunked, timeout.Token);
+        count = await counts.TryGetCountStreamedAsync(timeout.Token).ConfigureAwait(false);
+        await serving.ConfigureAwait(false);
+        if (!count.IsSuccess || count.Value is not null)
+        {
+            Console.Error.WriteLine($"AOT smoke: FAIL — an empty streamed int? body should be a success of null, chunked: {chunked}");
+            return 1;
+        }
+
+        serving = server.ServeAsync(200, "not json", chunked, timeout.Token);
+        count = await counts.TryGetCountStreamedAsync(timeout.Token).ConfigureAwait(false);
+        await serving.ConfigureAwait(false);
+        if (!count.IsFailure || count.Error.Kind != HttpErrorKind.Deserialization)
+        {
+            Console.Error.WriteLine($"AOT smoke: FAIL — an unreadable streamed body should be a Deserialization error, chunked: {chunked}");
+            return 1;
+        }
+
+        const string Missing = "{\"code\":\"missing\"}";
+        serving = server.ServeAsync(404, Missing, chunked, timeout.Token);
+        count = await counts.TryGetCountStreamedAsync(timeout.Token).ConfigureAwait(false);
+        await serving.ConfigureAwait(false);
+        if (!count.IsFailure || count.Error.Kind != HttpErrorKind.Status || count.Error.Body.Length != Missing.Length)
+        {
+            Console.Error.WriteLine($"AOT smoke: FAIL — a streamed 404 should carry its body, chunked: {chunked}");
+            return 1;
+        }
+
+        serving = server.ServeAsync(200, "9007199254740993", chunked, timeout.Token);
+        var total = await counts.GetTotalStreamedAsync(timeout.Token).ConfigureAwait(false);
+        await serving.ConfigureAwait(false);
+        if (total != 9007199254740993L)
+        {
+            Console.Error.WriteLine($"AOT smoke: FAIL — a streamed long body should read exactly, chunked: {chunked}");
+            return 1;
+        }
+    }
+}
+
 Console.WriteLine("AOT smoke: PASS");
 return 0;

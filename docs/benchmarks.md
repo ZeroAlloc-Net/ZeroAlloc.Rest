@@ -90,11 +90,37 @@ Use `options.UseSerializer(new MemoryPackRestSerializer(types => types.Add<UserD
 
 ---
 
+## Response bodies: buffered vs `StreamResponses`
+
+`ResponseBodyBenchmarks` reads the same JSON `UserDto[]` response through a generated client, once
+with the default buffering and once with [`StreamResponses`](advanced.md#streaming-responses). The
+in-memory handler answers with a `Content-Length` and a stream that cannot seek, as a connection
+does. `Users` sets the body size: 1 user is about 25 bytes, 1000 users about 30 KB.
+
+| Method | Users | Allocated | Alloc Ratio |
+|---|---:|---:|---:|
+| Buffered | 1 | 2.39 KB | 1.00 |
+| Streamed | 1 | 2.27 KB | 0.95 |
+| Buffered | 1000 | 124.64 KB | 1.00 |
+| Streamed | 1000 | 96.45 KB | 0.77 |
+
+Streaming removes the copy `HttpClient` makes of the body, about 28 KB for the 30 KB body. What
+remains is the deserialized array. Timings are not shown: they were within noise of each other.
+
+`MemoryPackBodyBenchmarks` measures `MemoryPackRestSerializer` on its own. It reads a body through
+pooled buffers that it clears before returning them, so for 1000 users, about 20 KB, reading a
+body allocates 80 KB, which is the result, instead of 122 KB from a stream that cannot seek or
+101 KB from a seekable one. Writing a body allocates 32 B instead of 64 KB.
+
+---
+
 ## How to reproduce
 
 ```sh
 cd tests/ZeroAlloc.Rest.Benchmarks
-dotnet run -c Release
+dotnet run -c Release -- --filter "*"
 ```
 
-BenchmarkDotNet requires Release mode. Debug builds produce incorrect numbers. Both benchmark classes (`RestClientBenchmarks` and `SerializerBenchmarks`) run automatically.
+BenchmarkDotNet requires Release mode. Debug builds produce incorrect numbers. `--filter "*"` runs
+every benchmark class; without a filter, BenchmarkDotNet asks which class to run. To run one class,
+name it, for example `--filter "*ResponseBodyBenchmarks*"`.

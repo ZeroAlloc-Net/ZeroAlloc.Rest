@@ -54,12 +54,13 @@ internal static class ModelExtractor
 
         var compilation = ctx.SemanticModel.Compilation;
         var clientHasQueryParameter = RouteTokenBinding.ClientHasQueryParameter(interfaceSymbol);
+        var clientStreamsResponses = GetStreamResponses(ctx);
         var methods = new List<MethodModel>();
         foreach (var member in interfaceSymbol.GetMembers())
         {
             ct.ThrowIfCancellationRequested();
             if (member is not IMethodSymbol method) continue;
-            var methodModel = ExtractMethod(method, mappers, diagnostics, clientHasQueryParameter, compilation, ct);
+            var methodModel = ExtractMethod(method, mappers, diagnostics, clientHasQueryParameter, clientStreamsResponses, compilation, ct);
             if (methodModel is not null) methods.Add(methodModel);
         }
 
@@ -257,6 +258,29 @@ internal static class ModelExtractor
         return DefaultMaxErrorBodyBytes;
     }
 
+    // [ZeroAllocRestClient(StreamResponses = true)]. Off by default.
+    private static bool GetStreamResponses(GeneratorAttributeSyntaxContext ctx)
+    {
+        foreach (var attr in ctx.Attributes)
+        {
+            if (StreamResponsesOf(attr) is { } value)
+                return value;
+        }
+        return false;
+    }
+
+    // StreamResponses when the attribute sets it, and null when it does not. A method's HTTP
+    // attribute that leaves it unset follows the interface, so unset and false differ there.
+    private static bool? StreamResponsesOf(AttributeData attr)
+    {
+        foreach (var namedArg in attr.NamedArguments)
+        {
+            if (namedArg.Key == "StreamResponses" && namedArg.Value.Value is bool value)
+                return value;
+        }
+        return null;
+    }
+
     // The attribute's zero-argument constructor has no ConstructorArguments at all; that means
     // an empty route, not a missing one, so it must not be confused with "no HTTP attribute".
     internal static string RouteOf(AttributeData attr)
@@ -328,7 +352,7 @@ internal static class ModelExtractor
 
     private static MethodModel? ExtractMethod(
         IMethodSymbol method, ErrorMapperResolution mappers, List<DiagnosticInfo> diagnostics,
-        bool clientHasQueryParameter, Compilation compilation, CancellationToken ct)
+        bool clientHasQueryParameter, bool clientStreamsResponses, Compilation compilation, CancellationToken ct)
     {
         var httpAttr = FindHttpAttribute(method, out var httpMethod);
         var route = httpAttr is null ? null : RouteOf(httpAttr);
@@ -355,7 +379,7 @@ internal static class ModelExtractor
                 staticHeaders.Add((headerName, headerValue));
         }
 
-        if (httpMethod is null || route is null) return null;
+        if (httpAttr is null || httpMethod is null || route is null) return null;
 
         var returnType = method.ReturnType as INamedTypeSymbol;
         if (returnType is null) return null;
@@ -438,7 +462,8 @@ internal static class ModelExtractor
             EvaluatedRouteTokens(method, route, clientHasQueryParameter, compilation, ct),
             returnsUnitResult,
             innerType?.IsValueType == true,
-            innerType is not null && IsNullable(innerType));
+            innerType is not null && IsNullable(innerType),
+            StreamResponsesOf(httpAttr) ?? clientStreamsResponses);
     }
 
     // A nullable reference type, or Nullable<T>.

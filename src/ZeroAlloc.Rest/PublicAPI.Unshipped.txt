@@ -1,1 +1,6 @@
 #nullable enable
+static ZeroAlloc.Rest.GeneratedRestClient.ReadResponseStreamAsync(System.Net.Http.HttpContent! content, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<System.IO.Stream!>
+ZeroAlloc.Rest.Attributes.HttpMethodAttribute.StreamResponses.get -> bool
+ZeroAlloc.Rest.Attributes.HttpMethodAttribute.StreamResponses.set -> void
+ZeroAlloc.Rest.Attributes.ZeroAllocRestClientAttribute.StreamResponses.get -> bool
+ZeroAlloc.Rest.Attributes.ZeroAllocRestClientAttribute.StreamResponses.set -> void

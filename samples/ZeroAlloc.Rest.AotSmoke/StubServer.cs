@@ -19,16 +19,33 @@ internal sealed class StubServer : IDisposable
 
     public string LastRequest { get; private set; } = "";
 
-    public async Task ServeAsync(int status, string json, CancellationToken ct)
+    public Task ServeAsync(int status, string json, CancellationToken ct) => ServeAsync(status, json, chunked: false, ct);
+
+    // With `chunked`, the body is sent with Transfer-Encoding: chunked and no Content-Length, so the
+    // client cannot know its length before reading it.
+    public async Task ServeAsync(int status, string json, bool chunked, CancellationToken ct)
     {
         using var client = await _listener.AcceptTcpClientAsync(ct).ConfigureAwait(false);
         var stream = client.GetStream();
         LastRequest = await ReadRequestAsync(stream, ct).ConfigureAwait(false);
         var body = Encoding.UTF8.GetBytes(json);
+        var framing = chunked ? "Transfer-Encoding: chunked" : $"Content-Length: {body.Length}";
         var head = Encoding.ASCII.GetBytes(
-            $"HTTP/1.1 {status} Stub\r\nContent-Type: application/json\r\nContent-Length: {body.Length}\r\nConnection: close\r\n\r\n");
+            $"HTTP/1.1 {status} Stub\r\nContent-Type: application/json\r\n{framing}\r\nConnection: close\r\n\r\n");
         await stream.WriteAsync(head, ct).ConfigureAwait(false);
-        await stream.WriteAsync(body, ct).ConfigureAwait(false);
+        if (!chunked)
+        {
+            await stream.WriteAsync(body, ct).ConfigureAwait(false);
+            return;
+        }
+
+        if (body.Length > 0)
+        {
+            await stream.WriteAsync(Encoding.ASCII.GetBytes($"{body.Length:X}\r\n"), ct).ConfigureAwait(false);
+            await stream.WriteAsync(body, ct).ConfigureAwait(false);
+            await stream.WriteAsync("\r\n"u8.ToArray(), ct).ConfigureAwait(false);
+        }
+        await stream.WriteAsync("0\r\n\r\n"u8.ToArray(), ct).ConfigureAwait(false);
     }
 
     // Reads the head, then Content-Length bytes of body.

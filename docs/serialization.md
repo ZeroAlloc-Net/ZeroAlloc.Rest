@@ -238,6 +238,10 @@ public sealed class MySerializer : IRestSerializer
 }
 ```
 
+The stream `DeserializeAsync` receives is seekable unless the client [streams
+responses](advanced.md#streaming-responses). With `StreamResponses`, a non-empty body arrives as the
+connection's stream, which cannot seek; an empty body still arrives as an empty seekable stream.
+
 Register it for one client, or as the app-wide default:
 
 ```csharp
