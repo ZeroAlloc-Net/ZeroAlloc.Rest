@@ -14,10 +14,16 @@ description: Generate a ZeroAllocRestClient interface from an existing OpenAPI 3
 
 ```sh
 dotnet add package ZeroAlloc.Rest.Tools.MSBuild
+dotnet add package ZeroAlloc.Rest
 dotnet add package ZeroAlloc.Rest.DependencyInjection
+dotnet add package ZeroAlloc.Rest.SystemTextJson
 ```
 
-Add `ZeroAlloc.Rest.DependencyInjection` for the generated `AddIMyApi` extension used in step 5.
+`ZeroAlloc.Rest.Tools.MSBuild` only generates the interface; `ZeroAlloc.Rest` compiles it into
+`MyApiClient` through its bundled generator — do not also add `ZeroAlloc.Rest.Generator`, referencing
+both is error ZR9001. Add `ZeroAlloc.Rest.DependencyInjection` for the generated `AddIMyApi`
+extension used in step 5, and `ZeroAlloc.Rest.SystemTextJson` for the `SystemTextJsonSerializer` step
+5 also uses.
 
 ## 2. Add the spec to your project
 

@@ -60,25 +60,21 @@ from `ZeroAlloc.Rest`. If you used it to bridge a `ZeroAlloc.Serialisation.ISeri
 using System.Buffers;
 using ZeroAlloc.Serialisation;
 
-public sealed class MyAdapter<T> : IRestSerializer
+public sealed class MyAdapter<T>(ISerializer<T> serializer) : IRestSerializer
 {
-    private readonly ISerializer<T> _serializer;
-    public MyAdapter(ISerializer<T> serializer) => _serializer = serializer;
-
     public string ContentType => "application/octet-stream";
 
     public async ValueTask<TResult?> DeserializeAsync<TResult>(Stream stream, CancellationToken ct = default)
     {
         using var ms = new MemoryStream();
         await stream.CopyToAsync(ms, ct);
-        var result = _serializer.Deserialize(ms.GetBuffer().AsSpan(0, (int)ms.Length));
-        return (TResult?)(object?)result;
+        return (TResult?)(object?)serializer.Deserialize(ms.ToArray());
     }
 
     public async ValueTask SerializeAsync<TValue>(Stream stream, TValue value, CancellationToken ct = default)
     {
         var buffer = new ArrayBufferWriter<byte>();
-        _serializer.Serialize(buffer, (T)(object)value!);
+        serializer.Serialize(buffer, (T)(object)value!);
         await stream.WriteAsync(buffer.WrittenMemory, ct);
     }
 }
