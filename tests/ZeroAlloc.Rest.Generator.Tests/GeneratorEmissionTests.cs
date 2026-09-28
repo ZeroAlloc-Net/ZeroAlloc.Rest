@@ -469,7 +469,7 @@ public class GeneratorEmissionTests
             }
             """;
         var output = GetGeneratedSourceWithResults(source, "IUserApi.g.cs");
-        Assert.Contains("catch (global::System.OperationCanceledException __ex) when (ct.IsCancellationRequested)", output);
+        Assert.Contains("catch (global::System.OperationCanceledException) when (ct.IsCancellationRequested)", output);
         Assert.Contains("HttpErrorKind.Timeout", output);
         Assert.Contains("catch (global::System.Net.Http.HttpRequestException __ex)", output);
         Assert.Contains("HttpErrorKind.Transport", output);
@@ -566,7 +566,7 @@ public class GeneratorEmissionTests
         const string OceCatch = "catch (global::System.OperationCanceledException __ex)";
         var output = GetGeneratedSourceWithResults(ResultApiSource, "IUserApi.g.cs");
 
-        var callerCatch = output.IndexOf(OceCatch + " when (ct.IsCancellationRequested)", StringComparison.Ordinal);
+        var callerCatch = output.IndexOf("catch (global::System.OperationCanceledException) when (ct.IsCancellationRequested)", StringComparison.Ordinal);
         var timeoutCatch = -1;
         for (var i = output.IndexOf(OceCatch, StringComparison.Ordinal); i >= 0;
             i = output.IndexOf(OceCatch, i + 1, StringComparison.Ordinal))
@@ -582,6 +582,51 @@ public class GeneratorEmissionTests
         Assert.True(callerCatch >= 0, "The caller-cancellation catch is missing.");
         Assert.True(timeoutCatch >= 0, "The unfiltered Timeout catch is missing.");
         Assert.True(callerCatch < timeoutCatch, "The caller-cancellation catch must come before the Timeout catch.");
+    }
+
+    [Fact]
+    public void Generator_TaskOfT_CallerCancellation_LeavesSpanUnset()
+    {
+        // Caller cancellation is not an error: it tags the span instead of setting status Error.
+        var source = """
+            using ZeroAlloc.Rest.Attributes;
+            namespace MyApp;
+            [ZeroAllocRestClient]
+            public interface IUserApi
+            {
+                [Get("/users/{id}")]
+                System.Threading.Tasks.Task<string> GetUserAsync(int id, System.Threading.CancellationToken ct = default);
+            }
+            """;
+        var output = GetGeneratedSource(source, "IUserApi.g.cs");
+
+        var callerCatch = output.IndexOf("catch (global::System.OperationCanceledException) when (ct.IsCancellationRequested)", StringComparison.Ordinal);
+        var generalCatch = output.IndexOf("catch (global::System.Exception __ex)", StringComparison.Ordinal);
+        Assert.True(callerCatch >= 0, "The caller-cancellation catch is missing.");
+        Assert.True(callerCatch < generalCatch, "The caller-cancellation catch must come before the general catch.");
+        Assert.Contains("__RecordCancellation(__activity, __sw, __httpMethod, __RestMethodTag, __durationRecorded);", output);
+        Assert.Contains("activity?.SetTag(\"rest.cancelled\", true);", output);
+    }
+
+    [Fact]
+    public void Generator_NoCancellationToken_EmitsNoCancellationHandling()
+    {
+        // Without a CancellationToken parameter there is no caller cancellation, so every
+        // cancellation is a failure and the helper would be unused.
+        var source = """
+            using ZeroAlloc.Rest.Attributes;
+            namespace MyApp;
+            [ZeroAllocRestClient]
+            public interface IUserApi
+            {
+                [Get("/users/{id}")]
+                System.Threading.Tasks.Task<string> GetUserAsync(int id);
+            }
+            """;
+        var output = GetGeneratedSource(source, "IUserApi.g.cs");
+
+        Assert.DoesNotContain("__RecordCancellation", output);
+        Assert.DoesNotContain("rest.cancelled", output);
     }
 
     [Theory]

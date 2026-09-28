@@ -125,7 +125,7 @@ ZA is **1.7–3.6× faster than Refit** across every call shape with **1.3–1.5
 
 Every generated client emits OpenTelemetry-compatible signals out of the box, with no extra dependency beyond the BCL `System.Diagnostics` primitives.
 
-**Tracing.** An `ActivitySource("ZeroAlloc.Rest")` produces one span per call, named `Interface.Method`. Tags: `http.method`, `http.status_code`, `server.address`, `rest.method`. Exceptions set `ActivityStatusCode.Error` with the message.
+**Tracing.** An `ActivitySource("ZeroAlloc.Rest")` produces one span per call, named `Interface.Method`. Tags: `http.method`, `http.status_code`, `server.address`, `rest.method`. A failure sets `ActivityStatusCode.Error` with the exception's message. Cancellation through the method's `CancellationToken` is not a failure: the span keeps status `Unset` and gets the tag `rest.cancelled` = `true`. Any other cancellation, such as `HttpClient.Timeout`, is a failure.
 
 **Metrics.** The generator emits `rest.requests_total` (counter) and `rest.request_duration_ms` (histogram) under the `ZeroAlloc.Rest` Meter. Tags: `http.method`, `http.status_code`, `server.address`, `rest.method` (the generated `Interface.Method` identifier).
 
