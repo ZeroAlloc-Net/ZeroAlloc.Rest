@@ -91,7 +91,8 @@ jobs:
       # fails on its first assertion — which is what stranded v1.2.2 and v1.3.0: the
       # release was tagged, the publish job died here, and nothing reached NuGet.
       # ci.yml has always had this step; the publish job never did. MSBuildTaskPackageTests
-      # restores ZeroAlloc.Rest.Tools.MSBuild from the same feed.
+      # restores ZeroAlloc.Rest.Tools.MSBuild from the same feed. PackageDependencyTests and
+      # CoreOnlyConsumerTests also need the DI package alongside core.
       #
       # --no-build, unlike ci.yml's copy: a plain `dotnet pack` here would rebuild these
       # projects at the default version and overwrite the output the Pack step below
@@ -102,6 +103,7 @@ jobs:
           dotnet pack src/ZeroAlloc.Rest/ZeroAlloc.Rest.csproj --no-build -c Release -p:PackageVersion=${{ steps.version.outputs.version }} -o artifacts/local
           dotnet pack src/ZeroAlloc.Rest.Generator/ZeroAlloc.Rest.Generator.csproj --no-build -c Release -p:PackageVersion=${{ steps.version.outputs.version }} -o artifacts/local
           dotnet pack src/ZeroAlloc.Rest.Tools.MSBuild/ZeroAlloc.Rest.Tools.MSBuild.csproj --no-build -c Release -p:PackageVersion=${{ steps.version.outputs.version }} -o artifacts/local
+          dotnet pack src/ZeroAlloc.Rest.DependencyInjection/ZeroAlloc.Rest.DependencyInjection.csproj --no-build -c Release -p:PackageVersion=${{ steps.version.outputs.version }} -o artifacts/local
 
       - name: Test
         run: dotnet test ZeroAlloc.Rest.slnx --no-build -c Release

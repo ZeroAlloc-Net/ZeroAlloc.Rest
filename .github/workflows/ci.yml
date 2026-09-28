@@ -42,7 +42,8 @@ jobs:
         run: dotnet build ZeroAlloc.Rest.slnx --no-restore -c Release -p:Version=${{ steps.gitversion.outputs.semver }}
 
       # Read by the tests that build a consumer project against the packages: the duplicate-generator
-      # test and the ZeroAlloc.Rest.Tools.MSBuild end-to-end test.
+      # test, the ZeroAlloc.Rest.Tools.MSBuild end-to-end test, and the package dependency and
+      # core-only/DI consumer tests, which need the DI package alongside core.
       #
       # --no-build and the build's version, as in release-please.yml. A plain `dotnet pack` here
       # rebuilt these projects at the default 1.0.0 over the Build step's output, so the tests and
@@ -53,6 +54,7 @@ jobs:
           dotnet pack src/ZeroAlloc.Rest/ZeroAlloc.Rest.csproj --no-build -c Release -p:Version=${{ steps.gitversion.outputs.semver }} -o artifacts/local
           dotnet pack src/ZeroAlloc.Rest.Generator/ZeroAlloc.Rest.Generator.csproj --no-build -c Release -p:Version=${{ steps.gitversion.outputs.semver }} -o artifacts/local
           dotnet pack src/ZeroAlloc.Rest.Tools.MSBuild/ZeroAlloc.Rest.Tools.MSBuild.csproj --no-build -c Release -p:Version=${{ steps.gitversion.outputs.semver }} -o artifacts/local
+          dotnet pack src/ZeroAlloc.Rest.DependencyInjection/ZeroAlloc.Rest.DependencyInjection.csproj --no-build -c Release -p:Version=${{ steps.gitversion.outputs.semver }} -o artifacts/local
 
       - name: Test
         run: dotnet test ZeroAlloc.Rest.slnx --no-build -c Release --logger "trx" --results-directory ./test-results
