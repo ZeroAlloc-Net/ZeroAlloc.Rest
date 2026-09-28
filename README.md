@@ -129,7 +129,7 @@ Every generated client emits OpenTelemetry-compatible signals out of the box, wi
 
 **Metrics.** The generator emits `rest.requests_total` (counter) and `rest.request_duration_ms` (histogram) under the `ZeroAlloc.Rest` Meter. Tags: `http.method`, `http.status_code`, `server.address`, `rest.method` (the generated `Interface.Method` identifier).
 
-The counter is incremented only on the success path. On exception, the histogram records the elapsed duration but the counter is left untouched — this lets operators distinguish failed attempts via histogram count vs. counter delta. The exception-path histogram carries only `http.method` and `rest.method`, since `http.status_code` and `server.address` may not be known.
+Every call records exactly one `rest.request_duration_ms` sample. A call that gets a response increments `rest.requests_total` and records its duration with all four tags, whatever the status and even when reading the body then fails. A call that ends before any response, such as a transport error, a timeout or a cancellation, records its duration with only `http.method` and `rest.method` and leaves the counter untouched, so the histogram count minus the counter is the number of calls that never got a response.
 
 **Subscription:**
 ```csharp

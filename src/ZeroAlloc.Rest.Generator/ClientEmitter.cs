@@ -497,8 +497,24 @@ internal static class ClientEmitter
         // TryAddWithoutValidation sends a null value as an empty header, so a parameter that can be
         // null is added only when it has a value: a null argument means "no header". A non-nullable
         // value type always has one, and comparing it with null would not compile cleanly.
+        // A collection adds each non-null element as one value of the header, which HttpClient sends
+        // comma-joined, the RFC 9110 list syntax; a null or empty collection sends no header.
         foreach (var h in headerParams)
         {
+            if (h.IsCollection)
+            {
+                sb.AppendLine($"        if ({Identifier(h)} != null)");
+                sb.AppendLine("        {");
+                sb.AppendLine($"            foreach (var __item in {Identifier(h)})");
+                sb.AppendLine("            {");
+                if (h.Format is not { ElementIsNullable: false })
+                    sb.AppendLine("                if (__item == null) continue;");
+                sb.AppendLine($"                __request.Headers.TryAddWithoutValidation(\"{h.HeaderName}\", __FormatValue(__item));");
+                sb.AppendLine("            }");
+                sb.AppendLine("        }");
+                continue;
+            }
+
             var addHeader = $"__request.Headers.TryAddWithoutValidation(\"{h.HeaderName}\", __FormatValue({Identifier(h)}));";
             if (h.IsNullable)
             {
@@ -530,6 +546,9 @@ internal static class ClientEmitter
         var ctArg = callerToken ?? "default";
         if (errorMapperField != null)
             sb.AppendLine("        global::ZeroAlloc.Rest.HttpError __httpError;");
+        // Set once the response's duration is recorded, so a failure after that point does not
+        // record the duration a second time.
+        sb.AppendLine("        var __durationRecorded = false;");
         sb.AppendLine("        try");
         sb.AppendLine("        {");
         sb.AppendLine($"            using var __response = await _httpClient.SendAsync(__request, {ctArg}).ConfigureAwait(false);");
@@ -548,13 +567,14 @@ internal static class ClientEmitter
         sb.AppendLine("                new global::System.Collections.Generic.KeyValuePair<string, object?>(\"http.status_code\", __statusCode),");
         sb.AppendLine("                new global::System.Collections.Generic.KeyValuePair<string, object?>(\"server.address\", __serverAddress),");
         sb.AppendLine("                new global::System.Collections.Generic.KeyValuePair<string, object?>(\"rest.method\", __RestMethodTag));");
+        sb.AppendLine("            __durationRecorded = true;");
         EmitResponseHandling(sb, method, ctArg, serializerExpr, maxErrorBodyBytes, indent: "            ");
         sb.AppendLine("        }");
         if (method.ReturnsResult)
             EmitResultCatches(sb, method, callerToken);
         sb.AppendLine("        catch (global::System.Exception __ex)");
         sb.AppendLine("        {");
-        sb.AppendLine("            __RecordFailure(__activity, __ex, __sw, __httpMethod, __RestMethodTag);");
+        sb.AppendLine("            __RecordFailure(__activity, __ex, __sw, __httpMethod, __RestMethodTag, __durationRecorded);");
         sb.AppendLine("            throw;");
         sb.AppendLine("        }");
         if (errorMapperField != null)
@@ -570,19 +590,19 @@ internal static class ClientEmitter
         {
             sb.AppendLine($"        catch (global::System.OperationCanceledException __ex) when ({callerToken}.IsCancellationRequested)");
             sb.AppendLine("        {");
-            sb.AppendLine("            __RecordFailure(__activity, __ex, __sw, __httpMethod, __RestMethodTag);");
+            sb.AppendLine("            __RecordFailure(__activity, __ex, __sw, __httpMethod, __RestMethodTag, __durationRecorded);");
             sb.AppendLine("            throw;");
             sb.AppendLine("        }");
         }
         // Not requested by the caller, so it is HttpClient.Timeout or another timeout in the pipeline.
         sb.AppendLine("        catch (global::System.OperationCanceledException __ex)");
         sb.AppendLine("        {");
-        sb.AppendLine("            __RecordFailure(__activity, __ex, __sw, __httpMethod, __RestMethodTag);");
+        sb.AppendLine("            __RecordFailure(__activity, __ex, __sw, __httpMethod, __RestMethodTag, __durationRecorded);");
         EmitFailure(sb, "            ", method, "__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Timeout, null, __ex)");
         sb.AppendLine("        }");
         sb.AppendLine("        catch (global::System.Net.Http.HttpRequestException __ex)");
         sb.AppendLine("        {");
-        sb.AppendLine("            __RecordFailure(__activity, __ex, __sw, __httpMethod, __RestMethodTag);");
+        sb.AppendLine("            __RecordFailure(__activity, __ex, __sw, __httpMethod, __RestMethodTag, __durationRecorded);");
         EmitFailure(sb, "            ", method, "__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Transport, null, __ex)");
         sb.AppendLine("        }");
     }
@@ -638,7 +658,7 @@ internal static class ClientEmitter
             }
             sb.AppendLine($"{i1}catch (global::System.Exception __ex) when (__ex is not global::System.OperationCanceledException)");
             sb.AppendLine($"{i1}{{");
-            sb.AppendLine($"{i2}__RecordFailure(__activity, __ex, __sw, __httpMethod, __RestMethodTag);");
+            sb.AppendLine($"{i2}__RecordFailure(__activity, __ex, __sw, __httpMethod, __RestMethodTag, __durationRecorded);");
             EmitFailure(sb, i2, method, "__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Deserialization, __response, __ex)");
             sb.AppendLine($"{i1}}}");
             if (!method.MapsError)
@@ -774,11 +794,16 @@ internal static class ClientEmitter
 
     // Marks the span as failed and records the request duration. Every failure goes through here,
     // whether the method then rethrows or returns an HttpError, so failures still show in traces.
+    // A failure after the response arrived, such as an error status or a body that fails to
+    // deserialize, finds the duration already recorded with the response's tags and leaves it:
+    // each call records one duration, matching its one rest.requests_total count.
     private static void EmitRecordFailure(StringBuilder sb)
     {
-        sb.AppendLine("    private static void __RecordFailure(global::System.Diagnostics.Activity? activity, global::System.Exception exception, long startTimestamp, string httpMethod, string restMethod)");
+        sb.AppendLine("    private static void __RecordFailure(global::System.Diagnostics.Activity? activity, global::System.Exception exception, long startTimestamp, string httpMethod, string restMethod, bool durationRecorded)");
         sb.AppendLine("    {");
         sb.AppendLine("        activity?.SetStatus(global::System.Diagnostics.ActivityStatusCode.Error, exception.Message);");
+        sb.AppendLine("        if (durationRecorded)");
+        sb.AppendLine("            return;");
         sb.AppendLine("        var elapsedMs = global::System.Diagnostics.Stopwatch.GetElapsedTime(startTimestamp).TotalMilliseconds;");
         sb.AppendLine("        _requestDurationMs.Record(elapsedMs,");
         sb.AppendLine("            new global::System.Collections.Generic.KeyValuePair<string, object?>(\"http.method\", httpMethod),");

@@ -230,10 +230,164 @@ public sealed class TelemetryTests : IDisposable
         Assert.Equal("simulated transport failure", activity.StatusDescription);
     }
 
+    // A call that gets a response and then fails records its duration once, with the response's
+    // tags, so the histogram's sample count matches rest.requests_total.
+    [Fact]
+    public async Task TaskOfT_ErrorStatus_RecordsDurationOnce()
+    {
+        using var capture = new DurationCapture();
+        _server.Given(Request.Create().WithPath("/users/40").UsingGet())
+               .RespondWith(Response.Create().WithStatusCode(500));
+
+        await Assert.ThrowsAsync<HttpRequestException>(() => _client.GetUserAsync(40));
+
+        capture.AssertRecordedOnceWithStatus(500);
+    }
+
+    [Fact]
+    public async Task TaskOfT_DeserializationFailure_RecordsDurationOnce()
+    {
+        using var capture = new DurationCapture();
+        _server.Given(Request.Create().WithPath("/users/41").UsingGet())
+               .RespondWith(Response.Create()
+                   .WithStatusCode(200)
+                   .WithHeader("Content-Type", "application/json")
+                   .WithBody("{ not json"));
+
+        await Assert.ThrowsAnyAsync<JsonException>(() => _client.GetUserAsync(41));
+
+        capture.AssertRecordedOnceWithStatus(200);
+    }
+
+    [Fact]
+    public async Task Task_ErrorStatus_RecordsDurationOnce()
+    {
+        using var capture = new DurationCapture();
+        _server.Given(Request.Create().WithPath("/users/42").UsingDelete())
+               .RespondWith(Response.Create().WithStatusCode(404));
+
+        await Assert.ThrowsAsync<HttpRequestException>(() => _client.DeleteUserAsync(42));
+
+        capture.AssertRecordedOnceWithStatus(404);
+    }
+
+    [Fact]
+    public async Task ResultMethod_DeserializationFailure_RecordsDurationOnce()
+    {
+        using var capture = new DurationCapture();
+        _server.Given(Request.Create().WithPath("/users/43/result").UsingGet())
+               .RespondWith(Response.Create()
+                   .WithStatusCode(200)
+                   .WithHeader("Content-Type", "application/json")
+                   .WithBody("{ not json"));
+
+        var result = await _client.GetUserResultAsync(43);
+
+        Assert.True(result.IsFailure);
+        Assert.Equal(HttpErrorKind.Deserialization, result.Error.Kind);
+        capture.AssertRecordedOnceWithStatus(200);
+    }
+
+    [Fact]
+    public async Task TaskOfT_CallerCancelsDuringBodyRead_RecordsDurationOnce()
+    {
+        using var capture = new DurationCapture();
+        using var cts = new System.Threading.CancellationTokenSource();
+        var client = CancelingClient(cts, "/users/44");
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => client.GetUserAsync(44, cts.Token));
+
+        capture.AssertRecordedOnceWithStatus(200);
+    }
+
+    [Fact]
+    public async Task ResultMethod_CallerCancelsDuringBodyRead_RecordsDurationOnce()
+    {
+        using var capture = new DurationCapture();
+        using var cts = new System.Threading.CancellationTokenSource();
+        var client = CancelingClient(cts, "/users/45/result");
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => client.GetUserResultAsync(45, cts.Token));
+
+        capture.AssertRecordedOnceWithStatus(200);
+    }
+
+    // A client whose serializer cancels the caller's token as it starts reading the body, so the
+    // cancellation lands after the response arrived.
+    private UserApiClient CancelingClient(System.Threading.CancellationTokenSource cts, string path)
+    {
+        _server.Given(Request.Create().WithPath(path).UsingGet())
+               .RespondWith(Response.Create()
+                   .WithStatusCode(200)
+                   .WithHeader("Content-Type", "application/json")
+                   .WithBody(JsonSerializer.Serialize(new UserDto(1, "Alice"), s_camelCase)));
+        var httpClient = new HttpClient { BaseAddress = new Uri(_server.Url!) };
+        return new UserApiClient(httpClient, new CancelingSerializer(cts));
+    }
+
+    // Captures rest.request_duration_ms samples with their tags, and counts rest.requests_total.
+    private sealed class DurationCapture : IDisposable
+    {
+        private readonly MeterListener _listener;
+        private readonly List<Dictionary<string, object?>> _durations = new();
+        private int _requests;
+
+        public DurationCapture()
+        {
+            _listener = new MeterListener
+            {
+                InstrumentPublished = (instrument, l) =>
+                {
+                    if (string.Equals(instrument.Meter.Name, "ZeroAlloc.Rest", StringComparison.Ordinal))
+                        l.EnableMeasurementEvents(instrument);
+                },
+            };
+            _listener.SetMeasurementEventCallback<long>((instrument, value, tags, state) =>
+            {
+                if (string.Equals(instrument.Name, "rest.requests_total", StringComparison.Ordinal))
+                    _requests++;
+            });
+            _listener.SetMeasurementEventCallback<double>((instrument, value, tags, state) =>
+            {
+                if (!string.Equals(instrument.Name, "rest.request_duration_ms", StringComparison.Ordinal))
+                    return;
+                var dict = new Dictionary<string, object?>(StringComparer.Ordinal);
+                for (var i = 0; i < tags.Length; i++)
+                    dict[tags[i].Key] = tags[i].Value;
+                _durations.Add(dict);
+            });
+            _listener.Start();
+        }
+
+        public void AssertRecordedOnceWithStatus(int statusCode)
+        {
+            Assert.Equal(1, _requests);
+            var tags = Assert.Single(_durations);
+            Assert.Equal(statusCode, tags["http.status_code"]);
+            Assert.True(tags.ContainsKey("server.address"));
+        }
+
+        public void Dispose() => _listener.Dispose();
+    }
+
     private sealed class ThrowingHandler : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, System.Threading.CancellationToken cancellationToken)
             => throw new HttpRequestException("simulated transport failure");
+    }
+    private sealed class CancelingSerializer(System.Threading.CancellationTokenSource cts) : IRestSerializer
+    {
+        public string ContentType => "application/json";
+
+        public async ValueTask<T?> DeserializeAsync<T>(System.IO.Stream stream, System.Threading.CancellationToken ct = default)
+        {
+            await cts.CancelAsync().ConfigureAwait(false);
+            ct.ThrowIfCancellationRequested();
+            return default;
+        }
+
+        public ValueTask SerializeAsync<T>(System.IO.Stream stream, T value, System.Threading.CancellationToken ct = default)
+            => ValueTask.CompletedTask;
     }
 }
 

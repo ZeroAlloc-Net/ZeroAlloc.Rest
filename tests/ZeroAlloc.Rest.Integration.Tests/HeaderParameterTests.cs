@@ -38,7 +38,42 @@ public sealed class HeaderParameterTests
         Assert.True(request.Headers.Contains("X-Ref"));
     }
 
-    private static async Task<HttpRequestMessage> SendAsync(string? reference, int? retryCount, int page)
+    // Issue #356: a collection-typed [Header] parameter sent its type name, such as
+    // System.String[], as the header value. Each element is now one value of the header.
+    [Fact]
+    public async Task CollectionHeader_SendsOneValuePerElement()
+    {
+        var request = await SendListsAsync(new[] { "a", "b" }, new[] { 1, 2, 3 });
+
+        Assert.Equal(new[] { "a", "b" }, request.Headers.GetValues("X-Tags"), StringComparer.Ordinal);
+        Assert.Equal(new[] { "1", "2", "3" }, request.Headers.GetValues("X-Ids"), StringComparer.Ordinal);
+        Assert.Equal("a, b", request.Headers.NonValidated["X-Tags"].ToString());
+    }
+
+    [Fact]
+    public async Task CollectionHeader_SkipsNullElements()
+    {
+        var request = await SendListsAsync(new List<string?> { "a", null, "c" }, new[] { 1 });
+
+        Assert.Equal(new[] { "a", "c" }, request.Headers.GetValues("X-Tags"), StringComparer.Ordinal);
+    }
+
+    [Fact]
+    public async Task NullOrEmptyCollectionHeader_IsOmitted()
+    {
+        var request = await SendListsAsync(null, System.Array.Empty<int>());
+
+        Assert.False(request.Headers.Contains("X-Tags"));
+        Assert.False(request.Headers.Contains("X-Ids"));
+    }
+
+    private static Task<HttpRequestMessage> SendAsync(string? reference, int? retryCount, int page)
+        => CaptureAsync(client => client.SendAsync(reference, retryCount, page));
+
+    private static Task<HttpRequestMessage> SendListsAsync(IEnumerable<string?>? tags, int[] ids)
+        => CaptureAsync(client => client.SendListsAsync(tags, ids));
+
+    private static async Task<HttpRequestMessage> CaptureAsync(Func<IHeaderApi, Task> send)
     {
         HttpRequestMessage? captured = null;
         using var httpClient = new HttpClient(new StubHandler((request, _) =>
@@ -49,7 +84,7 @@ public sealed class HeaderParameterTests
         { BaseAddress = new Uri("https://host/") };
         IHeaderApi client = new HeaderApiClient(httpClient, new SystemTextJsonSerializer());
 
-        await client.SendAsync(reference, retryCount, page).ConfigureAwait(false);
+        await send(client).ConfigureAwait(false);
 
         return captured!;
     }
