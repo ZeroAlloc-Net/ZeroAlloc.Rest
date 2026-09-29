@@ -39,7 +39,7 @@
     <!-- Referenced directly (not as an analyzer) by the generator tests, to run HLQ001 against generated code -->
     <PackageVersion Include="NetFabric.Hyperlinq.Analyzer" Version="2.3.0" />
     <!-- ZeroAlloc ecosystem -->
-    <PackageVersion Include="ZeroAlloc.Results" Version="1.2.3" />
+    <PackageVersion Include="ZeroAlloc.Results" Version="1.2.4" />
     <PackageVersion Include="ZeroAlloc.Collections" Version="1.1.9" />
     <PackageVersion Include="ZeroAlloc.Analyzers" Version="1.5.4" />
     <PackageVersion Include="ZeroAlloc.ValueObjects" Version="2.0.10" />
