@@ -358,9 +358,32 @@ public sealed class StreamResponsesTests
     public async Task Streamed_DoesNotAllocateACopyOfTheBody()
     {
         // Buffered, HttpClient copies the body into an array of its own before the serializer
-        // reads it. Streamed, the serializer reads the stream through its own pooled buffer, so
-        // the call allocates at least a body's worth less. Both calls allocate the int[] result.
-        var numbers = new int[16 * 1024];
+        // reads it. Streamed, the serializer reads the stream through its own pooled buffer. So
+        // what streaming saves grows with the body, a byte saved for every byte of body.
+        //
+        // Each path also has a fixed cost per call that does not depend on the body, and that
+        // cost differs by build: in Debug the compiler emits async state machines as classes, so
+        // ReadResponseStreamAsync, on the streamed path only, allocates one even when it
+        // completes synchronously. Measuring at two body sizes and comparing the growth cancels
+        // every fixed cost, so the test holds in Debug and Release alike.
+        var small = await MeasureBufferedAndStreamedAsync(1024);
+        var large = await MeasureBufferedAndStreamedAsync(16 * 1024);
+
+        // Both bodies are 8n + 1 bytes, so their buffered copies, rounded up to the 8-byte object
+        // alignment, differ by exactly the difference in body length.
+        Assert.Equal(small.Body % 8, large.Body % 8);
+        var bodyGrowth = large.Body - small.Body;
+        var savedGrowth = (large.Buffered - large.Streamed) - (small.Buffered - small.Streamed);
+        Assert.True(
+            savedGrowth >= bodyGrowth,
+            $"Streaming saved {small.Buffered - small.Streamed} bytes for a {small.Body}-byte body and "
+            + $"{large.Buffered - large.Streamed} for a {large.Body}-byte body: {savedGrowth} more for "
+            + $"{bodyGrowth} more body, so the streamed path copies the body too.");
+    }
+
+    private static async Task<(int Body, long Buffered, long Streamed)> MeasureBufferedAndStreamedAsync(int count)
+    {
+        var numbers = new int[count];
         for (var i = 0; i < numbers.Length; i++)
             numbers[i] = 1_000_000 + i;
         var body = JsonSerializer.SerializeToUtf8Bytes(numbers);
@@ -368,14 +391,16 @@ public sealed class StreamResponsesTests
         INumbersApi api = new NumbersApiClient(http, new SystemTextJsonSerializer());
 
         // Warm up both paths: JIT, the serializer's metadata and the pool's arrays.
-        Assert.Equal(numbers, await api.GetBufferedAsync());
-        Assert.Equal(numbers, await api.GetStreamedAsync());
+        Assert.Equal(numbers, await api.GetBufferedAsync().ConfigureAwait(false));
+        Assert.Equal(numbers, await api.GetStreamedAsync().ConfigureAwait(false));
 
-        var buffered = await AllocatedByAsync(() => api.GetBufferedAsync());
-        var streamed = await AllocatedByAsync(() => api.GetStreamedAsync());
+        var buffered = await AllocatedByAsync(() => api.GetBufferedAsync()).ConfigureAwait(false);
+        var streamed = await AllocatedByAsync(() => api.GetStreamedAsync()).ConfigureAwait(false);
 
+        // Both calls allocate the int[] result, so less than that means the measurement missed the call.
+        Assert.True(buffered >= numbers.Length * sizeof(int), $"Buffered allocated {buffered} bytes: less than its own result, so the measurement missed the call.");
         Assert.True(streamed >= numbers.Length * sizeof(int), $"Streamed allocated {streamed} bytes: less than its own result, so the measurement missed the call.");
-        Assert.True(buffered - streamed >= body.Length, $"Buffered allocated {buffered} bytes and streamed {streamed}, for a {body.Length}-byte body.");
+        return (body.Length, buffered, streamed);
     }
 
     // Every step of these calls completes synchronously, so the whole call runs on this thread.
