@@ -303,5 +303,97 @@ using (var refusingHttp = new System.Net.Http.HttpClient(new RefusingHandler()) 
     }
 }
 
+// Issue #358: raw Stream bodies over a real connection. An upload is sent as it is with its media
+// type; a download is read from the connection by the caller, and disposing it releases the
+// response. A non-success status comes back as a failure, or throws, with nothing left open.
+{
+    using var server = new StubServer();
+    using var http = new System.Net.Http.HttpClient { BaseAddress = server.BaseAddress };
+    ZeroAlloc.Rest.AotSmoke.PetStore.IPetStoreClient pets = new ZeroAlloc.Rest.AotSmoke.PetStore.PetStoreClientClient(
+        http, new ZeroAlloc.Rest.SystemTextJson.SystemTextJsonSerializer(ZeroAlloc.Rest.AotSmoke.PetStore.PetStoreClientJsonContext.Default));
+    IFileApi files = new FileApiClient(http, new SmokeSerializer());
+    using var timeout = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(30));
+
+    var serving = server.ServeAsync(204, "", timeout.Token);
+    using (var photo = new System.IO.MemoryStream(System.Text.Encoding.UTF8.GetBytes("png bytes")))
+    {
+        var stored = await pets.PutPhotoAsync(7, photo, timeout.Token).ConfigureAwait(false);
+        await serving.ConfigureAwait(false);
+        if (!stored.IsSuccess
+            || !server.LastRequest.StartsWith("PUT /pets/7/photo ", StringComparison.Ordinal)
+            || !server.LastRequest.Contains("Content-Type: image/png", StringComparison.OrdinalIgnoreCase)
+            || !server.LastRequest.EndsWith("\r\n\r\npng bytes", StringComparison.Ordinal))
+        {
+            Console.Error.WriteLine("AOT smoke: FAIL — a Stream body should be sent as it is, with its media type");
+            return 1;
+        }
+    }
+
+    foreach (var chunked in new[] { false, true })
+    {
+        serving = server.ServeAsync(200, "photo bytes", chunked, timeout.Token);
+        var photo = await pets.GetPhotoAsync(7, timeout.Token).ConfigureAwait(false);
+        if (!photo.IsSuccess)
+        {
+            Console.Error.WriteLine($"AOT smoke: FAIL — a binary response should be a Stream, chunked: {chunked}");
+            return 1;
+        }
+        string downloaded;
+        // Disposing the reader disposes the stream, which releases the response.
+        using (var reader = new System.IO.StreamReader(photo.Value))
+            downloaded = await reader.ReadToEndAsync(timeout.Token).ConfigureAwait(false);
+        await serving.ConfigureAwait(false);
+        if (!string.Equals(downloaded, "photo bytes", StringComparison.Ordinal))
+        {
+            Console.Error.WriteLine($"AOT smoke: FAIL — a Stream response should read the body, chunked: {chunked}");
+            return 1;
+        }
+    }
+
+    serving = server.ServeAsync(404, "{\"code\":\"missing\"}", timeout.Token);
+    var missing = await pets.GetPhotoAsync(8, timeout.Token).ConfigureAwait(false);
+    await serving.ConfigureAwait(false);
+    if (!missing.IsFailure || missing.Error.Kind != HttpErrorKind.Status || missing.Error.Body.Length != 18)
+    {
+        Console.Error.WriteLine("AOT smoke: FAIL — a 404 for a Stream response should be a Status failure with its body");
+        return 1;
+    }
+
+    serving = server.ServeAsync(200, "hello", timeout.Token);
+    var file = await files.DownloadAsync("a.txt", timeout.Token).ConfigureAwait(false);
+    string text;
+    using (var reader = new System.IO.StreamReader(file))
+        text = await reader.ReadToEndAsync(timeout.Token).ConfigureAwait(false);
+    await serving.ConfigureAwait(false);
+    if (!string.Equals(text, "hello", StringComparison.Ordinal))
+    {
+        Console.Error.WriteLine("AOT smoke: FAIL — a Task<Stream> method should return the body");
+        return 1;
+    }
+
+    serving = server.ServeAsync(500, "boom", timeout.Token);
+    try
+    {
+        await files.DownloadAsync("a.txt", timeout.Token).ConfigureAwait(false);
+        Console.Error.WriteLine("AOT smoke: FAIL — a 500 for a Task<Stream> method should throw");
+        return 1;
+    }
+    catch (System.Net.Http.HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.InternalServerError)
+    {
+    }
+    await serving.ConfigureAwait(false);
+
+    serving = server.ServeAsync(204, "", timeout.Token);
+    using (var upload = new System.IO.MemoryStream(System.Text.Encoding.UTF8.GetBytes("note")))
+        await files.UploadAsync("note.txt", upload, timeout.Token).ConfigureAwait(false);
+    await serving.ConfigureAwait(false);
+    if (!server.LastRequest.Contains("Content-Type: text/plain", StringComparison.OrdinalIgnoreCase)
+        || !server.LastRequest.EndsWith("\r\n\r\nnote", StringComparison.Ordinal))
+    {
+        Console.Error.WriteLine("AOT smoke: FAIL — a Task method should send its Stream body");
+        return 1;
+    }
+}
+
 Console.WriteLine("AOT smoke: PASS");
 return 0;

@@ -12,6 +12,12 @@ public interface IPetStoreClient
     [global::ZeroAlloc.Rest.Attributes.Delete("/pets/{petId}")]
     global::System.Threading.Tasks.Task<global::ZeroAlloc.Results.UnitResult<global::ZeroAlloc.Rest.HttpError>> DeletePetAsync(long petId, global::System.Threading.CancellationToken ct = default);
 
+    [global::ZeroAlloc.Rest.Attributes.Get("/pets/{petId}/photo")]
+    global::System.Threading.Tasks.Task<global::ZeroAlloc.Results.Result<global::System.IO.Stream, global::ZeroAlloc.Rest.HttpError>> GetPhotoAsync(long petId, global::System.Threading.CancellationToken ct = default);
+
+    [global::ZeroAlloc.Rest.Attributes.Put("/pets/{petId}/photo")]
+    global::System.Threading.Tasks.Task<global::ZeroAlloc.Results.UnitResult<global::ZeroAlloc.Rest.HttpError>> PutPhotoAsync(long petId, [global::ZeroAlloc.Rest.Attributes.Body(ContentType = "image/png")] global::System.IO.Stream body, global::System.Threading.CancellationToken ct = default);
+
     [global::ZeroAlloc.Rest.Attributes.Post("/pets")]
     global::System.Threading.Tasks.Task<global::ZeroAlloc.Results.Result<PetOrError, global::ZeroAlloc.Rest.HttpError>> AddPetAsync([global::ZeroAlloc.Rest.Attributes.Body] Pet body, global::System.Threading.CancellationToken ct = default);
 

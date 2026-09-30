@@ -179,17 +179,120 @@ public class OpenApiClientGenerationTests
     }
 
     [Fact]
-    public void NonJsonContent_KeepsAnUntypedBody_AndReportsAnUntypedResponse()
+    public void BinaryContent_IsAStream_WithNoWarning()
     {
+        // Issue #358: a format: binary response is a Stream the caller owns, and an
+        // application/octet-stream body a Stream sent as it is.
         var (code, warnings) = Generate();
 
-        Assert.Contains($"{Task}<global::ZeroAlloc.Results.Result<global::System.Text.Json.JsonElement, {HttpError}>> GetPhotoAsync(long petId, {Ct});", code);
-        Assert.Contains($"{Task}<global::ZeroAlloc.Results.UnitResult<{HttpError}>> PutPhotoAsync(long petId, [{A}Body] object body, {Ct});", code);
+        Assert.Contains($"{Task}<global::ZeroAlloc.Results.Result<global::System.IO.Stream, {HttpError}>> GetPhotoAsync(long petId, {Ct});", code);
+        Assert.Contains($"{Task}<global::ZeroAlloc.Results.UnitResult<{HttpError}>> PutPhotoAsync(long petId, [{A}Body] global::System.IO.Stream? body, {Ct});", code);
+        Assert.Empty(warnings);
+    }
+
+    private const string ContentSpec = """
+        openapi: 3.0.0
+        info:
+          title: Files
+          version: "1"
+        paths:
+          /images:
+            post:
+              operationId: uploadImage
+              requestBody:
+                required: true
+                content:
+                  image/png:
+                    schema:
+                      type: string
+                      format: binary
+              responses:
+                '201':
+                  description: Stored
+          /images/any:
+            post:
+              operationId: uploadAnyImage
+              requestBody:
+                required: true
+                content:
+                  image/*:
+                    schema:
+                      type: string
+                      format: binary
+              responses:
+                '201':
+                  description: Stored
+          /blobs:
+            get:
+              operationId: getBlob
+              responses:
+                '200':
+                  description: No schema, but binary by its media type
+                  content:
+                    application/octet-stream: {}
+                '204':
+                  description: Empty
+          /documents:
+            post:
+              operationId: postDocument
+              requestBody:
+                content:
+                  application/json:
+                    schema:
+                      type: object
+                      properties:
+                        title:
+                          type: string
+                  application/octet-stream:
+                    schema:
+                      type: string
+                      format: binary
+              responses:
+                '200':
+                  description: OK
+                  content:
+                    application/xml:
+                      schema:
+                        type: string
+          /forms:
+            post:
+              operationId: postForm
+              requestBody:
+                content:
+                  multipart/form-data:
+                    schema:
+                      type: object
+                      properties:
+                        file:
+                          type: string
+                          format: binary
+              responses:
+                '204':
+                  description: OK
+        """;
+
+    [Fact]
+    public void BinaryContent_TakesItsMediaType_AndOtherContentIsUnchanged()
+    {
+        var warnings = new List<OpenApiDiagnostic>();
+        var code = OpenApiInterfaceGenerator.Generate(ContentSpec, "MyApp", "IFilesApi", warnings, GenerationOptions.Default);
+
+        // A named media type is declared; a range such as image/* sends the default octet-stream.
+        Assert.Contains($"UploadImageAsync([{A}Body(ContentType = \"image/png\")] global::System.IO.Stream body, {Ct});", code);
+        Assert.Contains($"UploadAnyImageAsync([{A}Body] global::System.IO.Stream body, {Ct});", code);
+        // Binary content with no schema is still binary, and an empty 204 is an empty stream.
+        Assert.Contains($"{Task}<global::ZeroAlloc.Results.Result<global::System.IO.Stream, {HttpError}>> GetBlobAsync({Ct});", code);
+        // JSON is preferred where the body offers it; XML and multipart are not binary.
+        Assert.Contains($"PostDocumentAsync([{A}Body] PostDocumentRequest? body, {Ct});", code);
+        Assert.Contains($"{Task}<global::ZeroAlloc.Results.Result<global::System.Text.Json.JsonElement, {HttpError}>> PostDocumentAsync(", code);
+        Assert.Contains($"PostFormAsync([{A}Body] object body, {Ct});", code);
+        Assert.DoesNotContain("typeof(global::System.IO.Stream)", code);
         var warning = Assert.Single(warnings);
         Assert.Equal("ZRT002", warning.Code);
         Assert.Equal(
-            "Schema 'getPhoto: response 200' is mapped to JsonElement, because its content 'image/png' is not JSON, which the generated client cannot read yet.",
+            "Schema 'postDocument: response 200' is mapped to JsonElement, because its content 'application/xml' is not JSON, which the generated client cannot read yet.",
             warning.Message);
+        GeneratedCode.Compile(code).AssertClean();
     }
 
     [Fact]
@@ -199,7 +302,8 @@ public class OpenApiClientGenerationTests
 
         Assert.Contains("[global::System.Text.Json.Serialization.JsonSerializable(typeof(global::System.Collections.Generic.List<Pet>))]", code);
         Assert.Contains("[global::System.Text.Json.Serialization.JsonSerializable(typeof(GetStatsResponse))]", code);
-        Assert.Contains("[global::System.Text.Json.Serialization.JsonSerializable(typeof(global::System.Text.Json.JsonElement))]", code);
+        // A Stream is never serialized, so the context does not register it.
+        Assert.DoesNotContain("typeof(global::System.IO.Stream)", code);
     }
 
     [Fact]
@@ -270,6 +374,57 @@ public class OpenApiClientGenerationTests
     }
 
     [Fact]
+    public void GeneratedClient_SendsAndReturnsBinaryContentAsStreams()
+    {
+        // Issue #358: binary content goes out and comes back as a raw stream.
+        var output = GeneratedCode.Compile(Generate().Code, """
+            using System;
+            using System.IO;
+            using System.Net;
+            using System.Net.Http;
+            using System.Text;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using ZeroAlloc.Rest.SystemTextJson;
+
+            public sealed class Stub : HttpMessageHandler
+            {
+                public string? LastBody { get; private set; }
+
+                public string? LastMediaType { get; private set; }
+
+                protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+                {
+                    LastMediaType = request.Content?.Headers.ContentType?.MediaType;
+                    LastBody = request.Content is null ? null : await request.Content.ReadAsStringAsync(cancellationToken);
+                    return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("photo bytes") };
+                }
+            }
+
+            public static class Probe
+            {
+                public static string Run() => RunAsync().GetAwaiter().GetResult();
+
+                private static async Task<string> RunAsync()
+                {
+                    var stub = new Stub();
+                    MyApp.IPetsApi api = new MyApp.PetsApiClient(
+                        new HttpClient(stub) { BaseAddress = new Uri("http://stub/") },
+                        new SystemTextJsonSerializer(MyApp.PetsApiJsonContext.Default));
+
+                    await api.PutPhotoAsync(1, new MemoryStream(Encoding.UTF8.GetBytes("png bytes")));
+                    var sent = stub.LastMediaType + "|" + stub.LastBody;
+                    var photo = await api.GetPhotoAsync(1);
+                    using var reader = new StreamReader(photo.Value);
+                    return sent + "|" + await reader.ReadToEndAsync();
+                }
+            }
+            """);
+
+        Assert.Equal("application/octet-stream|png bytes|photo bytes", output.RunProbe());
+    }
+
+    [Fact]
     public void ModelsOff_UsesBareNames_AndCompilesAgainstHandWrittenDtos()
     {
         var (code, warnings) = Generate(models: false);
@@ -277,7 +432,7 @@ public class OpenApiClientGenerationTests
         Assert.DoesNotContain("public sealed record", code);
         Assert.Contains($"{Task}<global::ZeroAlloc.Results.Result<Pet, {HttpError}>> GetPetAsync(long petId, {Ct});", code);
         Assert.Contains("[global::ZeroAlloc.Rest.Attributes.Query] global::System.Text.Json.JsonElement? status", code);
-        Assert.Equal(3, warnings.Count(w => string.Equals(w.Code, "ZRT002", StringComparison.Ordinal)));
+        Assert.Equal(2, warnings.Count(w => string.Equals(w.Code, "ZRT002", StringComparison.Ordinal)));
         GeneratedCode.Compile(code, """
             namespace MyApp;
 

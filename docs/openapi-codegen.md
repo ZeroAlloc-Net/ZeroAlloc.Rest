@@ -61,9 +61,17 @@ ZeroAlloc type as `global::`, so a schema named `Task` or `Header` cannot shadow
   status, a transport failure, a timeout and an unreadable body come back as an `HttpError`; see
   [What still throws](advanced.md#what-still-throws).
 - A JSON request body is `[Body] T body`, `T?` when the body is not `required`. For a value type,
-  such as an enum or `int`, the JSON context registers `T?`, the type the body is written as. A body with no JSON
-  media type, such as XML, multipart, form or `application/octet-stream`, stays `[Body] object body`.
-- A success response with no JSON media type is typed `JsonElement` and reported as
+  such as an enum or `int`, the JSON context registers `T?`, the type the body is written as.
+- A binary request body, `application/octet-stream` or a `type: string, format: binary` schema, is
+  `[Body(ContentType = "image/png")] Stream body`, sent as it is with its media type; see
+  [Raw Stream bodies](advanced.md#raw-stream-bodies). `application/octet-stream`, and a range such as
+  `image/*`, need no `ContentType`. The body is `Stream?` when it is not `required`. JSON is
+  preferred when the body offers both.
+- Any other request body with no JSON media type, such as XML, multipart or form content, stays
+  `[Body] object body`.
+- A binary success response is `Result<Stream, HttpError>`: a stream you own, which reads the body
+  from the connection. An empty body, such as a 204's, is an empty stream.
+- A success response with any other non-JSON media type is typed `JsonElement` and reported as
   [ZRT002](advanced.md#zrt002-schema-mapped-to-jsonelement). JSON media types are `application/json`,
   `text/json`, any `+json` type and `*/*`.
 
@@ -89,6 +97,7 @@ ZeroAlloc type as `global::`, so a schema named `Task` or `Header` cannot shadow
 | `number`; `format: float`; `format: decimal` | `double`; `float`; `decimal` |
 | `string`; `format: date-time`, `date`, `time` | `string`; `DateTimeOffset`, `DateOnly`, `TimeOnly` |
 | `string`, `format: uuid`, `uri`, `byte` | `Guid`, `Uri`, `byte[]` |
+| `string`, `format: binary`, as a request or response body | `Stream` |
 | `boolean` | `bool` |
 | `array` | `List<T>` |
 | `object` with only `additionalProperties` | `Dictionary<string, T>` |
