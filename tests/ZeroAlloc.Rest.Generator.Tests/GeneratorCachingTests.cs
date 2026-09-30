@@ -183,12 +183,12 @@ public class GeneratorCachingTests
         var driver = CreateDriver().RunGenerators(compilation);
         Assert.DoesNotContain(
             driver.GetRunResult().Results[0].GeneratedSources,
-            s => s.HintName == "IJevApi.DI.g.cs");
+            s => s.HintName == "MyApp.IJevApi.DI.g.cs");
 
         driver = driver.RunGenerators(compilation.AddReferences(DependencyInjectionReference));
 
         var result = driver.GetRunResult().Results[0];
-        Assert.Contains(result.GeneratedSources, s => s.HintName == "IJevApi.DI.g.cs");
+        Assert.Contains(result.GeneratedSources, s => s.HintName == "MyApp.IJevApi.DI.g.cs");
         var markerReasons = result.TrackedSteps[DependencyInjectionStep]
             .SelectMany(step => step.Outputs)
             .Select(output => output.Reason);

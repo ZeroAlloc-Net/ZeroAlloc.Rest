@@ -153,7 +153,7 @@ public class GeneratorErrorMapperTests
         Assert.Equal($"'{display}' cannot be an error mapper: {NotConstructible}", Message(diagnostic));
         // Every row is valid C#, so the stub must leave ZRA003 as the only error.
         Assert.Empty(run.CompileErrors);
-        Assert.Contains("=> throw new global::System.NotSupportedException(", run.Sources["IJevApi.g.cs"]);
+        Assert.Contains("=> throw new global::System.NotSupportedException(", run.Sources["MyApp.IJevApi.g.cs"]);
     }
 
     [Fact]
@@ -299,7 +299,7 @@ public class GeneratorErrorMapperTests
 
         Assert.Empty(run.GeneratorDiagnostics);
         Assert.Empty(run.CompileErrors);
-        var client = run.Sources["IJevApi.g.cs"];
+        var client = run.Sources["MyApp.IJevApi.g.cs"];
         Assert.Contains("private readonly global::ZeroAlloc.Rest.IHttpErrorMapper<global::MyApp.JevError> _jevErrorMapper;", client);
         Assert.Contains(
             "public JevApiClient(System.Net.Http.HttpClient httpClient, ZeroAlloc.Rest.IRestSerializer serializer, global::ZeroAlloc.Rest.IHttpErrorMapper<global::MyApp.JevError> jevErrorMapper)",
@@ -315,7 +315,7 @@ public class GeneratorErrorMapperTests
     [Fact]
     public void MappedMethod_MapsAllFourFailureKinds_Once_AfterTheTry()
     {
-        var client = Run(Types + JevApi).Sources["IJevApi.g.cs"];
+        var client = Run(Types + JevApi).Sources["MyApp.IJevApi.g.cs"];
 
         Assert.Contains("global::ZeroAlloc.Rest.HttpError __httpError;", client);
         Assert.Contains(
@@ -362,9 +362,9 @@ public class GeneratorErrorMapperTests
         Assert.Empty(plainRun.CompileErrors);
         Assert.Empty(mappedRun.CompileErrors);
         Assert.Equal(
-            MethodText(plainRun.Sources["IJevApi.g.cs"], "PingAsync"),
-            MethodText(mappedRun.Sources["IJevApi.g.cs"], "PingAsync"));
-        Assert.DoesNotContain("__httpError", MethodText(mappedRun.Sources["IJevApi.g.cs"], "PingAsync"));
+            MethodText(plainRun.Sources["MyApp.IJevApi.g.cs"], "PingAsync"),
+            MethodText(mappedRun.Sources["MyApp.IJevApi.g.cs"], "PingAsync"));
+        Assert.DoesNotContain("__httpError", MethodText(mappedRun.Sources["MyApp.IJevApi.g.cs"], "PingAsync"));
     }
 
     [Fact]
@@ -391,7 +391,7 @@ public class GeneratorErrorMapperTests
 
         Assert.Empty(run.GeneratorDiagnostics);
         Assert.Empty(run.CompileErrors);
-        var client = run.Sources["IJevApi.g.cs"];
+        var client = run.Sources["MyApp.IJevApi.g.cs"];
         Assert.Contains(
             "ZeroAlloc.Rest.IRestSerializer serializer, global::ZeroAlloc.Rest.IHttpErrorMapper<global::MyApp.JevError> jevErrorMapper, global::ZeroAlloc.Rest.IHttpErrorMapper<global::MyApp.OtherError> otherErrorMapper)",
             client);
@@ -425,7 +425,7 @@ public class GeneratorErrorMapperTests
         Assert.Empty(run.GeneratorDiagnostics);
         Assert.Empty(run.CompileErrors);
         Assert.Empty(run.GeneratedWarnings);
-        var client = run.Sources["IJevApi.g.cs"];
+        var client = run.Sources["MyApp.IJevApi.g.cs"];
         Assert.Contains(
             "private readonly global::ZeroAlloc.Rest.IHttpErrorMapper<global::System.ValueTuple<int, string>> _valueTupleMapper;",
             client);
@@ -464,7 +464,7 @@ public class GeneratorErrorMapperTests
         Assert.Empty(run.GeneratorDiagnostics);
         Assert.Empty(run.CompileErrors);
         Assert.Empty(run.GeneratedWarnings);
-        Assert.Equal(1, CountOccurrences(run.Sources["IJevApi.g.cs"], ".Map("));
+        Assert.Equal(1, CountOccurrences(run.Sources["MyApp.IJevApi.g.cs"], ".Map("));
     }
 
     [Fact]
@@ -493,7 +493,7 @@ public class GeneratorErrorMapperTests
         Assert.Equal("ListAsync", At(source, diagnostic));
         Assert.Empty(run.CompileErrors);
         Assert.Empty(run.GeneratedWarnings);
-        Assert.Contains("=> throw new global::System.NotSupportedException(", run.Sources["IJevApi.g.cs"]);
+        Assert.Contains("=> throw new global::System.NotSupportedException(", run.Sources["MyApp.IJevApi.g.cs"]);
     }
 
     [Fact]
@@ -519,7 +519,7 @@ public class GeneratorErrorMapperTests
         Assert.Empty(run.GeneratorDiagnostics);
         Assert.Empty(run.CompileErrors);
         Assert.Empty(run.GeneratedWarnings);
-        Assert.Contains(".Failure(_jevErrorMapper.Map(__httpError) ?? throw new global::System.InvalidOperationException(", run.Sources["IJevApi.g.cs"]);
+        Assert.Contains(".Failure(_jevErrorMapper.Map(__httpError) ?? throw new global::System.InvalidOperationException(", run.Sources["MyApp.IJevApi.g.cs"]);
     }
 
     [Fact]
@@ -535,7 +535,7 @@ public class GeneratorErrorMapperTests
         Assert.Empty(run.GeneratorDiagnostics);
         Assert.Empty(run.CompileErrors);
         Assert.Empty(run.GeneratedWarnings);
-        var client = run.Sources["IJevApi.g.cs"];
+        var client = run.Sources["MyApp.IJevApi.g.cs"];
         Assert.Equal(1, CountOccurrences(client, "GetRequiredService<global::MyApp.MultiMapper>(services)"));
         Assert.Contains("            __errorMapper0,\n            __errorMapper0);\n", client);
         Assert.Contains(
@@ -560,7 +560,7 @@ public class GeneratorErrorMapperTests
             }
             """;
 
-        var client = Run(source).Sources["IJevApi.g.cs"];
+        var client = Run(source).Sources["MyApp.IJevApi.g.cs"];
 
         Assert.Contains("private readonly global::ZeroAlloc.Rest.IHttpErrorMapper<global::MyApp.JevError?> _jevErrorMapper;", client);
         Assert.Contains(".Failure(_jevErrorMapper.Map(__httpError) ?? throw new global::System.InvalidOperationException(", client);
@@ -590,7 +590,7 @@ public class GeneratorErrorMapperTests
         Assert.Empty(run.CompileErrors);
         Assert.Contains(
             "public JevApiClient(System.Net.Http.HttpClient httpClient, ZeroAlloc.Rest.IRestSerializer serializer)",
-            run.Sources["IJevApi.g.cs"]);
+            run.Sources["MyApp.IJevApi.g.cs"]);
     }
 
     [Fact]
@@ -623,7 +623,7 @@ public class GeneratorErrorMapperTests
 
         Assert.Empty(run.GeneratorDiagnostics);
         Assert.Empty(run.CompileErrors);
-        Assert.Contains("internal sealed partial class JevApiClient", run.Sources["IJevApi.g.cs"]);
+        Assert.Contains("internal sealed partial class JevApiClient", run.Sources["MyApp.IJevApi.g.cs"]);
     }
 
     [Fact]
@@ -645,7 +645,7 @@ public class GeneratorErrorMapperTests
 
         Assert.Equal("ZRA002", Assert.Single(run.GeneratorDiagnostics).Id);
         Assert.Empty(run.CompileErrors);
-        Assert.Contains("=> throw new global::System.NotSupportedException(", run.Sources["IJevApi.g.cs"]);
+        Assert.Contains("=> throw new global::System.NotSupportedException(", run.Sources["MyApp.IJevApi.g.cs"]);
     }
 
     [Fact]
@@ -668,7 +668,7 @@ public class GeneratorErrorMapperTests
 
         Assert.Empty(run.CompileErrors);
         Assert.Equal(2, run.GeneratorDiagnostics.Count(d => d.Id == "ZRA003"));
-        var client = run.Sources["IJevApi.g.cs"];
+        var client = run.Sources["MyApp.IJevApi.g.cs"];
         const string TryAdd = "global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddSingleton";
         Assert.Contains($"{TryAdd}<global::MyApp.JevErrorMapper>(services);", client);
         // No method uses OtherError: its mapper is registered, never called, and not a parameter.

@@ -88,6 +88,10 @@ Given the interface above, the generator writes two files at compile time:
 - `IUserApi.DI.g.cs` — `AddIUserApi(IServiceCollection, Action<ZeroAllocClientOptions>)` extension,
   emitted only when `ZeroAlloc.Rest.DependencyInjection` is referenced
 
+Each file name starts with the interface's namespace and any containing types, for example
+`MyApp.IUserApi.g.cs`, so interfaces with the same name in different namespaces each get their
+own files. File names are not a contract and may change between releases.
+
 You can inspect the generated code in Visual Studio via **Analyzers → ZeroAlloc.Rest.Generator → Generated files**.
 
 ## Next steps

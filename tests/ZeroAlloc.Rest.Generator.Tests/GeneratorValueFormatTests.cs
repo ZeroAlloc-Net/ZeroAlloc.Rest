@@ -69,7 +69,7 @@ public class GeneratorValueFormatTests
                 [Get("/b")] Task<string> NullableIntsAsync([Query] int?[] maybe);
                 [Get("/c")] Task<string> StringsAsync([Query] IEnumerable<string?> tags);
             }
-            """, "IListApi.g.cs");
+            """, "MyApp.IListApi.g.cs");
 
         Assert.Empty(run.GeneratorDiagnostics);
         Assert.Empty(run.Problems);
@@ -98,7 +98,7 @@ public class GeneratorValueFormatTests
                 [Get("/b")] Task<string> NullableIntsAsync([Header("X-Maybe")] int?[]? maybe);
                 [Get("/c")] Task<string> StringsAsync([Header("X-Tags")] IEnumerable<string?> tags);
             }
-            """, "IHeaderListApi.g.cs");
+            """, "MyApp.IHeaderListApi.g.cs");
 
         Assert.Empty(run.GeneratorDiagnostics);
         Assert.Empty(run.Problems);
@@ -144,7 +144,7 @@ public class GeneratorValueFormatTests
             {
                 [Get("/k/{kind}")] Task<string> GetAsync(Kind kind, [Query] Kind other, [Header("X-Kind")] Kind? header);
             }
-            """, "IKindApi.g.cs");
+            """, "MyApp.IKindApi.g.cs");
 
         Assert.Empty(run.GeneratorDiagnostics);
         Assert.Empty(run.Problems);
@@ -184,7 +184,7 @@ public class GeneratorValueFormatTests
                 [Get("/f")] Task<string> FlagsAsync([Query] Perm perm, [Query] Perm[] perms);
                 [Get("/n/{when}")] Task<string> NullableAsync(DateTimeOffset? when, [Query] bool? flag);
             }
-            """, "IMixApi.g.cs");
+            """, "MyApp.IMixApi.g.cs");
 
         Assert.Empty(run.GeneratorDiagnostics);
         Assert.Empty(run.Problems);
@@ -202,7 +202,7 @@ public class GeneratorValueFormatTests
 
     private static string Generate(string source)
     {
-        var run = GeneratorHarness.Run(source, "IFormatApi.g.cs");
+        var run = GeneratorHarness.Run(source, "MyApp.IFormatApi.g.cs");
         Assert.Empty(run.GeneratorDiagnostics);
         Assert.Empty(run.Problems);
         return run.GeneratedSource;

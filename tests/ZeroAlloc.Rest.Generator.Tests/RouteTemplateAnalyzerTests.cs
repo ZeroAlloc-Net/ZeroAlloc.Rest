@@ -95,7 +95,7 @@ public class RouteTemplateAnalyzerTests
         // Before #333 the unmatched token became an interpolation hole naming an undefined variable,
         // a CS0103 in generated code on top of the ZRA005.
         Assert.Empty(run.CompileErrors);
-        Assert.Contains("var __url = $\"users/{{usrId}}\";", run.Sources["IApi.g.cs"]);
+        Assert.Contains("var __url = $\"users/{{usrId}}\";", run.Sources["MyApp.IApi.g.cs"]);
     }
 
     // A token no route parameter matches, which the URL built before ZRA005 filled with a working
@@ -172,7 +172,7 @@ public class RouteTemplateAnalyzerTests
         Assert.Empty(run.CompileErrors);
         var line = lineBefore339.Replace("var url ", "var __url ", StringComparison.Ordinal)
             .Replace("var urlBase ", "var __urlBase ", StringComparison.Ordinal);
-        Assert.Contains(line + "\n", run.Sources["IApi.g.cs"]);
+        Assert.Contains(line + "\n", run.Sources["MyApp.IApi.g.cs"]);
 
         // Only the token is reported: every route parameter reaches the URL.
         var diagnostic = Assert.Single(run.Diagnostics);
@@ -240,7 +240,7 @@ public class RouteTemplateAnalyzerTests
         var run = Run(api);
 
         Assert.Empty(run.CompileErrors);
-        Assert.Contains(line + "\n", run.Sources["IApi.g.cs"]);
+        Assert.Contains(line + "\n", run.Sources["MyApp.IApi.g.cs"]);
         Assert.Equal(reports, run.Diagnostics.Length);
         Assert.All(run.Diagnostics, d => Assert.EndsWith("token that no route parameter matches, so it is sent as literal text", Message(d), StringComparison.Ordinal));
     }
@@ -304,7 +304,7 @@ public class RouteTemplateAnalyzerTests
 
         Assert.Empty(run.Diagnostics);
         Assert.Empty(run.CompileErrors);
-        var client = run.Sources["IApi.g.cs"];
+        var client = run.Sources["MyApp.IApi.g.cs"];
         Assert.Contains("""var __url = "a\\b/\"c\"";""", client);
         Assert.Contains("""var __url = $"a\\b/\"c\"/{(global::System.Uri.EscapeDataString(__FormatValue(id)))}";""", client);
         Assert.Contains("""var __urlBase = $"a\\b/\"c\"";""", client);

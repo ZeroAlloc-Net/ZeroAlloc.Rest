@@ -39,7 +39,7 @@ public class GeneratorDiscoveryTests
 
         var (diagnostics, output) = RunGenerator(source);
         Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
-        Assert.Contains(output, f => f.HintName == "IUserApi.g.cs");
+        Assert.Contains(output, f => f.HintName == "MyApp.IUserApi.g.cs");
     }
 
     [Fact]
@@ -57,7 +57,7 @@ public class GeneratorDiscoveryTests
             """;
 
         var (_, output) = RunGenerator(source);
-        var file = output.Single(f => f.HintName == "IUserApi.g.cs");
+        var file = output.Single(f => f.HintName == "MyApp.IUserApi.g.cs");
         Assert.Contains("UserApiClient", file.SourceText.ToString());
     }
 
