@@ -7,6 +7,18 @@ internal record ClientModel(
     string InterfaceName,
     string HintNameStem,
     string ClassName,
+    // How generated code at namespace level names the interface: its simple name for a top-level
+    // interface, as it always was, and global::Ns.Outer.IApi for a nested one.
+    string InterfaceReference,
+    // The interface's name within its namespace, for messages and span names: IUserApi, or
+    // Outer.IApi for a nested interface.
+    string InterfaceDisplayName,
+    // The containing types' names, each followed by '_', or empty for a top-level interface. It
+    // starts the client's class name and follows "Add" in the registration method's name, so two
+    // nested interfaces with one name get distinct ones: Orders_ApiClient and AddOrders_IApi.
+    string NestedPrefix,
+    // False when no client can be generated for the interface; Diagnostics then says why (ZRA006).
+    bool IsSupported,
     EquatableArray<MethodModel> Methods,
     string? SerializerTypeName,
     bool IsPublic,
@@ -20,6 +32,16 @@ internal record ClientModel(
 
     // Partial declarations must agree on accessibility, so internal clients get their own class.
     internal string ExtensionsClassName => IsPublic ? "GeneratedRestClientExtensions" : "InternalGeneratedRestClientExtensions";
+
+    // The Add{I} registration method: AddIUserApi, or AddOrders_IApi for Orders.IApi.
+    internal string RegistrationMethodName => "Add" + NestedPrefix + InterfaceName;
+
+    // The named HttpClient Add{I} registers. A top-level interface keeps nameof(IUserApi), which
+    // is "IUserApi"; a nested one is named with its containing types, "Orders.IApi", because
+    // nameof would give two nested IApi interfaces the same name and the same client settings.
+    internal string HttpClientNameExpression => NestedPrefix.Length == 0
+        ? $"nameof({InterfaceName})"
+        : $"\"{InterfaceDisplayName}\"";
 
     // Method-level serializers that need their own constructor parameter. A method override equal to
     // the interface-level type reuses the main serializer instead of injecting it twice.

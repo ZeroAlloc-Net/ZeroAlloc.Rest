@@ -39,6 +39,24 @@ builder.Services.AddIUserApi(options =>
 });
 ```
 
+## Nested interfaces
+
+An interface can be nested in another type. Its client and `Add` method are still declared at the
+top of the interface's namespace, named after the containing types joined with underscores, so two
+nested interfaces with the same name do not collide:
+
+| Interface | Client | Registration | Named `HttpClient` |
+|---|---|---|---|
+| `MyApp.IUserApi` | `UserApiClient` | `AddIUserApi` | `IUserApi` |
+| `MyApp.Orders.IApi` | `Orders_ApiClient` | `AddOrders_IApi` | `Orders.IApi` |
+| `MyApp.Billing.Invoices.IApi` | `Billing_Invoices_ApiClient` | `AddBilling_Invoices_IApi` | `Billing.Invoices.IApi` |
+
+The containing types do not need to be `partial`: nothing is generated inside them. The interface
+must be reachable from its namespace, so it and every containing type must be `public`,
+`internal` or `protected internal`, and none of them can be generic. Otherwise the generator
+reports [ZRA006](advanced.md#zra006-no-client-can-be-generated-for-the-interface) and generates
+nothing for the interface. `AddRestResilience` uses the same named `HttpClient`.
+
 ## ZeroAllocClientOptions
 
 | Property / Method | Description |

@@ -231,7 +231,7 @@ internal interface IJevApi
 
 The generator reports these diagnostics. Each points at the method, parameter or attribute at
 fault. ZRA001 to ZRA004 are errors, which `#pragma warning disable` does not suppress; fix the
-declaration. ZRA005 is a warning, so it can be suppressed like any other.
+declaration. ZRA005 and ZRA006 are warnings.
 
 ### ZRA001: Conflicting body attributes
 
@@ -353,6 +353,39 @@ Message: `Route '/users/{id}' of method 'GetUserAsync' has a '{id}' token that n
 
 ZRA005 comes from an analyzer in the generator package, so `#pragma warning disable ZRA005`,
 `[SuppressMessage]` and an `.editorconfig` severity all apply to it.
+
+### ZRA006: No client can be generated for the interface
+
+Severity: Warning.
+
+The generated client is a class at namespace level that implements the interface, so no client is
+generated for an interface it cannot implement:
+
+- **A generic interface**, such as `IApi<T>`. The client would have to be generic too, and the
+  generator chooses how to format each route, query and header value from its concrete type, which
+  a type parameter does not have.
+- **An interface declared inside a generic type**, such as `Outer<T>.IApi`, for the same reason.
+- **An interface that is `private`, `protected` or `private protected`**, or that is nested in a
+  type with one of those accessibilities. A class at namespace level cannot reach it.
+
+The warning points at the interface's name. Nothing else is generated for that interface, so code
+that uses its client or its `Add{I}` method fails to compile. Declare the interface non-generic,
+outside generic types, and `public` or `internal`. An interface nested in a non-generic type is
+supported; see [Nested interfaces](dependency-injection.md#nested-interfaces).
+
+```csharp
+public class Outer<T>
+{
+    [ZeroAllocRestClient]
+    public interface IApi
+    {
+        [Get("/items")]
+        Task<string> ListAsync(CancellationToken ct = default);
+    }
+}
+```
+
+Message: `No REST client is generated for 'MyApp.Outer<T>.IApi', because it is declared inside the generic type 'MyApp.Outer<T>'`
 
 ### OpenAPI code generation: ZRT diagnostics
 

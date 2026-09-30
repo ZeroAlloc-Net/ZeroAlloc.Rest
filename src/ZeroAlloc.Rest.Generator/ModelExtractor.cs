@@ -3,6 +3,7 @@ using System.Collections.Immutable;
 using System.Linq;
 using System.Threading;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using ZeroAlloc.Rest.Generator.Models;
 
 namespace ZeroAlloc.Rest.Generator;
@@ -43,10 +44,30 @@ internal static class ModelExtractor
             : interfaceSymbol.ContainingNamespace.ToDisplayString();
 
         var interfaceName = interfaceSymbol.Name;
-        // Strip leading 'I' to form implementation name: IUserApi -> UserApiClient
-        var className = interfaceName.Length > 1 && interfaceName[0] == 'I'
+        var nestedPrefix = NestedPrefix(interfaceSymbol);
+        // Strip leading 'I' to form implementation name: IUserApi -> UserApiClient, and
+        // Orders.IApi -> Orders_ApiClient.
+        var className = nestedPrefix + (interfaceName.Length > 1 && interfaceName[0] == 'I'
             ? interfaceName.Substring(1) + "Client"
-            : interfaceName + "Client";
+            : interfaceName + "Client");
+        var interfaceReference = interfaceSymbol.ContainingType is null
+            ? interfaceName
+            : interfaceSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        var interfaceDisplayName = DisplayWithinNamespace(interfaceSymbol);
+        var hintNameStem = HintNames.ForInterface(interfaceSymbol);
+
+        if (UnsupportedReason(interfaceSymbol) is { } reason)
+        {
+            var identifier = (ctx.TargetNode as InterfaceDeclarationSyntax)?.Identifier.GetLocation()
+                ?? interfaceSymbol.Locations[0];
+            var unsupported = new DiagnosticInfo(DiagnosticDescriptors.UnsupportedClientInterface,
+                LocationInfo.From(identifier),
+                Args(interfaceSymbol.ToDisplayString(), reason));
+            return new ClientModel(ns, interfaceName, hintNameStem, className, interfaceReference,
+                interfaceDisplayName, nestedPrefix, IsSupported: false,
+                Methods: default, SerializerTypeName: null, IsPublic: false, MaxErrorBodyBytes: 0,
+                ErrorMappers: default, Diagnostics: ToEquatable(new List<DiagnosticInfo> { unsupported }));
+        }
 
         var clientSerializer = GetSerializerType(interfaceSymbol);
         var diagnostics = new List<DiagnosticInfo>();
@@ -64,7 +85,8 @@ internal static class ModelExtractor
             if (methodModel is not null) methods.Add(methodModel);
         }
 
-        return new ClientModel(ns, interfaceName, HintNames.ForInterface(interfaceSymbol), className,
+        return new ClientModel(ns, interfaceName, hintNameStem, className, interfaceReference,
+            interfaceDisplayName, nestedPrefix, IsSupported: true,
             ToEquatable(methods), clientSerializer,
             IsEffectivelyPublic(interfaceSymbol), GetMaxErrorBodyBytes(ctx),
             ToEquatable(mappers.Valid), ToEquatable(diagnostics));
@@ -233,6 +255,59 @@ internal static class ModelExtractor
                 return true;
         }
         return false;
+    }
+
+    // Why no client can be generated for the interface, or null when one can. The client is a
+    // class at namespace level that implements the interface, so it cannot implement a generic
+    // interface without becoming generic itself, cannot name an interface declared inside a generic
+    // type without its type arguments, and cannot reach an interface that it, or a containing
+    // type, hides as private or protected (#394).
+    private static string? UnsupportedReason(INamedTypeSymbol interfaceSymbol)
+    {
+        // Arity, not IsGenericType, which is also true for a type nested in a generic type.
+        if (interfaceSymbol.Arity > 0)
+            return "it is generic";
+
+        for (var container = interfaceSymbol.ContainingType; container is not null; container = container.ContainingType)
+        {
+            if (container.Arity > 0)
+                return $"it is declared inside the generic type '{container.ToDisplayString()}'";
+        }
+
+        for (INamedTypeSymbol? t = interfaceSymbol; t is not null; t = t.ContainingType)
+        {
+            var hidden = t.DeclaredAccessibility switch
+            {
+                Accessibility.Private => "private",
+                Accessibility.Protected => "protected",
+                Accessibility.ProtectedAndInternal => "private protected",
+                _ => null,
+            };
+            if (hidden is not null)
+                return $"'{t.ToDisplayString()}' is {hidden}, and the generated client, a class at namespace level, cannot reach it";
+        }
+
+        return null;
+    }
+
+    // The containing types' names, outermost first, each followed by '_': "Orders_" for
+    // Orders.IApi, "A_B_" for A.B.IApi, and "" for a top-level interface. A type's own name never
+    // contains '_' under the .NET naming guidelines, so the prefix cannot make two clients collide.
+    private static string NestedPrefix(INamedTypeSymbol interfaceSymbol)
+    {
+        var prefix = string.Empty;
+        for (var container = interfaceSymbol.ContainingType; container is not null; container = container.ContainingType)
+            prefix = container.Name + "_" + prefix;
+        return prefix;
+    }
+
+    // The interface's name within its namespace: "IUserApi", or "Orders.IApi" for a nested one.
+    private static string DisplayWithinNamespace(INamedTypeSymbol interfaceSymbol)
+    {
+        var name = interfaceSymbol.Name;
+        for (var container = interfaceSymbol.ContainingType; container is not null; container = container.ContainingType)
+            name = container.Name + "." + name;
+        return name;
     }
 
     private static bool IsEffectivelyPublic(INamedTypeSymbol type)
