@@ -82,7 +82,9 @@ public static class RestResilienceServiceCollectionExtensions
         // The same named HTTP client pipeline as the generated Add{I}, keyed by the interface name,
         // so ConfigurePrimaryHttpMessageHandler, AddHttpMessageHandler etc. on the returned builder
         // apply to it.
-        var clientName = HttpClientName(typeof(TInterface));
+        // A generated client whose default name another client in its project also has declares a
+        // namespace-qualified one, which the generated Add{I} uses too (#395).
+        var clientName = TRestClient.HttpClientName ?? HttpClientName(typeof(TInterface));
         var builder = services.AddHttpClient(clientName, client =>
         {
             if (options.BaseAddress is not null)
@@ -103,8 +105,8 @@ public static class RestResilienceServiceCollectionExtensions
         return builder;
     }
 
-    // The name of the HttpClient the generated Add{I} registers: the interface's name within its
-    // namespace, "IUserApi", or "Orders.IApi" for an interface nested in Orders. Type.Name alone
+    // The default name of the HttpClient the generated Add{I} registers: the interface's name within
+    // its namespace, "IUserApi", or "Orders.IApi" for an interface nested in Orders. Type.Name alone
     // would give two nested IApi interfaces one client and one set of settings (#394).
     private static string HttpClientName(Type interfaceType)
     {

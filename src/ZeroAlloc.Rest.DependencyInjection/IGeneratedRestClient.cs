@@ -29,4 +29,14 @@ public interface IGeneratedRestClient<TSelf>
     /// The interface declares <c>[Serializer]</c> and <paramref name="options"/> also sets one.
     /// </exception>
     static abstract void AddSerializers(IServiceCollection services, ZeroAllocClientOptions options);
+
+    /// <summary>
+    /// The name of the named <see cref="HttpClient"/> the generated <c>Add{I}</c> registers, when it
+    /// is not the default: the interface's name within its namespace, such as <c>IUserApi</c> or
+    /// <c>Orders.IApi</c>. The generator sets it only when two client interfaces in one project
+    /// would share the default name, and then qualifies it with the namespace, such as
+    /// <c>MyApp.IUserApi</c>. Integrations such as the Resilience bridge use it to share the
+    /// generated client's pipeline. <see langword="null"/> means the default.
+    /// </summary>
+    static virtual string? HttpClientName => null;
 }

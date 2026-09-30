@@ -52,6 +52,16 @@ internal readonly record struct EquatableArray<T>(ImmutableArray<T> Values) : IE
 
     public static EquatableArray<T> Empty => new(ImmutableArray<T>.Empty);
 
+    public bool Contains(T item)
+    {
+        foreach (var v in this)
+        {
+            if (v.Equals(item))
+                return true;
+        }
+        return false;
+    }
+
     public struct Enumerator
     {
         private readonly ImmutableArray<T> _values;

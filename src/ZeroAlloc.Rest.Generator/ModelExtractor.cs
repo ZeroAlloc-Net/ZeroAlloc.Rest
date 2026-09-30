@@ -32,6 +32,10 @@ internal static class ModelExtractor
     private const string FormattableInterface = "System.IFormattable";
     private const int DefaultMaxErrorBodyBytes = 65536;
 
+    // A namespace as a name, not as code: class.Models, where code would need @class.Models.
+    private static readonly SymbolDisplayFormat UnescapedNamespaceFormat = new(
+        typeQualificationStyle: SymbolDisplayTypeQualificationStyle.NameAndContainingTypesAndNamespaces);
+
     internal static ClientModel? Extract(
         GeneratorAttributeSyntaxContext ctx,
         CancellationToken ct)
@@ -54,6 +58,9 @@ internal static class ModelExtractor
             ? interfaceName
             : interfaceSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         var interfaceDisplayName = DisplayWithinNamespace(interfaceSymbol);
+        var qualifiedDisplayName = interfaceSymbol.ContainingNamespace.IsGlobalNamespace
+            ? interfaceDisplayName
+            : interfaceSymbol.ContainingNamespace.ToDisplayString(UnescapedNamespaceFormat) + "." + interfaceDisplayName;
         var hintNameStem = HintNames.ForInterface(interfaceSymbol);
 
         if (UnsupportedReason(interfaceSymbol) is { } reason)
@@ -64,7 +71,7 @@ internal static class ModelExtractor
                 LocationInfo.From(identifier),
                 Args(interfaceSymbol.ToDisplayString(), reason));
             return new ClientModel(ns, interfaceName, hintNameStem, className, interfaceReference,
-                interfaceDisplayName, nestedPrefix, IsSupported: false,
+                interfaceDisplayName, qualifiedDisplayName, nestedPrefix, IsSupported: false,
                 Methods: default, SerializerTypeName: null, IsPublic: false, MaxErrorBodyBytes: 0,
                 ErrorMappers: default, Diagnostics: ToEquatable(new List<DiagnosticInfo> { unsupported }));
         }
@@ -86,7 +93,7 @@ internal static class ModelExtractor
         }
 
         return new ClientModel(ns, interfaceName, hintNameStem, className, interfaceReference,
-            interfaceDisplayName, nestedPrefix, IsSupported: true,
+            interfaceDisplayName, qualifiedDisplayName, nestedPrefix, IsSupported: true,
             ToEquatable(methods), clientSerializer,
             IsEffectivelyPublic(interfaceSymbol), GetMaxErrorBodyBytes(ctx),
             ToEquatable(mappers.Valid), ToEquatable(diagnostics));

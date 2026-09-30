@@ -6,7 +6,9 @@ namespace ZeroAlloc.Rest.Generator;
 
 internal static class DiEmitter
 {
-    internal static void Emit(SourceProductionContext ctx, ClientModel model)
+    // qualifiedHttpClientName replaces the default named-HttpClient name when another client would
+    // share it (#395); otherwise null.
+    internal static void Emit(SourceProductionContext ctx, ClientModel model, string? qualifiedHttpClientName)
     {
         if (!model.IsSupported)
             return;
@@ -38,7 +40,7 @@ internal static class DiEmitter
         // A named client plus a typed-client factory that calls the client's static Create, through
         // GeneratedRestClientRegistration because the client implements it explicitly, so the
         // serializer is resolved per client with no reflection or ActivatorUtilities.
-        sb.AppendLine($"        return services.AddHttpClient({model.HttpClientNameExpression}, client =>");
+        sb.AppendLine($"        return services.AddHttpClient({(qualifiedHttpClientName is null ? model.HttpClientNameExpression : "\"" + qualifiedHttpClientName + "\"")}, client =>");
         sb.AppendLine("        {");
         sb.AppendLine("            if (options.BaseAddress is not null)");
         sb.AppendLine("                client.BaseAddress = options.BaseAddress;");

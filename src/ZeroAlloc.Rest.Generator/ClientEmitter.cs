@@ -12,7 +12,9 @@ internal static class ClientEmitter
     private static readonly string[] ReservedFieldNames =
         { "_activitySource", "_meter", "_requestsTotal", "_requestDurationMs", "_httpClient", "_serializer" };
 
-    internal static void Emit(SourceProductionContext ctx, ClientModel model, bool dependencyInjection)
+    // declaredHttpClientName is the named HttpClient's name when it is not the default, which the
+    // client then declares as IGeneratedRestClient<TSelf>.HttpClientName (#395); otherwise null.
+    internal static void Emit(SourceProductionContext ctx, ClientModel model, bool dependencyInjection, string? declaredHttpClientName)
     {
         foreach (var diagnostic in model.Diagnostics)
             ctx.ReportDiagnostic(diagnostic.ToDiagnostic());
@@ -127,7 +129,7 @@ internal static class ClientEmitter
         sb.AppendLine();
 
         if (dependencyInjection)
-            EmitGeneratedClientMembers(sb, model, overrideSerializers, errorMappings);
+            EmitGeneratedClientMembers(sb, model, overrideSerializers, errorMappings, declaredHttpClientName);
 
         var anyCallerCancellation = false;
         foreach (var method in model.Methods)
@@ -168,7 +170,7 @@ internal static class ClientEmitter
     // ZeroAlloc.Rest.DependencyInjection package, since they call Microsoft.Extensions. Implemented
     // explicitly, so the client gains no public Create or AddSerializers that could clash with the
     // interface's own methods.
-    private static void EmitGeneratedClientMembers(StringBuilder sb, ClientModel model, IReadOnlyList<string> overrideSerializers, IReadOnlyList<(string ErrorTypeName, string MapperTypeName, string MapperErrorTypeName)> errorMappings)
+    private static void EmitGeneratedClientMembers(StringBuilder sb, ClientModel model, IReadOnlyList<string> overrideSerializers, IReadOnlyList<(string ErrorTypeName, string MapperTypeName, string MapperErrorTypeName)> errorMappings, string? declaredHttpClientName)
     {
         var self = $"global::ZeroAlloc.Rest.IGeneratedRestClient<{model.ClassName}>";
         const string GetRequired = "global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService";
@@ -251,6 +253,14 @@ internal static class ClientEmitter
         }
         sb.AppendLine("    }");
         sb.AppendLine();
+
+        // Only a client whose named HttpClient is not the default declares its name, so every
+        // other client stays exactly as it was.
+        if (declaredHttpClientName is not null)
+        {
+            sb.AppendLine($"    static string? {self}.HttpClientName => \"{declaredHttpClientName}\";");
+            sb.AppendLine();
+        }
     }
 
     // Returns true when the method has a CancellationToken parameter, so its body calls

@@ -1,1 +1,2 @@
 #nullable enable
+ZeroAlloc.Rest.IGeneratedRestClient<TSelf>.HttpClientName.get -> string?
