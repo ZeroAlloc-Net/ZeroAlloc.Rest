@@ -418,7 +418,7 @@ is typed `System.Text.Json.JsonElement` and you read it yourself. The reasons ar
 - the schema uses `not`;
 - its `allOf` refers back to itself;
 - it has neither a `type` nor a composition;
-- a success response has no JSON media type, or is binary: ZeroAlloc.Rest has no raw stream binding yet;
+- a success response has a media type that is neither JSON nor binary, such as `application/xml`;
 - `--models false` is set and the schema is an inline object, enum or composition.
 
 Message: `Schema '#/components/schemas/Holder/properties/anything' is mapped to JsonElement, because it has neither a type nor a composition.`
@@ -542,6 +542,79 @@ Through the [Resilience bridge](resilience.md), `[Timeout]` cancels the method's
 bound the body read. A `RetryWhen` predicate that retries `HttpErrorKind.Transport` does not see a
 connection lost mid-body as `Transport` when streaming; to retry that too, also match
 `Kind is HttpErrorKind.Deserialization && Exception is IOException`.
+
+## Raw Stream bodies
+
+A `[Body]` of type `Stream`, or of a type derived from it, is sent as it is, with no serializer. A
+method whose success type is `Stream` hands the response body to you unread. Use them for file
+uploads and downloads, and for any content the serializer does not read.
+
+```csharp
+[ZeroAllocRestClient]
+public interface IFileApi
+{
+    [Put("/files/{name}")]
+    Task UploadAsync(string name, [Body(ContentType = "image/png")] Stream body, CancellationToken ct = default);
+
+    [Get("/files/{name}")]
+    Task<Stream> DownloadAsync(string name, CancellationToken ct = default);
+
+    [Get("/files/{name}")]
+    Task<Result<Stream, HttpError>> TryDownloadAsync(string name, CancellationToken ct = default);
+}
+
+await using var file = File.OpenRead("cat.png");
+await api.UploadAsync("cat.png", file);
+
+await using var download = await api.DownloadAsync("cat.png");
+await download.CopyToAsync(destination);
+```
+
+### Uploading a Stream
+
+- **Media type:** `[Body(ContentType = "...")]` sets it; without one, the body is sent as
+  `application/octet-stream`. An invalid media type throws `FormatException` when the method is
+  called; a `Result` method returns it as a `Deserialization` failure, as it does any body it cannot
+  write.
+- **No copy:** the body is copied to the connection through a pooled buffer as it is sent. A
+  seekable stream is sent from its current position, with its remaining length as
+  `Content-Length`. Any other stream is sent chunked.
+- **Ownership:** the stream stays yours. The client does not dispose it, so dispose it yourself.
+- **A null stream** sends no body.
+- **A stream that fails to read** fails the send. `HttpClient` reports that as an
+  `HttpRequestException`, so a `Result` method returns `HttpErrorKind.Transport` with the read's
+  exception as its inner exception.
+- **Sending again:** a handler that resends the request, such as a retrying `DelegatingHandler`,
+  sends a seekable stream again from where it started. A stream that cannot seek can be sent once;
+  a second send throws `InvalidOperationException`. A retry through the
+  [Resilience bridge](resilience.md) calls the method again, which sends the stream from its
+  position at that moment, so rewind a seekable stream in your retry logic, or do not retry uploads.
+
+### Downloading a Stream
+
+A method whose success type is `Stream`, as `Task<Stream>`, `Task<Result<Stream, HttpError>>` or
+`Task<Result<Stream, E>>` with an [error mapper](#your-own-error-type-errormapper), always sends with
+`HttpCompletionOption.ResponseHeadersRead`. `StreamResponses` makes no difference to it. The
+stream it returns reads the body from the connection as you read it; nothing is buffered.
+
+- **You own the stream.** It owns the `HttpResponseMessage`: disposing the stream disposes the
+  response and releases the connection. Dispose it on every path, or the connection stays in use
+  until the garbage collector finalizes it.
+- **Every other path disposes the response for you:** an error status, a body that cannot be
+  opened, a timeout, a transport failure, and cancellation.
+- **An error status** throws `HttpRequestException` from `Task<Stream>`. A `Result` method returns an
+  `HttpErrorKind.Status` failure that carries the [error body](#the-error-body), as it does for any
+  other success type.
+- **An empty body,** such as a 204's, is an empty stream, never null.
+- **No `Accept` header** is sent for the serializer's media type, since the serializer does not read
+  the body. Declare one with a static header, `[Header("Accept", Value = "image/png")]`, if the server
+  needs it.
+- **Timeouts and cancellation:** `HttpClient.Timeout` and the method's `CancellationToken` cover
+  the call until the headers arrive. After the method returns, only the token you pass to each read
+  bounds a slow body, and a failure mid-body surfaces from your read, typically as an `IOException`.
+  The `rest.request_duration_ms` metric is recorded when the headers arrive.
+- A type derived from `Stream`, such as `Task<MemoryStream>`, is not a raw body. The serializer
+  reads it, as before.
 
 ## Void methods (no response body)
 

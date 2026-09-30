@@ -11,6 +11,8 @@ internal static class OperationEmitter
     private const string ResultOf = "global::System.Threading.Tasks.Task<global::ZeroAlloc.Results.Result<";
     private const string UnitResult = "global::System.Threading.Tasks.Task<global::ZeroAlloc.Results.UnitResult<global::ZeroAlloc.Rest.HttpError>>";
     private const string HttpError = "global::ZeroAlloc.Rest.HttpError";
+    private const string Stream = "global::System.IO.Stream";
+    private const string OctetStream = "application/octet-stream";
 
     // serializable receives the request and response types, which the JSON context registers.
     internal static void Emit(
@@ -95,19 +97,46 @@ internal static class OperationEmitter
         };
     }
 
-    // Design decision 4: only JSON content is typed. A body without it, or one that maps to a
-    // Stream, keeps today's [Body] object body.
+    // Design decision 4: JSON content is typed. Binary content, application/octet-stream or a
+    // format: binary schema, is a Stream sent with its media type (#358). Any other body, such as
+    // XML, multipart or form content, keeps [Body] object body.
     private static string BodyParameter(OpenApiRequestBody body, string baseName, string operationName, ISchemaTypeNamer namer, List<string> serializable)
     {
         const string Untyped = "[" + Attributes + "Body] object body";
-        if (JsonSchema(body.Content) is not { } schema)
+        if (JsonSchema(body.Content) is { } schema)
+        {
+            var type = TypeMapper.Map(schema, baseName + "Request", $"{operationName}: request body", namer, isBody: true);
+            if (type.Kind != TypeRefKind.Stream)
+            {
+                var declared = TypeMapper.Declare(type, body.Required, schema.Nullable);
+                serializable.Add(Registered(type, declared));
+                return $"[{Attributes}Body] {declared} body";
+            }
+        }
+        if (BinaryMediaType(body.Content) is not { } mediaType)
             return Untyped;
-        var type = TypeMapper.Map(schema, baseName + "Request", $"{operationName}: request body", namer, isBody: true);
-        if (type.Kind == TypeRefKind.Stream)
-            return Untyped;
-        var declared = TypeMapper.Declare(type, body.Required, schema.Nullable);
-        serializable.Add(Registered(type, declared));
-        return $"[{Attributes}Body] {declared} body";
+        var stream = body.Required ? Stream : Stream + "?";
+        // A range such as image/* names no type to send, so the body goes as application/octet-stream,
+        // the default [Body] needs no ContentType for.
+        return mediaType.Contains('*', StringComparison.Ordinal) || string.Equals(mediaType, OctetStream, StringComparison.OrdinalIgnoreCase)
+            ? $"[{Attributes}Body] {stream} body"
+            : $"[{Attributes}Body(ContentType = {CSharpNames.Literal(mediaType)})] {stream} body";
+    }
+
+    // The first media type whose content is binary: application/octet-stream, with or without a
+    // schema, or any media type whose schema is a string of format: binary.
+    private static string? BinaryMediaType(IDictionary<string, OpenApiMediaType>? content)
+    {
+        if (content is null)
+            return null;
+        foreach (var (mediaType, media) in content)
+        {
+            var type = mediaType.Split(';')[0].Trim();
+            if (string.Equals(type, OctetStream, StringComparison.OrdinalIgnoreCase)
+                || media.Schema is { Type: "string", Format: "binary" })
+                return type;
+        }
+        return null;
     }
 
     // The type the serializer is called with is the declared one. For a value type, T? is
@@ -115,29 +144,36 @@ internal static class OperationEmitter
     // typeof takes no nullable reference type annotation.
     private static string Registered(TypeRef type, string declared) => type.IsValueType ? declared : type.Name;
 
-    // Spec §6: the success type comes from the first 2xx response with a schema; a 2xx response
-    // whose content carries no schema is skipped, and none gives UnitResult. Only a schema under a
-    // non-JSON media type is reported as content the client cannot read. The success type is T?
+    // Spec §6: the success type comes from the first 2xx response with a schema or binary content;
+    // a 2xx response whose content carries neither is skipped, and none gives UnitResult. Binary
+    // content, application/octet-stream or a format: binary schema, is a Stream. Only a schema
+    // under another non-JSON media type is reported as content the client cannot read. The success type is T?
     // when the operation may also succeed with no body, such as 200 with a schema and 204 without,
     // or when the schema is nullable: the client reads an empty body as a success with no value.
     private static string ReturnType(OpenApiOperation operation, string baseName, string operationName, ISchemaTypeNamer namer, List<string> serializable)
     {
         foreach (var (status, response) in operation.Responses)
         {
-            if (!IsSuccess(status) || SchemaMediaType(response) is not { } withSchema)
+            if (!IsSuccess(status))
+                continue;
+            var binary = BinaryMediaType(response.Content);
+            var withSchema = SchemaMediaType(response);
+            if (withSchema is null && binary is null)
                 continue;
             var where = $"{operationName}: response {status}";
             TypeRef type;
-            var nullable = operation.Responses.Any(r => IsSuccess(r.Key) && SchemaMediaType(r.Value) is null);
-            if (JsonSchema(response.Content) is { } schema)
+            var nullable = operation.Responses.Any(r => IsSuccess(r.Key) && SchemaMediaType(r.Value) is null && BinaryMediaType(r.Value.Content) is null);
+            if (JsonSchema(response.Content) is { } schema
+                && TypeMapper.Map(schema, baseName + "Response", where, namer, isBody: true) is { Kind: not TypeRefKind.Stream } mapped)
             {
-                type = TypeMapper.Map(schema, baseName + "Response", where, namer, isBody: true);
+                type = mapped;
                 nullable |= schema.Nullable;
-                if (type.Kind == TypeRefKind.Stream)
-                {
-                    namer.Unsupported(where, "binary content needs a raw stream response, which ZeroAlloc.Rest does not support yet");
-                    type = TypeRef.JsonElement;
-                }
+            }
+            else if (binary is not null)
+            {
+                // Binary content is returned as a stream that owns the response (#358). An empty
+                // body, such as a 204's, is an empty stream, so the type is never nullable.
+                return $"{ResultOf}{Stream}, {HttpError}>>";
             }
             else
             {

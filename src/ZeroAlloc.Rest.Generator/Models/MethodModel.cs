@@ -21,8 +21,12 @@ internal record MethodModel(
     bool ReturnsUnitResult,
     bool InnerTypeIsValueType,
     bool InnerTypeIsNullable,
-    bool StreamResponses)
+    bool StreamResponses,
+    bool ReturnsStream)
 {
+    // ReturnsStream is set when T, the success type, is System.IO.Stream: the call always sends with
+    // ResponseHeadersRead, and the success body is handed to the caller as a stream that owns the
+    // response, never deserialized.
     // StreamResponses is the method's own value when its HTTP attribute sets one, and otherwise the
     // interface's: the call sends with ResponseHeadersRead and reads the body from the connection.
     // EvaluatedRouteTokens are the {token} names the URL keeps as C# interpolation holes, exactly as

@@ -25,6 +25,36 @@ paths:
       responses:
         '204':
           description: Deleted
+  /pets/{petId}/photo:
+    parameters:
+      - name: petId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+    get:
+      operationId: getPhoto
+      responses:
+        '200':
+          description: The photo
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+    put:
+      operationId: putPhoto
+      requestBody:
+        required: true
+        content:
+          image/png:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '204':
+          description: Stored
   /pets:
     post:
       operationId: addPet

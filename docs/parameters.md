@@ -57,6 +57,17 @@ Only one `[Body]` parameter per method is supported.
 
 The serializer writes the body into a buffer rented from `ArrayPool<byte>.Shared`, and the request sends it with its `Content-Length`. Disposing the request clears the buffer and returns it to the pool, also when the send fails or is cancelled. A send that is still copying the body at that moment, such as an HTTP/2 upload the server answered early, keeps the buffer until the copy ends. The serializer gets a seekable stream, so a serializer that seeks or reads back what it wrote works as it did with a `MemoryStream`.
 
+`ContentType` on `[Body]` sets the media type the body is sent with, in place of the serializer's:
+
+```csharp
+[Patch("/users/{id}")]
+Task PatchUserAsync(int id, [Body(ContentType = "application/merge-patch+json")] UserPatch body, CancellationToken ct = default);
+```
+
+A `Stream` body, or one of a type derived from `Stream` such as `FileStream`, is not serialized: it
+is sent as it is, as `application/octet-stream` unless `ContentType` says otherwise. See
+[Raw Stream bodies](advanced.md#raw-stream-bodies).
+
 ## Header parameters
 
 Decorated with `[Header("Header-Name")]`. The value is added to the request headers:
@@ -103,7 +114,7 @@ Every method should end with `CancellationToken ct = default`. The generator rec
 |---|---|---|
 | `{name}` in route | URL path segment | URL-encoded automatically |
 | `[Query]` | Query string | Nullable → omitted when null |
-| `[Body]` | Request body | Serialized by `IRestSerializer` |
+| `[Body]` | Request body | Serialized by `IRestSerializer`; a `Stream` is sent as it is. `ContentType` sets its media type |
 | `[Header("Name")]` | Request header | Exact header name required; omitted when null |
 | `CancellationToken` | (automatic) | Recognised by type, no attribute needed |
 | `[Header("Name", Value = "...")]` on method | Static request header | Compile-time constant; silently ignored when `Value` is omitted |
