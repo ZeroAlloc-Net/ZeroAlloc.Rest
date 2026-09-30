@@ -54,16 +54,31 @@ public sealed class MemoryPackRestSerializer : IRestSerializer
     {
         EnsureServed<T>();
         if (stream.CanSeek && stream.Position >= stream.Length) return default;
-        var bytes = await ReadAllBytesAsync(stream, ct).ConfigureAwait(false);
-        return Read<T>(bytes);
+        // MemoryPack reads from one contiguous span, so the body is gathered first: into a pooled
+        // buffer, cleared before it goes back, never into an array of this call's own.
+        var length = stream.CanSeek ? RemainingLength(stream) : -1;
+        using var body = new PooledBuffer(length < 0 ? UnknownLengthRent : length);
+        await body.FillAsync(stream, length, ct).ConfigureAwait(false);
+        return Read<T>(body.Written);
     }
 
     public async ValueTask SerializeAsync<T>(Stream stream, T value, CancellationToken ct = default)
     {
         EnsureServed<T>();
-        var buffer = new ArrayBufferWriter<byte>();
+        using var buffer = new PooledBuffer(UnknownLengthRent);
         MemoryPackSerializer.Serialize(buffer, value);
         await stream.WriteAsync(buffer.WrittenMemory, ct).ConfigureAwait(false);
+    }
+
+    // The first rent for a body of unknown length. The buffer doubles from here as needed.
+    private const int UnknownLengthRent = 4096;
+
+    private static int RemainingLength(Stream stream)
+    {
+        var remaining = stream.Length - stream.Position;
+        if (remaining > Array.MaxLength)
+            throw new IOException($"The MemoryPack body is {remaining} bytes, more than an array can hold.");
+        return (int)remaining;
     }
 
     // MemoryPackSerializer.Deserialize<T> without its reflection-based formatter lookup: the same unmanaged
@@ -165,26 +180,91 @@ public sealed class MemoryPackRestSerializer : IRestSerializer
         return name + "<" + string.Join(", ", Array.ConvertAll(type.GetGenericArguments(), Display)) + ">";
     }
 
-    private static async Task<byte[]> ReadAllBytesAsync(Stream stream, CancellationToken ct)
+    // An IBufferWriter over ArrayPool<byte>.Shared. It grows by renting a larger array, and every
+    // array it lets go of is cleared first: a body can hold tokens or PII.
+    private sealed class PooledBuffer : IBufferWriter<byte>, IDisposable
     {
-        if (stream.CanSeek)
+        private byte[] _buffer;
+        private int _written;
+
+        // Set while a span handed out by GetMemory or GetSpan has not been advanced over. A writer
+        // or a stream read that fails part way may have written into it, so the whole array is
+        // cleared then, not just the bytes advanced over.
+        private bool _spanOutstanding;
+
+        internal PooledBuffer(int initialSize)
         {
-            var remaining = (int)(stream.Length - stream.Position);
-            var buffer = new byte[remaining];
-            var totalRead = 0;
-            while (totalRead < remaining)
+            _buffer = ArrayPool<byte>.Shared.Rent(Math.Max(initialSize, 1));
+        }
+
+        internal ReadOnlySpan<byte> Written => _buffer.AsSpan(0, _written);
+
+        internal ReadOnlyMemory<byte> WrittenMemory => _buffer.AsMemory(0, _written);
+
+        // Reads `stream` to its end, or until `length` bytes when the length is known.
+        internal async ValueTask FillAsync(Stream stream, int length, CancellationToken ct)
+        {
+            while (length < 0 || _written < length)
             {
-                var read = await stream.ReadAsync(buffer, totalRead, remaining - totalRead, ct).ConfigureAwait(false);
-                if (read == 0) break;
-                totalRead += read;
+                var read = await stream.ReadAsync(GetMemory(1), ct).ConfigureAwait(false);
+                Advance(read);
+                if (read == 0)
+                    return;
             }
-            return buffer;
         }
-        else
+
+        public void Advance(int count)
         {
-            using var ms = new MemoryStream();
-            await stream.CopyToAsync(ms, 81920, ct).ConfigureAwait(false);
-            return ms.ToArray();
+            if (count < 0 || count > _buffer.Length - _written)
+                throw new ArgumentOutOfRangeException(nameof(count));
+            _written += count;
+            _spanOutstanding = false;
         }
+
+        public Memory<byte> GetMemory(int sizeHint = 0)
+        {
+            Ensure(sizeHint);
+            _spanOutstanding = true;
+            return _buffer.AsMemory(_written);
+        }
+
+        public Span<byte> GetSpan(int sizeHint = 0)
+        {
+            Ensure(sizeHint);
+            _spanOutstanding = true;
+            return _buffer.AsSpan(_written);
+        }
+
+        public void Dispose()
+        {
+            var buffer = _buffer;
+            buffer.AsSpan(0, DirtyLength).Clear();
+            _buffer = [];
+            _written = 0;
+            _spanOutstanding = false;
+            if (buffer.Length > 0)
+                ArrayPool<byte>.Shared.Return(buffer);
+        }
+
+        private void Ensure(int sizeHint)
+        {
+            var needed = Math.Max(sizeHint, 1);
+            if (_buffer.Length - _written >= needed)
+                return;
+
+            var required = (long)_written + needed;
+            if (required > Array.MaxLength)
+                throw new IOException("The MemoryPack body is larger than an array can hold.");
+            var size = (int)Math.Min(Math.Max(required, (long)_buffer.Length * 2), Array.MaxLength);
+            var larger = ArrayPool<byte>.Shared.Rent(size);
+            _buffer.AsSpan(0, _written).CopyTo(larger);
+            _buffer.AsSpan(0, DirtyLength).Clear();
+            ArrayPool<byte>.Shared.Return(_buffer);
+            _buffer = larger;
+            _spanOutstanding = false;
+        }
+
+        // The bytes of the array that may hold body data.
+        private int DirtyLength => _spanOutstanding ? _buffer.Length : _written;
     }
 }

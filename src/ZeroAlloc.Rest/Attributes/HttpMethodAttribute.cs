@@ -11,6 +11,15 @@ public abstract class HttpMethodAttribute(string method, string route) : Attribu
 
     public string Method { get; } = method;
     public string Route { get; } = route;
+
+    /// <summary>
+    /// Whether this method reads its response as a stream instead of buffering it first. When set,
+    /// it overrides <see cref="ZeroAllocRestClientAttribute.StreamResponses"/> for this method, in
+    /// either direction: <c>StreamResponses = false</c> buffers one method of a streaming client.
+    /// When not set, the method follows the interface. Read at compile time.
+    /// See <see cref="ZeroAllocRestClientAttribute.StreamResponses"/> for what streaming changes.
+    /// </summary>
+    public bool StreamResponses { get; set; }
 }
 
 public sealed class GetAttribute : HttpMethodAttribute

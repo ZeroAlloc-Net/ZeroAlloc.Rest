@@ -32,8 +32,9 @@ The generated client returns `Result<T, HttpError>.Success(value)` on a 2xx resp
 |---|---|---|---|---|
 | The server answers with a non-2xx status | `Status` | The response status | The response and content headers | `null` |
 | The request fails before a response arrives: DNS, connection refused, TLS | `Transport` | `0`, or the status an `HttpRequestException` carries | Empty | The `HttpRequestException` |
-| The request times out, for example through `HttpClient.Timeout` | `Timeout` | `0` | Empty | The `OperationCanceledException` or `TaskCanceledException` |
+| The request times out, for example through `HttpClient.Timeout`. With [`StreamResponses`](#streaming-responses), `HttpClient.Timeout` covers only the wait for the headers | `Timeout` | `0` | Empty | The `OperationCanceledException` or `TaskCanceledException` |
 | The body of a 2xx response cannot be deserialized | `Deserialization` | The response status | The response and content headers | Whatever the serializer threw: a `JsonException`, a `MemoryPackSerializationException`, a `MessagePackSerializationException` and so on |
+| With [`StreamResponses`](#streaming-responses), the connection fails while a 2xx body is read | `Deserialization` | The response status | The response and content headers | The `IOException` the read threw |
 | The body of a 2xx response is empty, as a 204's is, or JSON `null`, and `T` does not accept null | `Deserialization` | The response status | The response and content headers | An `InvalidOperationException` whose message names the method and says to declare `T?` |
 | The serializer cannot write the `[Body]` value, so nothing is sent | `Deserialization` | `0` | Empty | Whatever the serializer threw |
 
@@ -461,6 +462,53 @@ public interface IMixedApi
 The generated `AddSerializers`, called by `Add{I}` and `AddRestResilience`, registers each override serializer type as a singleton via `TryAddSingleton<T>()`. The override types may be `internal` even when the interface is public, because they never appear in the client's public constructor.
 
 `MemoryPackRestSerializer` serves only the `[MemoryPackable]` types registered with it, plus MemoryPack's built-in types. The instance `TryAddSingleton` creates has no registered types, so a method that only sends `byte[]`, as above, works with it. For `[MemoryPackable]` types, register a configured instance before `Add{I}`, and `TryAddSingleton` keeps it: `services.AddSingleton(new MemoryPackRestSerializer(types => types.Add<PayloadDto>()));`. See [Dependency Injection](dependency-injection.md#serializer-overrides-in-di).
+
+## Streaming responses
+
+By default a generated call sends with `HttpCompletionOption.ResponseContentRead`: `HttpClient` reads
+the whole response body into its own buffer, which is not pooled, and the serializer then reads that
+copy. Set `StreamResponses` to skip the copy. The call then sends with
+`HttpCompletionOption.ResponseHeadersRead`, and the serializer reads the body straight from the
+connection.
+
+```csharp
+[ZeroAllocRestClient(StreamResponses = true)]   // every method streams...
+public interface IReportApi
+{
+    [Get("/reports/{id}")]
+    Task<Report> GetAsync(int id, CancellationToken ct = default);
+
+    [Get("/status", StreamResponses = false)]   // ...except this one
+    Task<Status> GetStatusAsync(CancellationToken ct = default);
+}
+```
+
+`StreamResponses` on a method's `[Get]`, `[Post]`, `[Put]`, `[Patch]` or `[Delete]` overrides the
+interface's value, in either direction. A method that does not set it follows the interface. Both
+are read at compile time. Without the flag, the generated code is exactly what it was before.
+
+The response, and the stream the serializer reads, are disposed when the call ends. That holds for a
+success, an error status, a body that fails to deserialize, and a call cancelled mid-body. A
+`Result` method still reads its [error body](#the-error-body) from the stream, up to
+`MaxErrorBodyBytes`.
+
+Streaming trades some of `HttpClient`'s guarantees for the saved copy:
+
+| | Buffered (default) | `StreamResponses = true` |
+|---|---|---|
+| `HttpClient.Timeout` | Covers the headers and the whole body. A `Result` method returns `HttpErrorKind.Timeout` when it fires. | Covers only the wait for the headers, which still returns `HttpErrorKind.Timeout`. Only the method's `CancellationToken` stops a slow body, so pass one with a deadline, such as the token of a `CancellationTokenSource` created with a timeout, to bound the read. That token is the caller's, so when it fires the call throws `OperationCanceledException`, from a `Result` method too, rather than returning `HttpErrorKind.Timeout`. |
+| Connection lost mid-body | `HttpRequestException` from the send. A `Result` method returns `HttpErrorKind.Transport`. | `IOException` from the serializer. A `Result` method returns `HttpErrorKind.Deserialization`, with the `IOException` as `HttpError.Exception`. A failure before the headers arrive is still `Transport`. |
+| `HttpClient.MaxResponseContentBufferSize` | Applies: a larger body fails the send. | Does not apply: nothing is buffered, so the serializer reads a body of any size. |
+| Empty body | Detected from the buffered, seekable stream. | The same outcome. A streamed body is not seekable, so an empty one is detected from a `Content-Length` of 0 or, when no length is sent, by reading its first byte. It then reaches the serializer as an empty seekable stream, as a buffered one does. See [Empty and null success bodies](#empty-and-null-success-bodies). |
+| `rest.request_duration_ms` | Includes the body download. | Recorded when the headers arrive, so it excludes the body download. |
+
+A [custom serializer](serialization.md#custom-serializer) may receive a stream that cannot seek when
+the body is not empty, so it must not rely on `Length` or `Position`.
+
+Through the [Resilience bridge](resilience.md), `[Timeout]` cancels the method's token, so it does
+bound the body read. A `RetryWhen` predicate that retries `HttpErrorKind.Transport` does not see a
+connection lost mid-body as `Transport` when streaming; to retry that too, also match
+`Kind is HttpErrorKind.Deserialization && Exception is IOException`.
 
 ## Void methods (no response body)
 

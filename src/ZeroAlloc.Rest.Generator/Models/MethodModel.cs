@@ -20,8 +20,11 @@ internal record MethodModel(
     EquatableArray<string> EvaluatedRouteTokens,
     bool ReturnsUnitResult,
     bool InnerTypeIsValueType,
-    bool InnerTypeIsNullable)
+    bool InnerTypeIsNullable,
+    bool StreamResponses)
 {
+    // StreamResponses is the method's own value when its HTTP attribute sets one, and otherwise the
+    // interface's: the call sends with ResponseHeadersRead and reads the body from the connection.
     // EvaluatedRouteTokens are the {token} names the URL keeps as C# interpolation holes, exactly as
     // before ZRA005; see RouteTokenBinding.
     // ErrorTypeName is the key a mapper is matched by: no tuple element names and no nullable
