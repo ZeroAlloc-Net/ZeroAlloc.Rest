@@ -16,6 +16,12 @@ namespace ZeroAlloc.Rest.Generator;
 /// other: <c>#pragma warning disable</c>, <c>[SuppressMessage]</c> and .editorconfig all apply.
 /// A generator's diagnostic has to be rebuilt from the cached model's path and span, which the
 /// compiler does not treat as a source location, so <c>#pragma</c> would not suppress it.
+/// <para>
+/// Generated code is analyzed too, so an interface emitted by a tool, such as the OpenAPI client
+/// generator in ZeroAlloc.Rest.Tools, gets the same checks as one written by hand (#346). The Rest
+/// source generator's own output declares clients, registration methods and helpers, never a
+/// <c>[ZeroAllocRestClient]</c> interface, so it is analyzed but never reported on.
+/// </para>
 /// </remarks>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class RouteTemplateAnalyzer : DiagnosticAnalyzer
@@ -30,7 +36,7 @@ public sealed class RouteTemplateAnalyzer : DiagnosticAnalyzer
     /// <inheritdoc />
     public override void Initialize(AnalysisContext context)
     {
-        context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);
+        context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.Analyze | GeneratedCodeAnalysisFlags.ReportDiagnostics);
         context.EnableConcurrentExecution();
         context.RegisterSymbolAction(AnalyzeMethod, SymbolKind.Method);
     }
