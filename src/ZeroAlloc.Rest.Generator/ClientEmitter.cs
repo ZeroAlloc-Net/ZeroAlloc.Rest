@@ -16,6 +16,8 @@ internal static class ClientEmitter
     {
         foreach (var diagnostic in model.Diagnostics)
             ctx.ReportDiagnostic(diagnostic.ToDiagnostic());
+        if (!model.IsSupported)
+            return;
 
         // Collect unique method-level serializer types (ordered, deduped)
         var overrideSerializers = model.GetOverrideSerializerTypes();
@@ -66,8 +68,8 @@ internal static class ClientEmitter
         }
 
         sb.AppendLine(dependencyInjection
-            ? $"{model.Accessibility} sealed partial class {model.ClassName} : {model.InterfaceName}, global::ZeroAlloc.Rest.IGeneratedRestClient<{model.ClassName}>"
-            : $"{model.Accessibility} sealed partial class {model.ClassName} : {model.InterfaceName}");
+            ? $"{model.Accessibility} sealed partial class {model.ClassName} : {model.InterfaceReference}, global::ZeroAlloc.Rest.IGeneratedRestClient<{model.ClassName}>"
+            : $"{model.Accessibility} sealed partial class {model.ClassName} : {model.InterfaceReference}");
         sb.AppendLine("{");
         sb.AppendLine("    private static readonly global::System.Diagnostics.ActivitySource _activitySource = new(\"ZeroAlloc.Rest\");");
         sb.AppendLine("    private static readonly global::System.Diagnostics.Metrics.Meter _meter = new(\"ZeroAlloc.Rest\");");
@@ -129,7 +131,7 @@ internal static class ClientEmitter
 
         var anyCallerCancellation = false;
         foreach (var method in model.Methods)
-            anyCallerCancellation |= EmitMethod(ctx, sb, model.InterfaceName, method, serializerFieldMap, errorMapperFieldMap, model.MaxErrorBodyBytes);
+            anyCallerCancellation |= EmitMethod(ctx, sb, model.InterfaceDisplayName, method, serializerFieldMap, errorMapperFieldMap, model.MaxErrorBodyBytes);
 
         EmitFormatHelpers(sb, model);
 
@@ -174,7 +176,7 @@ internal static class ClientEmitter
 
         var serializerArg = model.SerializerTypeName != null
             ? $"{GetRequired}<{model.SerializerTypeName}>(services)"
-            : $"global::ZeroAlloc.Rest.RestSerializerServiceProviderExtensions.GetRequiredRestSerializer<{model.InterfaceName}>(services)";
+            : $"global::ZeroAlloc.Rest.RestSerializerServiceProviderExtensions.GetRequiredRestSerializer<{model.InterfaceReference}>(services)";
         var ctorArgs = new List<string> { "httpClient", serializerArg };
         foreach (var st in overrideSerializers)
             ctorArgs.Add($"{GetRequired}<{st}>(services)");
@@ -220,8 +222,8 @@ internal static class ClientEmitter
             // The interface-level [Serializer] fixes this client's serializer at compile time, so a
             // UseSerializer for it is a contradiction: reject it instead of ignoring it.
             var interfaceFullName = string.IsNullOrEmpty(model.Namespace)
-                ? model.InterfaceName
-                : model.Namespace + "." + model.InterfaceName;
+                ? model.InterfaceDisplayName
+                : model.Namespace + "." + model.InterfaceDisplayName;
             var serializerDisplayName = StripGlobal(model.SerializerTypeName);
             sb.AppendLine("        if (options.SerializerType is not null || options.SerializerInstance is not null)");
             sb.AppendLine("            throw new global::System.InvalidOperationException(");
@@ -233,7 +235,7 @@ internal static class ClientEmitter
         {
             // UseSerializer is per client: keyed by the interface, it never touches the app-wide
             // IRestSerializer, so two clients cannot overwrite each other's serializer.
-            sb.AppendLine($"        global::ZeroAlloc.Rest.GeneratedRestClientRegistration.AddPerClientSerializer<{model.InterfaceName}>(services, options);");
+            sb.AppendLine($"        global::ZeroAlloc.Rest.GeneratedRestClientRegistration.AddPerClientSerializer<{model.InterfaceReference}>(services, options);");
         }
         foreach (var st in overrideSerializers)
             sb.AppendLine($"        {TryAddSingleton}<{st}>(services);");

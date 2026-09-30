@@ -68,4 +68,19 @@ internal static class DiagnosticDescriptors
         category: Category,
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
+
+    // A Warning, not an Error, as for the other ZeroAlloc generators' nested and generic type rules:
+    // before #394 such an interface got a client that did not compile, so nothing that built stops
+    // building. No client is generated for the interface.
+    internal static readonly DiagnosticDescriptor UnsupportedClientInterface = new(
+        id: "ZRA006",
+        title: "No client can be generated for the interface",
+        messageFormat: "No REST client is generated for '{0}', because {1}",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "The generated client is a class at namespace level that implements the interface. "
+            + "It cannot implement a generic interface or one declared inside a generic type, and cannot "
+            + "reach an interface that it, or a containing type, declares private or protected. Declare "
+            + "the interface non-generic, outside generic types, and public or internal.");
 }

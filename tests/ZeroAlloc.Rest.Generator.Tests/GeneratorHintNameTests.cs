@@ -35,8 +35,6 @@ public class GeneratorHintNameTests
     [Fact]
     public void SameNamedInterfaces_InDifferentContainingTypes_GetDistinctHintNames()
     {
-        // Only the hint names are checked: a client for a nested interface does not compile yet,
-        // but a nested interface must not take down every other client in the project.
         var source = $$"""
             namespace App
             {
@@ -59,10 +57,11 @@ public class GeneratorHintNameTests
                 "App.Orders+IApi.DI.g.cs", "App.Orders+IApi.g.cs",
             ],
             HintNames(run));
+        Assert.Empty(run.Problems);
     }
 
     [Fact]
-    public void GenericInterfaces_AreNamedWithTheirArity()
+    public void GenericInterfaces_GetNoFiles_NextToASameNamedInterface()
     {
         var source = $$"""
             namespace App
@@ -75,14 +74,10 @@ public class GeneratorHintNameTests
 
         var run = GeneratorHarness.RunAll(source, GeneratorHarness.References);
 
-        Assert.DoesNotContain(run.GeneratorDiagnostics, d => d.Severity == DiagnosticSeverity.Warning || d.Severity == DiagnosticSeverity.Error);
-        Assert.Equal(
-            [
-                "App.IApi.DI.g.cs", "App.IApi.g.cs",
-                "App.IApi`1.DI.g.cs", "App.IApi`1.g.cs",
-                "App.Outer`1+IApi.DI.g.cs", "App.Outer`1+IApi.g.cs",
-            ],
-            HintNames(run));
+        // A generic interface, and one inside a generic type, get ZRA006 and no client (#394).
+        Assert.Equal(["ZRA006", "ZRA006"], run.GeneratorDiagnostics.Select(d => d.Id), System.StringComparer.Ordinal);
+        Assert.Equal(["App.IApi.DI.g.cs", "App.IApi.g.cs"], HintNames(run));
+        Assert.Empty(run.Problems);
     }
 
     [Fact]
