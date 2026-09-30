@@ -40,7 +40,7 @@ public class GeneratorNullBodyTests
         }
         """;
 
-    private static GeneratorHarness.GeneratorHarnessRun Run() => GeneratorHarness.Run(Source, "IPetApi.g.cs");
+    private static GeneratorHarness.GeneratorHarnessRun Run() => GeneratorHarness.Run(Source, "MyApp.IPetApi.g.cs");
 
     [Fact]
     public void Generated_CompilesClean_WithNoNullForgivingDeserialize()

@@ -51,7 +51,7 @@ public class GeneratorDependencyInjectionTests
         var run = GeneratorHarness.RunAll(Api, CoreOnly);
 
         Assert.DoesNotContain(run.GeneratedSources, s => s.HintName.EndsWith(".DI.g.cs", System.StringComparison.Ordinal));
-        var client = Source(run, "IThingApi.g.cs");
+        var client = Source(run, "MyApp.IThingApi.g.cs");
         Assert.DoesNotContain("IGeneratedRestClient", client);
         Assert.DoesNotContain("Microsoft.Extensions", client);
         Assert.DoesNotContain(" Create(", client);
@@ -67,11 +67,11 @@ public class GeneratorDependencyInjectionTests
     {
         var run = GeneratorHarness.RunAll(Api, WithDependencyInjection);
 
-        var di = Source(run, "IThingApi.DI.g.cs");
+        var di = Source(run, "MyApp.IThingApi.DI.g.cs");
         Assert.Contains("AddIThingApi", di);
         Assert.Contains("global::ZeroAlloc.Rest.GeneratedRestClientRegistration.AddSerializers<ThingApiClient>", di);
         Assert.Contains("global::ZeroAlloc.Rest.GeneratedRestClientRegistration.Create<ThingApiClient>", di);
-        var client = Source(run, "IThingApi.g.cs");
+        var client = Source(run, "MyApp.IThingApi.g.cs");
         Assert.Contains("IGeneratedRestClient<ThingApiClient>", client);
         Assert.Contains("global::ZeroAlloc.Rest.GeneratedRestClientRegistration.AddPerClientSerializer<IThingApi>", client);
         Assert.Empty(run.Problems);
@@ -85,7 +85,7 @@ public class GeneratorDependencyInjectionTests
     {
         var run = GeneratorHarness.RunAll(Api, [.. WithDependencyInjection, BuildDuplicateMarkerAssembly()]);
 
-        var di = Source(run, "IThingApi.DI.g.cs");
+        var di = Source(run, "MyApp.IThingApi.DI.g.cs");
         Assert.Contains("AddIThingApi", di);
         Assert.Empty(run.Problems);
     }
@@ -151,7 +151,7 @@ public class GeneratorDependencyInjectionTests
         var run = GeneratorHarness.RunAll(source, CoreOnly);
 
         Assert.DoesNotContain(run.GeneratedSources, s => s.HintName.EndsWith(".DI.g.cs", System.StringComparison.Ordinal));
-        var client = Source(run, "IThingApi.g.cs");
+        var client = Source(run, "MyApp.IThingApi.g.cs");
         Assert.DoesNotContain("IGeneratedRestClient", client);
         Assert.DoesNotContain("Microsoft.Extensions", client);
         var ctor = client.Split('\n').Single(l => l.Contains("public ThingApiClient(", System.StringComparison.Ordinal));

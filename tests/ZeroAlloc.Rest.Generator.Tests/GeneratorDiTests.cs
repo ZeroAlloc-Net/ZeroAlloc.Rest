@@ -25,7 +25,7 @@ public class GeneratorDiTests
             """;
 
         var output = RunAndGetSources(source);
-        Assert.Contains(output, f => f.HintName == "IUserApi.DI.g.cs");
+        Assert.Contains(output, f => f.HintName == "MyApp.IUserApi.DI.g.cs");
     }
 
     [Fact]
@@ -43,7 +43,7 @@ public class GeneratorDiTests
             """;
 
         var output = RunAndGetSources(source);
-        var diFile = output.Single(f => f.HintName == "IUserApi.DI.g.cs");
+        var diFile = output.Single(f => f.HintName == "MyApp.IUserApi.DI.g.cs");
         var content = diFile.SourceText.ToString();
         Assert.Contains("AddIUserApi", content);
     }
@@ -63,7 +63,7 @@ public class GeneratorDiTests
             """;
 
         var output = RunAndGetSources(source);
-        var diFile = output.Single(f => f.HintName == "IUserApi.DI.g.cs");
+        var diFile = output.Single(f => f.HintName == "MyApp.IUserApi.DI.g.cs");
         var content = diFile.SourceText.ToString();
         Assert.Contains("AddHttpClient(nameof(IUserApi)", content);
         Assert.Contains(".AddTypedClient<IUserApi>(", content);
@@ -85,8 +85,8 @@ public class GeneratorDiTests
             """;
 
         var output = RunAndGetSources(source);
-        Assert.Contains(output, f => f.HintName == "IOrderApi.g.cs");
-        Assert.Contains(output, f => f.HintName == "IOrderApi.DI.g.cs");
+        Assert.Contains(output, f => f.HintName == "MyApp.IOrderApi.g.cs");
+        Assert.Contains(output, f => f.HintName == "MyApp.IOrderApi.DI.g.cs");
     }
 
     [Fact]
@@ -117,7 +117,7 @@ public class GeneratorDiTests
             """;
         var output = RunAndGetSources(source);
         // Registered by the client's AddSerializers, which the generated AddIUploadApi calls.
-        var clientFile = output.Single(f => f.HintName == "IUploadApi.g.cs");
+        var clientFile = output.Single(f => f.HintName == "MyApp.IUploadApi.g.cs");
         var content = clientFile.SourceText.ToString();
         Assert.Contains("TryAddSingleton<global::MyApp.OverrideSerializer>(services)", content);
     }

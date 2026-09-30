@@ -60,7 +60,7 @@ public class GeneratorInterfaceSerializerTests
     public void InterfaceLevelSerializer_ConstructorKeepsIRestSerializer_CreateResolvesConcreteType()
     {
         var (sources, _, _) = Run(JevApiSource);
-        var client = sources["IJevApi.g.cs"];
+        var client = sources["MyApp.IJevApi.g.cs"];
 
         Assert.Contains("public JevApiClient(System.Net.Http.HttpClient httpClient, ZeroAlloc.Rest.IRestSerializer serializer)", client);
         Assert.Contains("ServiceProviderServiceExtensions.GetRequiredService<global::MyApp.JevSerializer>(services)", client);
@@ -105,8 +105,8 @@ public class GeneratorInterfaceSerializerTests
         var (sources, _, errors) = Run(source);
 
         Assert.Empty(errors);
-        Assert.Contains("public UploadApiClient(System.Net.Http.HttpClient httpClient, ZeroAlloc.Rest.IRestSerializer serializer, ZeroAlloc.Rest.IRestSerializer uploadSerializer)", sources["IUploadApi.g.cs"]);
-        Assert.Contains("GetRequiredService<global::MyApp.UploadSerializer>(services)", sources["IUploadApi.g.cs"]);
+        Assert.Contains("public UploadApiClient(System.Net.Http.HttpClient httpClient, ZeroAlloc.Rest.IRestSerializer serializer, ZeroAlloc.Rest.IRestSerializer uploadSerializer)", sources["MyApp.IUploadApi.g.cs"]);
+        Assert.Contains("GetRequiredService<global::MyApp.UploadSerializer>(services)", sources["MyApp.IUploadApi.g.cs"]);
     }
 
     // Serializer type names are emitted global::-qualified, so a namespace that shadows the
@@ -158,15 +158,15 @@ public class GeneratorInterfaceSerializerTests
         var (sources, _, errors) = Run(source);
 
         Assert.Empty(errors);
-        Assert.Contains("GetRequiredService<global::Lib.JevSerializer>(services)", sources["IJevApi.g.cs"]);
-        Assert.Contains("GetRequiredService<global::Lib.JevSerializer>(services)", sources["IUploadApi.g.cs"]);
+        Assert.Contains("GetRequiredService<global::Lib.JevSerializer>(services)", sources["App.Api.IJevApi.g.cs"]);
+        Assert.Contains("GetRequiredService<global::Lib.JevSerializer>(services)", sources["App.Api.IUploadApi.g.cs"]);
     }
 
     [Fact]
     public void InterfaceLevelSerializer_RegistersAndResolvesConcreteType()
     {
         var (sources, _, _) = Run(JevApiSource);
-        var client = sources["IJevApi.g.cs"];
+        var client = sources["MyApp.IJevApi.g.cs"];
 
         Assert.Contains("ServiceCollectionDescriptorExtensions.TryAddSingleton<global::MyApp.JevSerializer>(services);", client);
         Assert.Contains("ServiceProviderServiceExtensions.GetRequiredService<global::MyApp.JevSerializer>(services)", client);
@@ -218,15 +218,15 @@ public class GeneratorInterfaceSerializerTests
         var (sources, _, errors) = Run(source);
 
         Assert.Empty(errors);
-        Assert.DoesNotContain("public static ClashApiClient Create(", sources["IClashApi.g.cs"]);
-        Assert.DoesNotContain("public static void AddSerializers(", sources["IClashApi.g.cs"]);
+        Assert.DoesNotContain("public static ClashApiClient Create(", sources["MyApp.IClashApi.g.cs"]);
+        Assert.DoesNotContain("public static void AddSerializers(", sources["MyApp.IClashApi.g.cs"]);
     }
 
     [Fact]
     public void Add_DelegatesToTheClientsStaticMembers()
     {
         var (sources, _, _) = Run(JevApiSource);
-        var di = sources["IJevApi.DI.g.cs"];
+        var di = sources["MyApp.IJevApi.DI.g.cs"];
 
         Assert.Contains("global::ZeroAlloc.Rest.GeneratedRestClientRegistration.AddSerializers<JevApiClient>(services, options);", di);
         Assert.Contains("global::ZeroAlloc.Rest.GeneratedRestClientRegistration.Create<JevApiClient>(httpClient, sp)", di);
@@ -236,7 +236,7 @@ public class GeneratorInterfaceSerializerTests
     public void InterfaceLevelSerializer_AddRejectsUseSerializer()
     {
         var (sources, _, _) = Run(JevApiSource);
-        var client = sources["IJevApi.g.cs"];
+        var client = sources["MyApp.IJevApi.g.cs"];
 
         Assert.Contains("if (options.SerializerType is not null || options.SerializerInstance is not null)", client);
         Assert.Contains("throw new global::System.InvalidOperationException(", client);
@@ -268,7 +268,7 @@ public class GeneratorInterfaceSerializerTests
         Assert.Empty(errors);
         Assert.Contains(
             "public JevApiClient(System.Net.Http.HttpClient httpClient, ZeroAlloc.Rest.IRestSerializer serializer, ZeroAlloc.Rest.IRestSerializer uploadSerializer)",
-            sources["IJevApi.g.cs"]);
+            sources["MyApp.IJevApi.g.cs"]);
     }
 
     [Fact]
@@ -287,10 +287,10 @@ public class GeneratorInterfaceSerializerTests
         var (sources, compilation, errors) = Run(source);
 
         Assert.Empty(errors);
-        Assert.Contains("public HostApiClient(System.Net.Http.HttpClient httpClient, ZeroAlloc.Rest.IRestSerializer serializer)", sources["IHostApi.g.cs"]);
-        Assert.Contains("RestSerializerServiceProviderExtensions.GetRequiredRestSerializer<IHostApi>(services)", sources["IHostApi.g.cs"]);
+        Assert.Contains("public HostApiClient(System.Net.Http.HttpClient httpClient, ZeroAlloc.Rest.IRestSerializer serializer)", sources["MyApp.IHostApi.g.cs"]);
+        Assert.Contains("RestSerializerServiceProviderExtensions.GetRequiredRestSerializer<IHostApi>(services)", sources["MyApp.IHostApi.g.cs"]);
         Assert.NotNull(compilation.GetTypeByMetadataName("MyApp.HostApiClient"));
-        Assert.DoesNotContain("cannot also be given a serializer", sources["IHostApi.g.cs"]);
+        Assert.DoesNotContain("cannot also be given a serializer", sources["MyApp.IHostApi.g.cs"]);
     }
 
     private static (Dictionary<string, string> Sources, Compilation Compilation, ImmutableArray<Diagnostic> Errors) Run(string source)

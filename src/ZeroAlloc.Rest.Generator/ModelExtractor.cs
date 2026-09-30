@@ -64,7 +64,8 @@ internal static class ModelExtractor
             if (methodModel is not null) methods.Add(methodModel);
         }
 
-        return new ClientModel(ns, interfaceName, className, ToEquatable(methods), clientSerializer,
+        return new ClientModel(ns, interfaceName, HintNames.ForInterface(interfaceSymbol), className,
+            ToEquatable(methods), clientSerializer,
             IsEffectivelyPublic(interfaceSymbol), GetMaxErrorBodyBytes(ctx),
             ToEquatable(mappers.Valid), ToEquatable(diagnostics));
     }

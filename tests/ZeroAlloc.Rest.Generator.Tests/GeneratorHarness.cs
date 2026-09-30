@@ -22,8 +22,8 @@ internal static class GeneratorHarness
     ];
 
     // Compiles `source` with the Rest client generator and returns the generated text for
-    // `hintName` (e.g. "IThingApi.g.cs"), the generator's own diagnostics, and the problems in the
-    // resulting compilation. Consumers build with TreatWarningsAsErrors, so a warning in generated
+    // `hintName` (e.g. "MyApp.IThingApi.g.cs"), the generator's own diagnostics, and the problems in
+    // the resulting compilation. Consumers build with TreatWarningsAsErrors, so a warning in generated
     // code is a problem worth asserting on. `extraReferences` are added to the reference set.
     internal static GeneratorHarnessRun Run(string source, string hintName, bool nullableEnabled = true,
         MetadataReference[]? extraReferences = null)

@@ -25,7 +25,7 @@ public class GeneratorHarnessTests
         // Bytes that are not a PE image: the compiler reports CS0009 with no source location.
         var broken = MetadataReference.CreateFromImage(new byte[] { 1, 2, 3, 4 }, filePath: "Broken.dll");
 
-        var run = GeneratorHarness.Run(Source, "IThingApi.g.cs", extraReferences: [broken]);
+        var run = GeneratorHarness.Run(Source, "MyApp.IThingApi.g.cs", extraReferences: [broken]);
 
         var error = Assert.Single(run.Problems, d => d.Id == "CS0009");
         Assert.Equal(DiagnosticSeverity.Error, error.Severity);
@@ -35,7 +35,7 @@ public class GeneratorHarnessTests
     [Fact]
     public void LocationLessWarning_FromTheReferenceSet_IsNotReported()
     {
-        var run = GeneratorHarness.Run(Source, "IThingApi.g.cs");
+        var run = GeneratorHarness.Run(Source, "MyApp.IThingApi.g.cs");
 
         // [Query] needs ZeroAlloc.Collections, whose net9.0 asset reports CS1701 here.
         Assert.Empty(run.Problems);

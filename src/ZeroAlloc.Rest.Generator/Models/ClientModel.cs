@@ -5,6 +5,7 @@ namespace ZeroAlloc.Rest.Generator.Models;
 internal record ClientModel(
     string Namespace,
     string InterfaceName,
+    string HintNameStem,
     string ClassName,
     EquatableArray<MethodModel> Methods,
     string? SerializerTypeName,

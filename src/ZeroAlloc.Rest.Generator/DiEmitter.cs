@@ -44,6 +44,6 @@ internal static class DiEmitter
         sb.AppendLine("    }");
         sb.AppendLine("}");
 
-        ctx.AddSource($"{model.InterfaceName}.DI.g.cs", sb.ToString());
+        ctx.AddSource($"{model.HintNameStem}.DI.g.cs", sb.ToString());
     }
 }

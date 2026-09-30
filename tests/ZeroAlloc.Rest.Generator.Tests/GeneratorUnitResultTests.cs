@@ -86,5 +86,5 @@ public class GeneratorUnitResultTests
         Assert.Equal("ZRA002", diagnostic.Id);
     }
 
-    private static GeneratorHarness.GeneratorHarnessRun Run(string source) => GeneratorHarness.Run(source, "IThingApi.g.cs");
+    private static GeneratorHarness.GeneratorHarnessRun Run(string source) => GeneratorHarness.Run(source, "MyApp.IThingApi.g.cs");
 }

@@ -158,7 +158,7 @@ internal static class ClientEmitter
 
         sb.AppendLine("}");
 
-        ctx.AddSource($"{model.InterfaceName}.g.cs", sb.ToString());
+        ctx.AddSource($"{model.HintNameStem}.g.cs", sb.ToString());
     }
 
     // IGeneratedRestClient<TSelf>: how Add{I} and the Resilience bridge build the client and register

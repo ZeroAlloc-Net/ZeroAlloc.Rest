@@ -191,7 +191,7 @@ public class GeneratorStreamResponsesTests
     }
 
     private static GeneratorHarness.GeneratorHarnessRun Run(string source)
-        => GeneratorHarness.Run(source, "IThingApi.g.cs");
+        => GeneratorHarness.Run(source, "MyApp.IThingApi.g.cs");
 
     // The text of one generated method, from its signature to the next member.
     private static string MethodBody(string client, string methodName)

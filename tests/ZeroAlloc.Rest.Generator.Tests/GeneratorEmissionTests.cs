@@ -24,7 +24,7 @@ public class GeneratorEmissionTests
                 System.Threading.Tasks.Task<string> ListAsync(System.Threading.CancellationToken ct = default);
             }
             """;
-        var output = GetGeneratedSource(source, "IUserApi.g.cs");
+        var output = GetGeneratedSource(source, "MyApp.IUserApi.g.cs");
         Assert.Contains("HttpClient", output);
         Assert.Contains("IRestSerializer", output);
     }
@@ -42,7 +42,7 @@ public class GeneratorEmissionTests
                 System.Threading.Tasks.Task<string> ListAsync(System.Threading.CancellationToken ct = default);
             }
             """;
-        var output = GetGeneratedSource(source, "IUserApi.g.cs");
+        var output = GetGeneratedSource(source, "MyApp.IUserApi.g.cs");
         Assert.Contains("IUserApi", output);
         Assert.Contains("UserApiClient", output);
     }
@@ -60,7 +60,7 @@ public class GeneratorEmissionTests
                 System.Threading.Tasks.Task<string> GetOrderAsync(int id, System.Threading.CancellationToken ct = default);
             }
             """;
-        var output = GetGeneratedSource(source, "IOrderApi.g.cs");
+        var output = GetGeneratedSource(source, "MyApp.IOrderApi.g.cs");
         Assert.Contains("SendAsync", output);
         Assert.Contains("/orders/", output);
     }
@@ -78,7 +78,7 @@ public class GeneratorEmissionTests
                 System.Threading.Tasks.Task<string> CreateAsync([Body] string body, System.Threading.CancellationToken ct = default);
             }
             """;
-        var output = GetGeneratedSource(source, "IOrderApi.g.cs");
+        var output = GetGeneratedSource(source, "MyApp.IOrderApi.g.cs");
         // Issue #362: the body is serialized into a pooled buffer that the request owns, not into
         // an unpooled MemoryStream wrapped in StreamContent.
         Assert.Contains(BodyStatement, output);
@@ -99,7 +99,7 @@ public class GeneratorEmissionTests
                 System.Threading.Tasks.Task<string> ListAsync(System.Threading.CancellationToken ct = default);
             }
             """;
-        var output = GetGeneratedSource(source, "IOrderApi.g.cs");
+        var output = GetGeneratedSource(source, "MyApp.IOrderApi.g.cs");
         Assert.Contains("DeserializeAsync", output);
     }
 
@@ -116,7 +116,7 @@ public class GeneratorEmissionTests
                 System.Threading.Tasks.Task DeleteAsync(int id, System.Threading.CancellationToken ct = default);
             }
             """;
-        var output = GetGeneratedSource(source, "IOrderApi.g.cs");
+        var output = GetGeneratedSource(source, "MyApp.IOrderApi.g.cs");
         Assert.DoesNotContain("DeserializeAsync", output);
         Assert.Contains("EnsureSuccessStatusCode", output);
     }
@@ -135,7 +135,7 @@ public class GeneratorEmissionTests
                 System.Threading.Tasks.Task<string> EvaluateAsync([Body] string body, System.Threading.CancellationToken ct = default);
             }
             """;
-        var output = GetGeneratedSource(source, "IEvalApi.g.cs");
+        var output = GetGeneratedSource(source, "MyApp.IEvalApi.g.cs");
         Assert.Contains("var __url = \"\";", output);
     }
 
@@ -157,7 +157,7 @@ public class GeneratorEmissionTests
             }}
             """;
         var source = string.Format(System.Globalization.CultureInfo.InvariantCulture, Template, verb);
-        var (output, errors) = CompileGenerated(source, "IEvalApi.g.cs");
+        var (output, errors) = CompileGenerated(source, "MyApp.IEvalApi.g.cs");
         Assert.Empty(errors);
         Assert.Contains("var __url = \"\";", output);
     }
@@ -175,7 +175,7 @@ public class GeneratorEmissionTests
                 System.Threading.Tasks.Task<string> EvaluateAsync([Query] int x, System.Threading.CancellationToken ct = default);
             }
             """;
-        var output = GetGeneratedSource(source, "IEvalApi.g.cs");
+        var output = GetGeneratedSource(source, "MyApp.IEvalApi.g.cs");
         Assert.Contains("var __urlBase = $\"\";", output);
         Assert.Contains("\"x=\"", output);
     }
@@ -196,7 +196,7 @@ public class GeneratorEmissionTests
                 System.Threading.Tasks.Task<string> EvaluateAsync(int id, [Body] string body, System.Threading.CancellationToken ct = default);
             }
             """;
-        var (output, errors) = CompileGenerated(source, "IEvalApi.g.cs");
+        var (output, errors) = CompileGenerated(source, "MyApp.IEvalApi.g.cs");
         Assert.Empty(errors);
         // A path-kind parameter forces the interpolated form; there is no "{id}" token in an
         // empty route for it to bind to, so the interpolation still produces an empty URL.
@@ -216,7 +216,7 @@ public class GeneratorEmissionTests
                 System.Threading.Tasks.Task<string> GetAsync(System.Threading.CancellationToken ct = default);
             }
             """;
-        var output = GetGeneratedSource(source, "IApi.g.cs");
+        var output = GetGeneratedSource(source, "MyApp.IApi.g.cs");
         Assert.Contains("ConfigureAwait(false)", output);
     }
 
@@ -235,7 +235,7 @@ public class GeneratorEmissionTests
                     System.Threading.CancellationToken ct = default);
             }
             """;
-        var output = GetGeneratedSource(source, "ISearchApi.g.cs");
+        var output = GetGeneratedSource(source, "MyApp.ISearchApi.g.cs");
         Assert.DoesNotContain("if (page != null)", output);
         Assert.Contains("\"page=\"", output);
     }
@@ -255,7 +255,7 @@ public class GeneratorEmissionTests
                     System.Threading.CancellationToken ct = default);
             }
             """;
-        var output = GetGeneratedSource(source, "ISearchApi.g.cs");
+        var output = GetGeneratedSource(source, "MyApp.ISearchApi.g.cs");
         Assert.Contains("if (page != null)", output);
     }
 
@@ -272,7 +272,7 @@ public class GeneratorEmissionTests
                 System.Threading.Tasks.Task<string> ListAsync(System.Threading.CancellationToken ct = default);
             }
             """;
-        var output = GetGeneratedSource(source, "IUserApi.g.cs");
+        var output = GetGeneratedSource(source, "MyApp.IUserApi.g.cs");
         Assert.Contains("request.Headers.Accept.Add", output);
         Assert.Contains("_serializer.ContentType", output);
     }
@@ -303,7 +303,7 @@ public class GeneratorEmissionTests
                 Task UploadAsync([Body] string data, CancellationToken ct = default);
             }
             """;
-        var output = GetGeneratedSource(source, "IUploadApi.g.cs");
+        var output = GetGeneratedSource(source, "MyApp.IUploadApi.g.cs");
         Assert.Contains("_overrideSerializer", output);
         Assert.Contains("ZeroAlloc.Rest.IRestSerializer overrideSerializer", output);
     }
@@ -336,7 +336,7 @@ public class GeneratorEmissionTests
             }
             """;
 
-        var (output, errors) = CompileGenerated(source, "IUploadApi.g.cs");
+        var (output, errors) = CompileGenerated(source, "MyApp.IUploadApi.g.cs");
 
         Assert.Empty(errors);
         Assert.Contains("private readonly ZeroAlloc.Rest.IRestSerializer _wrapper;", output);
@@ -358,7 +358,7 @@ public class GeneratorEmissionTests
             }
             """;
 
-        var (output, errors) = CompileGenerated(source, "IUploadApi.g.cs");
+        var (output, errors) = CompileGenerated(source, "MyApp.IUploadApi.g.cs");
 
         Assert.Empty(errors);
         Assert.Contains("private readonly ZeroAlloc.Rest.IRestSerializer _serializer2;", output);
@@ -380,7 +380,7 @@ public class GeneratorEmissionTests
             }
             """;
 
-        var (output, errors) = CompileGenerated(source, "IUploadApi.g.cs");
+        var (output, errors) = CompileGenerated(source, "MyApp.IUploadApi.g.cs");
 
         Assert.Empty(errors);
         Assert.Contains("private readonly ZeroAlloc.Rest.IRestSerializer _meter2;", output);
@@ -402,7 +402,7 @@ public class GeneratorEmissionTests
             }
             """;
 
-        var (output, errors) = CompileGenerated(source, "IUploadApi.g.cs");
+        var (output, errors) = CompileGenerated(source, "MyApp.IUploadApi.g.cs");
 
         Assert.Empty(errors);
         Assert.Contains("ZeroAlloc.Rest.IRestSerializer @class)", output);
@@ -446,7 +446,7 @@ public class GeneratorEmissionTests
                 System.Threading.Tasks.Task<ZeroAlloc.Results.Result<string, ZeroAlloc.Rest.HttpError>> GetUserResultAsync(int id, System.Threading.CancellationToken ct = default);
             }
             """;
-        var output = GetGeneratedSourceWithResults(source, "IUserApi.g.cs");
+        var output = GetGeneratedSourceWithResults(source, "MyApp.IUserApi.g.cs");
         Assert.Contains("ZeroAlloc.Results.Result<", output);
         Assert.Contains("IsSuccessStatusCode", output);
         Assert.Contains(".Success(", output);
@@ -466,7 +466,7 @@ public class GeneratorEmissionTests
                 System.Threading.Tasks.Task<ZeroAlloc.Results.Result<string, ZeroAlloc.Rest.HttpError>> GetUserResultAsync(int id, System.Threading.CancellationToken ct = default);
             }
             """;
-        var output = GetGeneratedSourceWithResults(source, "IUserApi.g.cs");
+        var output = GetGeneratedSourceWithResults(source, "MyApp.IUserApi.g.cs");
         Assert.Contains("catch (global::System.OperationCanceledException) when (ct.IsCancellationRequested)", output);
         Assert.Contains("HttpErrorKind.Timeout", output);
         Assert.Contains("catch (global::System.Net.Http.HttpRequestException __ex)", output);
@@ -490,7 +490,7 @@ public class GeneratorEmissionTests
                 System.Threading.Tasks.Task<ZeroAlloc.Results.Result<string, ZeroAlloc.Rest.HttpError>> GetUserResultAsync(int id, System.Threading.CancellationToken ct = default);
             }
             """;
-        var output = GetGeneratedSourceWithResults(source, "IUserApi.g.cs");
+        var output = GetGeneratedSourceWithResults(source, "MyApp.IUserApi.g.cs");
         Assert.Contains("foreach (var kvp in response.Headers)", output);
         Assert.Contains("foreach (var kvp in response.Content.Headers)", output);
     }
@@ -509,7 +509,7 @@ public class GeneratorEmissionTests
     [Fact]
     public void Generator_Result_ReadsTheErrorBodyOnlyOnTheStatusPath_WithTheDefaultCap()
     {
-        var output = GetGeneratedSourceWithResults(ResultApiSource, "IUserApi.g.cs");
+        var output = GetGeneratedSourceWithResults(ResultApiSource, "MyApp.IUserApi.g.cs");
 
         Assert.Equal(1, CountOccurrences(output, "ReadErrorBodyAsync("));
         Assert.Contains(
@@ -527,7 +527,7 @@ public class GeneratorEmissionTests
     [Fact]
     public void Generator_Result_SetsBodyContentTypeAndTruncatedOnTheError()
     {
-        var output = GetGeneratedSourceWithResults(ResultApiSource, "IUserApi.g.cs");
+        var output = GetGeneratedSourceWithResults(ResultApiSource, "MyApp.IUserApi.g.cs");
 
         Assert.Contains("global::System.ReadOnlyMemory<byte> body = default, bool bodyTruncated = false)", output);
         Assert.Contains("contentType = response.Content.Headers.ContentType?.MediaType;", output);
@@ -541,7 +541,7 @@ public class GeneratorEmissionTests
     {
         var source = ResultApiSource.Replace("[ZeroAllocRestClient]", "[ZeroAllocRestClient(MaxErrorBodyBytes = 1024)]");
 
-        var output = GetGeneratedSourceWithResults(source, "IUserApi.g.cs");
+        var output = GetGeneratedSourceWithResults(source, "MyApp.IUserApi.g.cs");
 
         Assert.Contains("ReadErrorBodyAsync(__response.Content, 1024, ct)", output);
     }
@@ -551,7 +551,7 @@ public class GeneratorEmissionTests
     {
         var source = ResultApiSource.Replace("[ZeroAllocRestClient]", "[ZeroAllocRestClient(MaxErrorBodyBytes = 4 * 1024)]");
 
-        var output = GetGeneratedSourceWithResults(source, "IUserApi.g.cs");
+        var output = GetGeneratedSourceWithResults(source, "MyApp.IUserApi.g.cs");
 
         Assert.Contains("ReadErrorBodyAsync(__response.Content, 4096,", output);
     }
@@ -562,7 +562,7 @@ public class GeneratorEmissionTests
         // The body read runs inside the method's try. Caller cancellation during that read must
         // reach the rethrowing catch, not the unfiltered one that turns cancellation into Timeout.
         const string OceCatch = "catch (global::System.OperationCanceledException __ex)";
-        var output = GetGeneratedSourceWithResults(ResultApiSource, "IUserApi.g.cs");
+        var output = GetGeneratedSourceWithResults(ResultApiSource, "MyApp.IUserApi.g.cs");
 
         var callerCatch = output.IndexOf("catch (global::System.OperationCanceledException) when (ct.IsCancellationRequested)", StringComparison.Ordinal);
         var timeoutCatch = -1;
@@ -596,7 +596,7 @@ public class GeneratorEmissionTests
                 System.Threading.Tasks.Task<string> GetUserAsync(int id, System.Threading.CancellationToken ct = default);
             }
             """;
-        var output = GetGeneratedSource(source, "IUserApi.g.cs");
+        var output = GetGeneratedSource(source, "MyApp.IUserApi.g.cs");
 
         var callerCatch = output.IndexOf("catch (global::System.OperationCanceledException) when (ct.IsCancellationRequested)", StringComparison.Ordinal);
         var generalCatch = output.IndexOf("catch (global::System.Exception __ex)", StringComparison.Ordinal);
@@ -621,7 +621,7 @@ public class GeneratorEmissionTests
                 System.Threading.Tasks.Task<string> GetUserAsync(int id);
             }
             """;
-        var output = GetGeneratedSource(source, "IUserApi.g.cs");
+        var output = GetGeneratedSource(source, "MyApp.IUserApi.g.cs");
 
         Assert.DoesNotContain("__RecordCancellation", output);
         Assert.DoesNotContain("rest.cancelled", output);
@@ -646,7 +646,7 @@ public class GeneratorEmissionTests
                 System.Threading.Tasks.Task<string> CreateAsync([Body] string body, System.Threading.CancellationToken ct = default);
             }
             """;
-        var output = GetGeneratedSource(source, "IOrderApi.g.cs");
+        var output = GetGeneratedSource(source, "MyApp.IOrderApi.g.cs");
 
         var tryIndex = output.IndexOf("        try", StringComparison.Ordinal);
         var bodyIndex = output.IndexOf(BodyStatement, StringComparison.Ordinal);
@@ -676,7 +676,7 @@ public class GeneratorEmissionTests
                 System.Threading.Tasks.Task<Result<string, HttpError>> CreateAsync([Body] string body, System.Threading.CancellationToken ct = default);
             }
             """;
-        var output = GetGeneratedSourceWithResults(source, "IOrderApi.g.cs");
+        var output = GetGeneratedSourceWithResults(source, "MyApp.IOrderApi.g.cs");
 
         const string BodyCatch = "catch (global::System.Exception __ex) when (__writingBody && __ex is not global::System.OperationCanceledException)";
         var guardIndex = output.IndexOf("var __writingBody = true;", StringComparison.Ordinal);
@@ -704,7 +704,7 @@ public class GeneratorEmissionTests
     [Fact]
     public void Generator_ResultWithoutBody_EmitsNoSerializationGuard()
     {
-        var output = GetGeneratedSourceWithResults(ResultApiSource, "IUserApi.g.cs");
+        var output = GetGeneratedSourceWithResults(ResultApiSource, "MyApp.IUserApi.g.cs");
 
         Assert.DoesNotContain("__writingBody", output);
     }
@@ -717,7 +717,7 @@ public class GeneratorEmissionTests
         var source = ResultApiSource.Replace(
             "[ZeroAllocRestClient]", $"[ZeroAllocRestClient(MaxErrorBodyBytes = {cap})]");
 
-        var output = GetGeneratedSourceWithResults(source, "IUserApi.g.cs");
+        var output = GetGeneratedSourceWithResults(source, "MyApp.IUserApi.g.cs");
 
         Assert.DoesNotContain("ReadErrorBodyAsync", output);
         Assert.DoesNotContain("__errorBody", output);
@@ -729,7 +729,7 @@ public class GeneratorEmissionTests
     {
         var source = ResultApiSource.Replace(", System.Threading.CancellationToken ct = default", "");
 
-        var output = GetGeneratedSourceWithResults(source, "IUserApi.g.cs");
+        var output = GetGeneratedSourceWithResults(source, "MyApp.IUserApi.g.cs");
 
         Assert.Contains("ReadErrorBodyAsync(__response.Content, 65536, default)", output);
     }
@@ -747,7 +747,7 @@ public class GeneratorEmissionTests
                 System.Threading.Tasks.Task<string> GetUserAsync(int id, System.Threading.CancellationToken ct = default);
             }
             """;
-        var output = GetGeneratedSource(source, "IUserApi.g.cs");
+        var output = GetGeneratedSource(source, "MyApp.IUserApi.g.cs");
         Assert.DoesNotContain("HttpErrorKind", output);
         Assert.DoesNotContain("__CreateHttpError", output);
         Assert.DoesNotContain("ReadErrorBodyAsync", output);
@@ -819,7 +819,7 @@ public class GeneratorEmissionTests
                 System.Threading.Tasks.Task<string> GetFileAsync(int id, System.Threading.CancellationToken ct = default);
             }
             """;
-        var output = GetGeneratedSource(source, "IFileApi.g.cs");
+        var output = GetGeneratedSource(source, "MyApp.IFileApi.g.cs");
         Assert.Contains("\"Accept\"", output);
         Assert.Contains("\"application/octet-stream\"", output);
         Assert.Contains("TryAddWithoutValidation", output);
@@ -847,7 +847,7 @@ public class GeneratorEmissionTests
                     System.Threading.CancellationToken ct = default);
             }
             """;
-        var (output, errors) = CompileGenerated(source, "IHeaderApi.g.cs");
+        var (output, errors) = CompileGenerated(source, "MyApp.IHeaderApi.g.cs");
 
         Assert.Empty(errors);
         Assert.Contains("if (reference is not null)", output);
@@ -875,7 +875,7 @@ public class GeneratorEmissionTests
                     System.Threading.CancellationToken ct = default);
             }
             """;
-        var output = GetGeneratedSource(source, "ISearchApi.g.cs");
+        var output = GetGeneratedSource(source, "MyApp.ISearchApi.g.cs");
         Assert.Contains("foreach", output);
         Assert.Contains("\"tags=\"", output);
         Assert.Contains("EscapeDataString", output);
@@ -897,7 +897,7 @@ public class GeneratorEmissionTests
                     System.Threading.CancellationToken ct = default);
             }
             """;
-        var output = GetGeneratedSource(source, "ISearchApi.g.cs");
+        var output = GetGeneratedSource(source, "MyApp.ISearchApi.g.cs");
         // The foreach branch must guard null items — no unconditional emission of empty values
         Assert.Contains("if (__item == null) continue;", output);
         Assert.DoesNotContain("__item?.ToString() ?? string.Empty", output);
@@ -919,7 +919,7 @@ public class GeneratorEmissionTests
                     System.Threading.CancellationToken ct = default);
             }
             """;
-        var output = GetGeneratedSource(source, "ITokenApi.g.cs");
+        var output = GetGeneratedSource(source, "MyApp.ITokenApi.g.cs");
         Assert.Contains("FormUrlEncodedContent", output);
         Assert.DoesNotContain("SerializeAsync", output);
         Assert.DoesNotContain("CreateBodyContentAsync", output);
@@ -983,7 +983,7 @@ public class GeneratorEmissionTests
             }
             """;
 
-        var generated = GetGeneratedSource(source, "IPingApi.g.cs");
+        var generated = GetGeneratedSource(source, "MyApp.IPingApi.g.cs");
 
         Assert.Contains("PingAsync(", generated);
         Assert.DoesNotContain("UnconditionalSuppressMessage", generated);
