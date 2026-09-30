@@ -55,7 +55,9 @@ The containing types do not need to be `partial`: nothing is generated inside th
 must be reachable from its namespace, so it and every containing type must be `public`,
 `internal` or `protected internal`, and none of them can be generic. Otherwise the generator
 reports [ZRA006](advanced.md#zra006-no-client-can-be-generated-for-the-interface) and generates
-nothing for the interface. `AddRestResilience` uses the same named `HttpClient`.
+nothing for the interface. `AddRestResilience` uses the same named `HttpClient`. If another
+client in the project has the same name, both are qualified with their namespace; see
+[Named `HttpClient`](#named-httpclient).
 
 ## ZeroAllocClientOptions
 
@@ -82,6 +84,25 @@ builder.Services.AddIUserApi(options =>
 .AddHttpMessageHandler<LoggingHandler>()
 .AddPolicyHandler(retryPolicy);
 ```
+
+### Named `HttpClient`
+
+The named `HttpClient` is called after the interface's name within its namespace: `IUserApi`, or
+`Orders.IApi` for an interface nested in `Orders`. Settings and handlers added for one name apply
+to every client registered under it, so when two client interfaces in one project would share a
+name, both get their name qualified with their namespace instead:
+
+```csharp
+namespace Shipping { [ZeroAllocRestClient] public interface ITrackingApi { /* ... */ } }
+namespace Billing  { [ZeroAllocRestClient] public interface ITrackingApi { /* ... */ } }
+
+// Named HttpClients: "Shipping.ITrackingApi" and "Billing.ITrackingApi".
+```
+
+Every other client keeps its name. `AddRestResilience` uses the same name as `Add{I}`. The
+generator only sees the interfaces in the project it compiles, so a client from a referenced
+library and one in your project with the same name still share one named `HttpClient`. Give one
+of them a different name if you register both.
 
 ## Serializer overrides in DI
 

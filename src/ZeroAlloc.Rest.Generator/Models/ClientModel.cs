@@ -13,6 +13,9 @@ internal record ClientModel(
     // The interface's name within its namespace, for messages and span names: IUserApi, or
     // Outer.IApi for a nested interface.
     string InterfaceDisplayName,
+    // InterfaceDisplayName with the namespace in front, keywords unescaped: MyApp.IUserApi. The
+    // named HttpClient takes this name only when another client would share the default one.
+    string QualifiedDisplayName,
     // The containing types' names, each followed by '_', or empty for a top-level interface. It
     // starts the client's class name and follows "Add" in the registration method's name, so two
     // nested interfaces with one name get distinct ones: Orders_ApiClient and AddOrders_IApi.
@@ -42,6 +45,9 @@ internal record ClientModel(
     internal string HttpClientNameExpression => NestedPrefix.Length == 0
         ? $"nameof({InterfaceName})"
         : $"\"{InterfaceDisplayName}\"";
+
+    // What the client takes part in named-HttpClient collision detection with; see HttpClientNames.
+    internal HttpClientNameKey NameKey => new(HintNameStem, InterfaceDisplayName, QualifiedDisplayName, IsSupported);
 
     // Method-level serializers that need their own constructor parameter. A method override equal to
     // the interface-level type reuses the main serializer instead of injecting it twice.
