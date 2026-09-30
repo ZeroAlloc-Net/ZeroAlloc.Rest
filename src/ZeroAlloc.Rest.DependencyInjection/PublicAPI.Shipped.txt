@@ -12,6 +12,7 @@ ZeroAlloc.Rest.GeneratedRestClientRegistration
 ZeroAlloc.Rest.IGeneratedRestClient<TSelf>
 ZeroAlloc.Rest.IGeneratedRestClient<TSelf>.AddSerializers(Microsoft.Extensions.DependencyInjection.IServiceCollection! services, ZeroAlloc.Rest.ZeroAllocClientOptions! options) -> void
 ZeroAlloc.Rest.IGeneratedRestClient<TSelf>.Create(System.Net.Http.HttpClient! httpClient, System.IServiceProvider! services) -> TSelf!
+ZeroAlloc.Rest.IGeneratedRestClient<TSelf>.HttpClientName.get -> string?
 ZeroAlloc.Rest.RestSerializerServiceProviderExtensions
 ZeroAlloc.Rest.ServiceCollectionExtensions
 ZeroAlloc.Rest.ZeroAllocClientBuilder

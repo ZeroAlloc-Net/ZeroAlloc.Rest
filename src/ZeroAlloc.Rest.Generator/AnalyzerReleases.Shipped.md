@@ -26,3 +26,11 @@ ZRA004  | ZeroAlloc.Rest.Generator | Error    | Duplicate error mapper
 Rule ID | Category                 | Severity | Notes
 --------|--------------------------|----------|--------------------------------------------------
 ZRA005  | ZeroAlloc.Rest.Generator | Warning  | Route template and route parameters do not match
+
+## Release 3.2.0
+
+### New Rules
+
+Rule ID | Category                 | Severity | Notes
+--------|--------------------------|----------|---------------------------------------------
+ZRA006  | ZeroAlloc.Rest.Generator | Warning  | No client can be generated for the interface

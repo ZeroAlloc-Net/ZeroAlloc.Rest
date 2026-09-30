@@ -3,12 +3,18 @@ override ZeroAlloc.Rest.HttpError.Equals(object? obj) -> bool
 override ZeroAlloc.Rest.HttpError.GetHashCode() -> int
 override ZeroAlloc.Rest.HttpError.ToString() -> string!
 static ZeroAlloc.Rest.GeneratedRestClient.CreateBodyContentAsync<T>(ZeroAlloc.Rest.IRestSerializer! serializer, T value, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<System.Net.Http.HttpContent!>
+static ZeroAlloc.Rest.GeneratedRestClient.CreateStreamBodyContent(System.IO.Stream! body, string? mediaType) -> System.Net.Http.HttpContent!
+static ZeroAlloc.Rest.GeneratedRestClient.OpenResponseBodyAsync(System.Net.Http.HttpResponseMessage! response, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<System.IO.Stream!>
 static ZeroAlloc.Rest.GeneratedRestClient.ReadErrorBodyAsync(System.Net.Http.HttpContent! content, int maxBytes, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<(System.ReadOnlyMemory<byte> Body, bool Truncated)>
+static ZeroAlloc.Rest.GeneratedRestClient.ReadResponseStreamAsync(System.Net.Http.HttpContent! content, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<System.IO.Stream!>
+static ZeroAlloc.Rest.GeneratedRestClient.WithMediaType(System.Net.Http.HttpContent! content, string! mediaType) -> System.Net.Http.HttpContent!
 static ZeroAlloc.Rest.HttpError.operator !=(ZeroAlloc.Rest.HttpError? left, ZeroAlloc.Rest.HttpError? right) -> bool
 static ZeroAlloc.Rest.HttpError.operator ==(ZeroAlloc.Rest.HttpError? left, ZeroAlloc.Rest.HttpError? right) -> bool
 static ZeroAlloc.Rest.HttpErrorExtensions.GetRetryAfter(this ZeroAlloc.Rest.HttpError! error, System.TimeProvider? timeProvider = null) -> System.TimeSpan?
 ZeroAlloc.Rest.Attributes.BodyAttribute
 ZeroAlloc.Rest.Attributes.BodyAttribute.BodyAttribute() -> void
+ZeroAlloc.Rest.Attributes.BodyAttribute.ContentType.get -> string?
+ZeroAlloc.Rest.Attributes.BodyAttribute.ContentType.init -> void
 ZeroAlloc.Rest.Attributes.DeleteAttribute
 ZeroAlloc.Rest.Attributes.DeleteAttribute.DeleteAttribute() -> void
 ZeroAlloc.Rest.Attributes.DeleteAttribute.DeleteAttribute(string! route) -> void
@@ -30,6 +36,8 @@ ZeroAlloc.Rest.Attributes.HttpMethodAttribute.HttpMethodAttribute(string! method
 ZeroAlloc.Rest.Attributes.HttpMethodAttribute.HttpMethodAttribute(string! method, string! route) -> void
 ZeroAlloc.Rest.Attributes.HttpMethodAttribute.Method.get -> string!
 ZeroAlloc.Rest.Attributes.HttpMethodAttribute.Route.get -> string!
+ZeroAlloc.Rest.Attributes.HttpMethodAttribute.StreamResponses.get -> bool
+ZeroAlloc.Rest.Attributes.HttpMethodAttribute.StreamResponses.set -> void
 ZeroAlloc.Rest.Attributes.PatchAttribute
 ZeroAlloc.Rest.Attributes.PatchAttribute.PatchAttribute() -> void
 ZeroAlloc.Rest.Attributes.PatchAttribute.PatchAttribute(string! route) -> void
@@ -49,6 +57,8 @@ ZeroAlloc.Rest.Attributes.SerializerAttribute.SerializerType.get -> System.Type!
 ZeroAlloc.Rest.Attributes.ZeroAllocRestClientAttribute
 ZeroAlloc.Rest.Attributes.ZeroAllocRestClientAttribute.MaxErrorBodyBytes.get -> int
 ZeroAlloc.Rest.Attributes.ZeroAllocRestClientAttribute.MaxErrorBodyBytes.set -> void
+ZeroAlloc.Rest.Attributes.ZeroAllocRestClientAttribute.StreamResponses.get -> bool
+ZeroAlloc.Rest.Attributes.ZeroAllocRestClientAttribute.StreamResponses.set -> void
 ZeroAlloc.Rest.Attributes.ZeroAllocRestClientAttribute.ZeroAllocRestClientAttribute() -> void
 ZeroAlloc.Rest.GeneratedRestClient
 ZeroAlloc.Rest.HttpError
