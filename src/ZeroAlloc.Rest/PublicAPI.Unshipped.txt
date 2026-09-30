@@ -4,3 +4,8 @@ ZeroAlloc.Rest.Attributes.HttpMethodAttribute.StreamResponses.get -> bool
 ZeroAlloc.Rest.Attributes.HttpMethodAttribute.StreamResponses.set -> void
 ZeroAlloc.Rest.Attributes.ZeroAllocRestClientAttribute.StreamResponses.get -> bool
 ZeroAlloc.Rest.Attributes.ZeroAllocRestClientAttribute.StreamResponses.set -> void
+static ZeroAlloc.Rest.GeneratedRestClient.CreateStreamBodyContent(System.IO.Stream! body, string? mediaType) -> System.Net.Http.HttpContent!
+static ZeroAlloc.Rest.GeneratedRestClient.OpenResponseBodyAsync(System.Net.Http.HttpResponseMessage! response, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<System.IO.Stream!>
+static ZeroAlloc.Rest.GeneratedRestClient.WithMediaType(System.Net.Http.HttpContent! content, string! mediaType) -> System.Net.Http.HttpContent!
+ZeroAlloc.Rest.Attributes.BodyAttribute.ContentType.get -> string?
+ZeroAlloc.Rest.Attributes.BodyAttribute.ContentType.init -> void

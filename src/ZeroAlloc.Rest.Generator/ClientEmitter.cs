@@ -316,14 +316,27 @@ internal static class ClientEmitter
         EmitRequestCreation(sb, method, headerParams, formBodyParam, serializerExpr);
         // Serializing a [Body] is part of the call, so it runs inside the method's try: a serializer
         // failure or a caller cancellation is traced and timed like any other.
-        var bodyStatement = bodyParam is null
-            ? null
-            : $"__request.Content = await global::ZeroAlloc.Rest.GeneratedRestClient.CreateBodyContentAsync({serializerExpr}, {Identifier(bodyParam)}, {ctArg}).ConfigureAwait(false);";
+        var bodyStatement = bodyParam is null ? null : BodyStatement(bodyParam, serializerExpr, ctArg);
         EmitSendAndResponse(sb, method, ctParam is null ? null : Identifier(ctParam), bodyStatement, serializerExpr, maxErrorBodyBytes, errorMapperField);
 
         sb.AppendLine("    }");
         sb.AppendLine();
         return ctParam != null;
+    }
+
+    // A Stream body is sent as it is, from the caller's stream, which the request does not own; a
+    // null one sends no body. Any other body is serialized into a pooled buffer. A declared
+    // [Body(ContentType = ...)] is the media type either is sent with.
+    private static string BodyStatement(ParameterModel bodyParam, string serializerExpr, string ctArg)
+    {
+        var body = Identifier(bodyParam);
+        var mediaType = bodyParam.BodyContentType is null ? null : Literal(bodyParam.BodyContentType);
+        if (bodyParam.IsStream)
+            return $"if ({body} is not null) __request.Content = global::ZeroAlloc.Rest.GeneratedRestClient.CreateStreamBodyContent({body}, {mediaType ?? "null"});";
+        var create = $"await global::ZeroAlloc.Rest.GeneratedRestClient.CreateBodyContentAsync({serializerExpr}, {body}, {ctArg}).ConfigureAwait(false)";
+        return mediaType is null
+            ? $"__request.Content = {create};"
+            : $"__request.Content = global::ZeroAlloc.Rest.GeneratedRestClient.WithMediaType({create}, {mediaType});";
     }
 
     // One __FormatValue overload per type a route, query or header value has, so a value is written
@@ -508,7 +521,10 @@ internal static class ClientEmitter
         sb.AppendLine($"        using var __request = new System.Net.Http.HttpRequestMessage(");
         sb.AppendLine($"            System.Net.Http.HttpMethod.{Capitalize(method.HttpMethod)},");
         sb.AppendLine($"            __url);");
-        sb.AppendLine($"        __request.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue({serializerExpr}.ContentType));");
+        // A Stream response is handed over unread, so the serializer's media type says nothing about
+        // what the method accepts. A static [Header("Accept", ...)] still declares one.
+        if (!method.ReturnsStream)
+            sb.AppendLine($"        __request.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue({serializerExpr}.ContentType));");
 
         // Static headers declared with [Header("Name", Value = "...")] are added additively.
         // For Accept, this means both the serializer's content type and the static value will
@@ -571,19 +587,28 @@ internal static class ClientEmitter
         var guardBody = bodyStatement != null && method.ReturnsResult;
         if (guardBody)
             sb.AppendLine("        var __writingBody = true;");
+        // A Stream response is not disposed by a using: its success path hands the response to the
+        // stream it returns, and the method's finally disposes it on every other path.
+        if (method.ReturnsStream)
+        {
+            sb.AppendLine("        global::System.Net.Http.HttpResponseMessage? __response = null;");
+            sb.AppendLine("        var __responseHandedOver = false;");
+        }
         sb.AppendLine("        try");
         sb.AppendLine("        {");
         if (bodyStatement != null)
         {
-            // Serialized into a pooled buffer that the request owns: disposing the request returns
-            // it. The helper returns the buffer itself when the serializer throws or is cancelled.
+            // A serialized body goes into a pooled buffer that the request owns: disposing the
+            // request returns it. The helper returns the buffer itself when the serializer throws or
+            // is cancelled. A Stream body stays the caller's.
             sb.AppendLine($"            {bodyStatement}");
             if (guardBody)
                 sb.AppendLine("            __writingBody = false;");
         }
         // A streamed response is disposed by this using on every path, which disposes its stream.
-        var completion = method.StreamResponses ? "global::System.Net.Http.HttpCompletionOption.ResponseHeadersRead, " : string.Empty;
-        sb.AppendLine($"            using var __response = await _httpClient.SendAsync(__request, {completion}{ctArg}).ConfigureAwait(false);");
+        var completion = method.StreamResponses || method.ReturnsStream ? "global::System.Net.Http.HttpCompletionOption.ResponseHeadersRead, " : string.Empty;
+        var declaration = method.ReturnsStream ? string.Empty : "using var ";
+        sb.AppendLine($"            {declaration}__response = await _httpClient.SendAsync(__request, {completion}{ctArg}).ConfigureAwait(false);");
         sb.AppendLine("            var __statusCode = (int)__response.StatusCode;");
         sb.AppendLine("            var __serverAddress = __request.RequestUri?.Host ?? string.Empty;");
         sb.AppendLine("            __activity?.SetTag(\"http.status_code\", __statusCode);");
@@ -621,6 +646,16 @@ internal static class ClientEmitter
         sb.AppendLine("            __RecordFailure(__activity, __ex, __sw, __httpMethod, __RestMethodTag, __durationRecorded);");
         sb.AppendLine("            throw;");
         sb.AppendLine("        }");
+        if (method.ReturnsStream)
+        {
+            // Every path but a returned stream: an error status, a failure to open the body,
+            // cancellation, or a mapped error, whose body the HttpError already holds a copy of.
+            sb.AppendLine("        finally");
+            sb.AppendLine("        {");
+            sb.AppendLine("            if (!__responseHandedOver)");
+            sb.AppendLine("                __response?.Dispose();");
+            sb.AppendLine("        }");
+        }
         if (errorMapperField != null)
             EmitMapping(sb, method, errorMapperField);
     }
@@ -684,7 +719,7 @@ internal static class ClientEmitter
             // A buffered body is opened outside the try, since opening it reads nothing. A streamed
             // body is opened inside it: that reads from the connection, and a failure there is part
             // of reading the body.
-            if (!method.StreamResponses)
+            if (!method.StreamResponses && !method.ReturnsStream)
                 sb.AppendLine($"{i1}var __responseStream = await __response.Content.ReadAsStreamAsync({ctArg}).ConfigureAwait(false);");
             // Only the deserialize call is guarded: whatever the serializer throws, a JsonException or
             // a MemoryPack or MessagePack exception, means the body could not be read. Cancellation
@@ -727,7 +762,7 @@ internal static class ClientEmitter
         else
         {
             sb.AppendLine($"{indent}__response.EnsureSuccessStatusCode();");
-            if (method.StreamResponses)
+            if (method.StreamResponses || method.ReturnsStream)
                 EmitOpenStreamedBody(sb, method, indent, ctArg);
             else
                 sb.AppendLine($"{indent}var __responseStream = await __response.Content.ReadAsStreamAsync().ConfigureAwait(false);");
@@ -740,6 +775,13 @@ internal static class ClientEmitter
     // stream: the empty-body checks below, and the serializers' own, then behave as when buffered.
     private static void EmitOpenStreamedBody(StringBuilder sb, MethodModel method, string indent, string ctArg)
     {
+        if (method.ReturnsStream)
+        {
+            // The stream returned owns the response from here: the method's finally leaves it be.
+            sb.AppendLine($"{indent}var __responseBody = await global::ZeroAlloc.Rest.GeneratedRestClient.OpenResponseBodyAsync(__response, {ctArg}).ConfigureAwait(false);");
+            sb.AppendLine($"{indent}__responseHandedOver = true;");
+            return;
+        }
         if (!method.StreamResponses)
             return;
         sb.AppendLine($"{indent}var __responseStream = await global::ZeroAlloc.Rest.GeneratedRestClient.ReadResponseStreamAsync(__response.Content, {ctArg}).ConfigureAwait(false);");
@@ -752,6 +794,8 @@ internal static class ClientEmitter
     // body as default, so the empty body is checked before the read; JSON null already throws.
     private static string ReadBody(MethodModel method, string serializerExpr, string ctArg)
     {
+        if (method.ReturnsStream)
+            return "__responseBody";
         var read = $"await {serializerExpr}.DeserializeAsync<{method.InnerTypeName}>(__responseStream, {ctArg}).ConfigureAwait(false)";
         return method.InnerTypeIsNullable || method.InnerTypeIsValueType
             ? read

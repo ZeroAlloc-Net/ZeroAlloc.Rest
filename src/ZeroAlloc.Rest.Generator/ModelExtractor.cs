@@ -546,7 +546,39 @@ internal static class ModelExtractor
             returnsUnitResult,
             innerType?.IsValueType == true,
             innerType is not null && IsNullable(innerType),
-            StreamResponsesOf(httpAttr) ?? clientStreamsResponses);
+            StreamResponsesOf(httpAttr) ?? clientStreamsResponses,
+            innerType is not null && IsStreamType(innerType));
+    }
+
+    // System.IO.Stream itself, the type a raw response body is returned as.
+    private static bool IsStreamType(ITypeSymbol type)
+        => type is INamedTypeSymbol { Name: "Stream", ContainingNamespace: { Name: "IO", ContainingNamespace: { Name: "System", ContainingNamespace.IsGlobalNamespace: true } } };
+
+    // System.IO.Stream or a type derived from it, such as FileStream: a raw request body.
+    private static bool IsStreamOrDerived(ITypeSymbol type)
+    {
+        for (var current = type; current is not null; current = current.BaseType)
+        {
+            if (IsStreamType(current))
+                return true;
+        }
+        return false;
+    }
+
+    // [Body(ContentType = "...")], or null when the attribute leaves it unset.
+    private static string? BodyContentTypeOf(IParameterSymbol param)
+    {
+        foreach (var attr in param.GetAttributes())
+        {
+            if (attr.AttributeClass?.ToDisplayString() != BodyAttr)
+                continue;
+            foreach (var namedArg in attr.NamedArguments)
+            {
+                if (namedArg.Key == "ContentType" && namedArg.Value.Value is string contentType)
+                    return contentType;
+            }
+        }
+        return null;
     }
 
     // A nullable reference type, or Nullable<T>.
@@ -614,7 +646,9 @@ internal static class ModelExtractor
             var format = kind is ParameterKind.Path or ParameterKind.Query or ParameterKind.Header
                 ? FormatOf(param.Type, isCollection)
                 : null;
-            result.Add(new ParameterModel(param.Name, typeName, kind, headerName, queryName ?? param.Name, isNullable, isCollection, format));
+            var isStream = kind == ParameterKind.Body && IsStreamOrDerived(param.Type);
+            var bodyContentType = kind == ParameterKind.Body ? BodyContentTypeOf(param) : null;
+            result.Add(new ParameterModel(param.Name, typeName, kind, headerName, queryName ?? param.Name, isNullable, isCollection, format, isStream, bodyContentType));
         }
         return ToEquatable(result);
     }

@@ -1,7 +1,20 @@
 namespace ZeroAlloc.Rest.Attributes;
 
+/// <summary>
+/// Marks a parameter as the body of the request. A <see cref="System.IO.Stream"/> is sent as it is,
+/// with no serializer; any other type is written by the client's serializer.
+/// </summary>
 [AttributeUsage(AttributeTargets.Parameter)]
-public sealed class BodyAttribute : Attribute { }
+public sealed class BodyAttribute : Attribute
+{
+    /// <summary>
+    /// The media type the body is sent with, such as <c>image/png</c> or
+    /// <c>application/merge-patch+json</c>. Read at compile time.
+    /// When not set, a <see cref="System.IO.Stream"/> body is sent as <c>application/octet-stream</c>
+    /// and a serialized body with its serializer's <see cref="IRestSerializer.ContentType"/>.
+    /// </summary>
+    public string? ContentType { get; init; }
+}
 
 [AttributeUsage(AttributeTargets.Parameter)]
 public sealed class QueryAttribute : Attribute
