@@ -1,5 +1,32 @@
 # Changelog
 
+## [3.2.0](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v3.1.0...v3.2.0) (2026-09-30)
+
+
+### Features
+
+* generate Stream bodies for binary content in OpenAPI clients ([168c9bb](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/168c9bb040feb5249b6b393d178e7e034eec5d40))
+* opt-in StreamResponses reads response bodies without buffering them in HttpClient ([281db7c](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/281db7c9e16e325217b1518be20cab240082d06f))
+* send and return raw Stream bodies from generated clients, with [Body] ContentType ([168c9bb](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/168c9bb040feb5249b6b393d178e7e034eec5d40))
+
+
+### Bug Fixes
+
+* generate clients for nested interfaces and report ZRA006 for unsupported ones ([#396](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/396)) ([4216be8](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/4216be8d6d7b8011c03bdf0c80ba1a2833d22fd4)), closes [#394](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/394)
+* qualify generated file names so same-named clients do not crash the generator ([#393](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/393)) ([9fdef4a](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/9fdef4abae491fcd21517cb6af1eff752494efb4)), closes [#392](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/392)
+* qualify the named HttpClient when two clients would share its name ([#398](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/398)) ([c420415](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/c420415ff46eeed7d5eeabe2148047ec712bde34)), closes [#395](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/395)
+* run the route template checks on generated code ([#402](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/402)) ([59c4267](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/59c426725446aabab99d014fee7fb08becb4ef68)), closes [#346](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/346)
+
+
+### Performance Improvements
+
+* MemoryPackRestSerializer reads and writes bodies through cleared pooled buffers ([281db7c](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/281db7c9e16e325217b1518be20cab240082d06f))
+
+
+### Tests
+
+* measure the streamed body saving by growth, so it holds in Debug ([#400](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/400)) ([9b6a10a](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/9b6a10a1f7f90c8bd13acf143d9c2e9dcbf534f3)), closes [#397](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/397)
+
 ## [3.1.0](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v3.0.0...v3.1.0) (2026-09-28)
 
 
