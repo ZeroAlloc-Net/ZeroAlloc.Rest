@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.2.1](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v3.2.0...v3.2.1) (2026-10-04)
+
+
+### Performance Improvements
+
+* stop generated calls allocating when nothing listens ([#407](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/407)) ([d8090d9](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/d8090d998b32bd05dc4d8f209fe74f3b01306118)), closes [#406](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/406)
+
 ## [3.2.0](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v3.1.0...v3.2.0) (2026-09-30)
 
 
