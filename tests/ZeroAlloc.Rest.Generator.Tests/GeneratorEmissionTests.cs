@@ -273,8 +273,9 @@ public class GeneratorEmissionTests
             }
             """;
         var output = GetGeneratedSource(source, "MyApp.IUserApi.g.cs");
-        Assert.Contains("request.Headers.Accept.Add", output);
-        Assert.Contains("_serializer.ContentType", output);
+        // The raw media type is stored, so no header value object is built per call (#406).
+        Assert.Contains("__request.Headers.TryAddWithoutValidation(\"Accept\", _serializer.ContentType);", output);
+        Assert.DoesNotContain("MediaTypeWithQualityHeaderValue", output);
     }
 
     [Fact]
