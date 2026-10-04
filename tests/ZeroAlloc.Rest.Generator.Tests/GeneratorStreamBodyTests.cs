@@ -110,7 +110,7 @@ public class GeneratorStreamBodyTests
         Assert.Contains("__responseHandedOver = true;", body);
         Assert.Contains("if (!__responseHandedOver)", body);
         Assert.DoesNotContain("DeserializeAsync", body);
-        Assert.DoesNotContain("Headers.Accept.Add", body);
+        Assert.DoesNotContain("\"Accept\"", body);
     }
 
     [Fact]
@@ -120,7 +120,7 @@ public class GeneratorStreamBodyTests
 
         Assert.Contains("using var __response = await _httpClient.SendAsync(__request, ct).ConfigureAwait(false);", body);
         Assert.Contains("DeserializeAsync<System.IO.MemoryStream>", body);
-        Assert.Contains("Headers.Accept.Add", body);
+        Assert.Contains("Headers.TryAddWithoutValidation(\"Accept\", _serializer.ContentType)", body);
     }
 
     [Fact]
@@ -130,7 +130,7 @@ public class GeneratorStreamBodyTests
 
         Assert.Contains("using var __response = await _httpClient.SendAsync(__request, ct).ConfigureAwait(false);", body);
         Assert.DoesNotContain("__responseHandedOver", body);
-        Assert.Contains("Headers.Accept.Add", body);
+        Assert.Contains("Headers.TryAddWithoutValidation(\"Accept\", _serializer.ContentType)", body);
     }
 
     private static GeneratorHarness.GeneratorHarnessRun Run()

@@ -523,8 +523,11 @@ internal static class ClientEmitter
         sb.AppendLine($"            __url);");
         // A Stream response is handed over unread, so the serializer's media type says nothing about
         // what the method accepts. A static [Header("Accept", ...)] still declares one.
+        // The raw string is stored as is: the typed Accept collection would allocate a parsed
+        // MediaTypeWithQualityHeaderValue and the collection itself on every call, and caching one
+        // value would share a mutable object across requests. The bytes on the wire are the same.
         if (!method.ReturnsStream)
-            sb.AppendLine($"        __request.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue({serializerExpr}.ContentType));");
+            sb.AppendLine($"        __request.Headers.TryAddWithoutValidation(\"Accept\", {serializerExpr}.ContentType);");
 
         // Static headers declared with [Header("Name", Value = "...")] are added additively.
         // For Accept, this means both the serializer's content type and the static value will
@@ -609,21 +612,30 @@ internal static class ClientEmitter
         var completion = method.StreamResponses || method.ReturnsStream ? "global::System.Net.Http.HttpCompletionOption.ResponseHeadersRead, " : string.Empty;
         var declaration = method.ReturnsStream ? string.Empty : "using var ";
         sb.AppendLine($"            {declaration}__response = await _httpClient.SendAsync(__request, {completion}{ctArg}).ConfigureAwait(false);");
+        // With nothing listening, nothing here allocates: the span is null, and both instruments are
+        // disabled, so neither the server address nor the elapsed time is read. With a listener, the
+        // four tags go in one TagList, which holds them inline, so the status code is boxed once and
+        // no params array is built. Counter and Histogram take at most three tags without an array.
         sb.AppendLine("            var __statusCode = (int)__response.StatusCode;");
-        sb.AppendLine("            var __serverAddress = __request.RequestUri?.Host ?? string.Empty;");
-        sb.AppendLine("            __activity?.SetTag(\"http.status_code\", __statusCode);");
-        sb.AppendLine("            __activity?.SetTag(\"server.address\", __serverAddress);");
-        sb.AppendLine("            var __elapsedMs = global::System.Diagnostics.Stopwatch.GetElapsedTime(__sw).TotalMilliseconds;");
-        sb.AppendLine("            _requestsTotal.Add(1,");
-        sb.AppendLine("                new global::System.Collections.Generic.KeyValuePair<string, object?>(\"http.method\", __httpMethod),");
-        sb.AppendLine("                new global::System.Collections.Generic.KeyValuePair<string, object?>(\"http.status_code\", __statusCode),");
-        sb.AppendLine("                new global::System.Collections.Generic.KeyValuePair<string, object?>(\"server.address\", __serverAddress),");
-        sb.AppendLine("                new global::System.Collections.Generic.KeyValuePair<string, object?>(\"rest.method\", __RestMethodTag));");
-        sb.AppendLine("            _requestDurationMs.Record(__elapsedMs,");
-        sb.AppendLine("                new global::System.Collections.Generic.KeyValuePair<string, object?>(\"http.method\", __httpMethod),");
-        sb.AppendLine("                new global::System.Collections.Generic.KeyValuePair<string, object?>(\"http.status_code\", __statusCode),");
-        sb.AppendLine("                new global::System.Collections.Generic.KeyValuePair<string, object?>(\"server.address\", __serverAddress),");
-        sb.AppendLine("                new global::System.Collections.Generic.KeyValuePair<string, object?>(\"rest.method\", __RestMethodTag));");
+        sb.AppendLine("            var __metricsEnabled = _requestsTotal.Enabled || _requestDurationMs.Enabled;");
+        sb.AppendLine("            if (__activity is not null || __metricsEnabled)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                var __serverAddress = __request.RequestUri?.Host ?? string.Empty;");
+        sb.AppendLine("                __activity?.SetTag(\"http.status_code\", __statusCode);");
+        sb.AppendLine("                __activity?.SetTag(\"server.address\", __serverAddress);");
+        sb.AppendLine("                if (__metricsEnabled)");
+        sb.AppendLine("                {");
+        sb.AppendLine("                    var __tags = new global::System.Diagnostics.TagList");
+        sb.AppendLine("                    {");
+        sb.AppendLine("                        { \"http.method\", __httpMethod },");
+        sb.AppendLine("                        { \"http.status_code\", __statusCode },");
+        sb.AppendLine("                        { \"server.address\", __serverAddress },");
+        sb.AppendLine("                        { \"rest.method\", __RestMethodTag },");
+        sb.AppendLine("                    };");
+        sb.AppendLine("                    _requestsTotal.Add(1, in __tags);");
+        sb.AppendLine("                    _requestDurationMs.Record(global::System.Diagnostics.Stopwatch.GetElapsedTime(__sw).TotalMilliseconds, in __tags);");
+        sb.AppendLine("                }");
+        sb.AppendLine("            }");
         sb.AppendLine("            __durationRecorded = true;");
         EmitResponseHandling(sb, method, ctArg, serializerExpr, maxErrorBodyBytes, indent: "            ");
         sb.AppendLine("        }");
@@ -939,6 +951,8 @@ internal static class ClientEmitter
     {
         sb.AppendLine("    private static void __RecordDurationWithoutResponse(long startTimestamp, string httpMethod, string restMethod)");
         sb.AppendLine("    {");
+        sb.AppendLine("        if (!_requestDurationMs.Enabled)");
+        sb.AppendLine("            return;");
         sb.AppendLine("        var elapsedMs = global::System.Diagnostics.Stopwatch.GetElapsedTime(startTimestamp).TotalMilliseconds;");
         sb.AppendLine("        _requestDurationMs.Record(elapsedMs,");
         sb.AppendLine("            new global::System.Collections.Generic.KeyValuePair<string, object?>(\"http.method\", httpMethod),");
