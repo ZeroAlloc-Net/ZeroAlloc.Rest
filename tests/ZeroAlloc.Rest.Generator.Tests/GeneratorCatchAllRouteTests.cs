@@ -31,6 +31,23 @@ public class GeneratorCatchAllRouteTests
         Assert.Empty(run.Problems);
     }
 
+    // Issue #425: a value of unreserved characters and '/' is returned as it is, before the builder.
+    [Fact]
+    public void Helper_ReturnsACleanValueUnchanged_BeforeAnythingAllocates()
+    {
+        var run = Generate(Source("files/{**path}"));
+        var source = run.GeneratedSource;
+
+        var scan = source.IndexOf("if (__ch != '/' && !__IsUnreserved(__ch))", System.StringComparison.Ordinal);
+        var unchanged = source.IndexOf("return value;", System.StringComparison.Ordinal);
+        var builder = source.IndexOf("new global::System.Text.StringBuilder", System.StringComparison.Ordinal);
+        Assert.True(scan >= 0 && scan < unchanged && unchanged < builder, "The clean-value scan and return must come before the builder.");
+        Assert.Equal(1, Occurrences(source, "private static bool __IsUnreserved(char c)"));
+        Assert.Equal(1, Occurrences(source, "c >= 'a' && c <= 'z'"));
+        Assert.Equal(2, Occurrences(source, "__IsUnreserved(__c"));
+        Assert.Empty(run.Problems);
+    }
+
     [Theory]
     [InlineData("files/{*path}")]
     [InlineData("files/{path}")]

@@ -38,6 +38,8 @@ public sealed class CatchAllRouteTests
     [InlineData("/v1/x", "/files//v1/x")]
     [InlineData("a//b", "/files/a//b")]
     [InlineData("", "/files/")]
+    [InlineData("/", "/files//")]
+    [InlineData("v1/x/", "/files/v1/x/")]
     public async Task DoubleStar_KeepsTheSeparators_AndEscapesEachSegment(string value, string expected)
     {
         var (api, sent) = Create();
