@@ -290,6 +290,40 @@ public class RouteTemplateAnalyzerTests
         Assert.Empty(run.CompileErrors);
     }
 
+    // #422: {**name} and {*name} are catch-all forms of the {name} token. They bind the route
+    // parameter called name, so the parameter is used and the token is matched.
+    [Theory]
+    [InlineData("api/{**path}")]
+    [InlineData("api/{*path}")]
+    [InlineData("{**path}")]
+    [InlineData("{*path}")]
+    public void CatchAllToken_BindsTheRouteParameterOfItsName_AndReportsNothing(string route)
+    {
+        var source = Api($"[Post(\"{route}\")] Task<string> PostAsync(string path, [Body] Payload body, CancellationToken ct = default);");
+
+        var run = Run(source);
+
+        Assert.Empty(run.Diagnostics);
+        Assert.Empty(run.CompileErrors);
+    }
+
+    [Theory]
+    [InlineData("{**typo}", "**typo")]
+    [InlineData("{*typo}", "*typo")]
+    public void CatchAllToken_WithNoMatchingParameter_ReportsBothDirections_AndTheClientCompiles(string token, string text)
+    {
+        var source = Api($"[Get(\"api/{token}\")] Task<string> GetAsync(string path, CancellationToken ct = default);");
+
+        var run = Run(source);
+
+        Assert.Equal(2, run.Diagnostics.Length);
+        Assert.All(run.Diagnostics, d => Assert.Equal("ZRA005", d.Id));
+        Assert.Contains(run.Diagnostics, d => At(source, d) == "path"
+            && Message(d).Contains("has no '{path}' token", StringComparison.Ordinal));
+        Assert.Contains(run.Diagnostics, d => Message(d).Contains($"'{{{text}}}' token", StringComparison.Ordinal));
+        Assert.Empty(run.CompileErrors);
+    }
+
     [Fact]
     public void QuoteAndBackslashInRoute_AreEscaped_AndTheClientCompiles()
     {

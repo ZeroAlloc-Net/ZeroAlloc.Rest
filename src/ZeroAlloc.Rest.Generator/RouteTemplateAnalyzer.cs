@@ -9,7 +9,8 @@ namespace ZeroAlloc.Rest.Generator;
 /// <summary>
 /// Reports ZRA005 when a method's route template and its route parameters do not match. A route
 /// parameter with no {token} of its name is never sent, and a {token} no route parameter binds is
-/// sent as literal text.
+/// sent as literal text. A <c>{*name}</c> or <c>{**name}</c> catch-all token counts as a token of
+/// the name <c>name</c>.
 /// </summary>
 /// <remarks>
 /// An analyzer rather than the generator reports it, so that it is a warning in source like any
@@ -63,7 +64,7 @@ public sealed class RouteTemplateAnalyzer : DiagnosticAnalyzer
         foreach (var token in tokens)
         {
             if (token.TokenKind == RouteTokenBinding.Kind.RouteParameter)
-                usedNames.Add(token.Name);
+                usedNames.Add(token.ParameterName);
             foreach (var name in token.ReferencedParameters)
                 usedNames.Add(name);
         }

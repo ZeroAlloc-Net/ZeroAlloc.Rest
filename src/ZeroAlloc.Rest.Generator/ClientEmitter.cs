@@ -136,6 +136,7 @@ internal static class ClientEmitter
             anyCallerCancellation |= EmitMethod(ctx, sb, model.InterfaceDisplayName, method, serializerFieldMap, errorMapperFieldMap, model.MaxErrorBodyBytes);
 
         EmitFormatHelpers(sb, model);
+        EmitEscapePathHelper(sb, model);
 
         EmitRecordFailure(sb);
         if (anyCallerCancellation)
@@ -367,6 +368,53 @@ internal static class ClientEmitter
             sb.AppendLine("        => value.ToString(null, global::System.Globalization.CultureInfo.InvariantCulture);");
             sb.AppendLine();
         }
+    }
+
+    // __EscapePath, only for a client with a {**name} token a route parameter binds. It escapes each
+    // segment of the value and keeps the '/' between them, where {name} escapes the '/' too. A value
+    // without a '/' costs what Uri.EscapeDataString does; otherwise the one result string is built
+    // from the escaped segments.
+    private static void EmitEscapePathHelper(StringBuilder sb, ClientModel model)
+    {
+        var needed = false;
+        foreach (var method in model.Methods)
+            needed |= UsesEscapePath(method);
+        if (!needed)
+            return;
+
+        sb.AppendLine("    private static string __EscapePath(string value)");
+        sb.AppendLine("    {");
+        sb.AppendLine("        var __slash = value.IndexOf('/');");
+        sb.AppendLine("        if (__slash < 0)");
+        sb.AppendLine("            return global::System.Uri.EscapeDataString(value);");
+        sb.AppendLine("        var __result = new global::System.Text.StringBuilder(value.Length + 16);");
+        sb.AppendLine("        var __start = 0;");
+        sb.AppendLine("        while (__slash >= 0)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            __result.Append(global::System.Uri.EscapeDataString(value.Substring(__start, __slash - __start))).Append('/');");
+        sb.AppendLine("            __start = __slash + 1;");
+        sb.AppendLine("            __slash = value.IndexOf('/', __start);");
+        sb.AppendLine("        }");
+        sb.AppendLine("        return __result.Append(global::System.Uri.EscapeDataString(value.Substring(__start))).ToString();");
+        sb.AppendLine("    }");
+        sb.AppendLine();
+    }
+
+    // Whether the method's route has a {**name} token that one of its route parameters binds.
+    private static bool UsesEscapePath(MethodModel method)
+    {
+        foreach (var token in RouteTemplate.Tokens(method.Route))
+        {
+            if (token.CatchAll != RouteTemplate.CatchAllKind.DoubleStar)
+                continue;
+            foreach (var parameter in method.Parameters)
+            {
+                if (parameter.Kind == ParameterKind.Path
+                    && string.Equals(parameter.Name, token.Name, System.StringComparison.Ordinal))
+                    return true;
+            }
+        }
+        return false;
     }
 
     private static void EmitFormatHelper(StringBuilder sb, ValueFormatModel format)
@@ -1093,13 +1141,18 @@ internal static class ClientEmitter
         foreach (var token in RouteTemplate.Tokens(route))
         {
             var parameter = pathParams.Find(p => string.Equals(p.Name, token.Name, System.StringComparison.Ordinal));
-            if (parameter is null && !Contains(evaluatedTokens, token.Name)) continue;
+            if (parameter is null && !Contains(evaluatedTokens, token.Text)) continue;
             AppendLiteral(sb, route.Substring(next, token.Start - next), interpolated: true);
             if (parameter is not null)
+            {
                 // Parenthesized: a bare `global::` would end the hole's expression at its colon.
-                sb.Append("{(global::System.Uri.EscapeDataString(__FormatValue(").Append(Identifier(parameter)).Append(")))}");
+                var escape = token.CatchAll == RouteTemplate.CatchAllKind.DoubleStar
+                    ? "__EscapePath"
+                    : "global::System.Uri.EscapeDataString";
+                sb.Append("{(").Append(escape).Append("(__FormatValue(").Append(Identifier(parameter)).Append(")))}");
+            }
             else
-                sb.Append('{').Append(token.Name).Append('}');
+                sb.Append('{').Append(token.Text).Append('}');
             next = token.Start + token.Length;
         }
         AppendLiteral(sb, route.Substring(next), interpolated: true);

@@ -40,6 +40,35 @@ unless it compiles as C#, such as a token named after a `[Query]` parameter, whi
 URL escaping. Both get a
 [ZRA005](advanced.md#zra005-route-template-and-route-parameters-do-not-match) warning.
 
+### Catch-all tokens
+
+A `{name}` token escapes its whole value, so a `/` in it becomes `%2F`. Two prefixes change that.
+Each binds the route parameter called `name`, whatever the prefix:
+
+| Token | Value `"v1/system one"` is sent as | Use it for |
+|-------|-----------------------------------|------------|
+| `{name}` | `v1%2Fsystem%20one` | One path segment |
+| `{*name}` | `v1%2Fsystem%20one` | The same as `{name}`, as ASP.NET Core link generation does it |
+| `{**name}` | `v1/system%20one` | A multi-segment path that keeps its `/` separators |
+
+```csharp
+[Get("/files/{**path}")]
+Task<Stream> DownloadAsync(string path, CancellationToken ct = default);
+
+// DownloadAsync("v1/system one")  ->  GET /files/v1/system%20one
+```
+
+`{**name}` splits the value on `/`, escapes each segment with `Uri.EscapeDataString`, and joins them
+with `/` again. A `?`, `#` or `%` inside a segment is escaped, so the value cannot reach the query
+string. The separators are kept as written: a leading `/` and an empty segment, as in `a//b`, are
+sent unchanged. So with the route `{**path}` alone, the value `/v1/x` makes the request URI `/v1/x`,
+which replaces any path in the client's `BaseAddress`, while `v1/x` is appended to it. With
+`files/{**path}`, the value `/v1/x` is sent as `files//v1/x`: leave the leading `/` out of the value.
+
+A `{**name}` or `{*name}` token with no matching route parameter is sent as literal text, with the
+same [ZRA005](advanced.md#zra005-route-template-and-route-parameters-do-not-match) warning as any
+other unmatched token.
+
 ## No path
 
 Every method attribute also has a parameterless form. A missing route means an empty path, so

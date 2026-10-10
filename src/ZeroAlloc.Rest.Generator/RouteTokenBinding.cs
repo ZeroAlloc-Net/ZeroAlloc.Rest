@@ -26,15 +26,20 @@ internal static class RouteTokenBinding
 
     internal sealed class BoundToken
     {
-        internal BoundToken(string name, Kind kind, string? source, List<string> referencedParameters)
+        internal BoundToken(string name, Kind kind, string? source, List<string> referencedParameters, string? parameterName = null)
         {
             Name = name;
+            ParameterName = parameterName ?? name;
             TokenKind = kind;
             Source = source;
             ReferencedParameters = referencedParameters;
         }
 
+        // The token's text as written, such as '**path'. ZRA005's message prints it between braces.
         internal string Name { get; }
+
+        // For a RouteParameter token, the route parameter it binds: Name without a '*' or '**' prefix.
+        internal string ParameterName { get; }
         internal Kind TokenKind { get; }
 
         // For an Evaluated token, what it takes its value from, as ZRA005's message says it.
@@ -68,14 +73,15 @@ internal static class RouteTokenBinding
         var seen = new HashSet<string>(System.StringComparer.Ordinal);
         foreach (var token in RouteTemplate.Tokens(route))
         {
-            if (!seen.Add(token.Name))
+            if (!seen.Add(token.Text))
                 continue;
             if (kinds.TryGetValue(token.Name, out var kind) && kind == ParameterKind.Path)
-                result.Add(new BoundToken(token.Name, Kind.RouteParameter, null, new List<string>()));
-            else if (interpolated && IsProbeable(token.Name))
-                probed.Add(token.Name);
+                result.Add(new BoundToken(token.Text, Kind.RouteParameter, null, new List<string>(), token.Name));
+            else if (token.CatchAll == RouteTemplate.CatchAllKind.None && interpolated && IsProbeable(token.Text))
+                probed.Add(token.Text);
             else
-                result.Add(new BoundToken(token.Name, Kind.Literal, null, new List<string>()));
+                // A catch-all token is never a C# expression, so it is never probed.
+                result.Add(new BoundToken(token.Text, Kind.Literal, null, new List<string>()));
         }
 
         if (probed.Count > 0)
