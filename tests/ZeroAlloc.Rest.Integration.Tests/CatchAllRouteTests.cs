@@ -31,6 +31,8 @@ public sealed class CatchAllRouteTests
     [Theory]
     [InlineData("v1/systemone", "/files/v1/systemone")]
     [InlineData("v1/system one", "/files/v1/system%20one")]
+    [InlineData("a-b.c_d~e/F9/z", "/files/a-b.c_d~e/F9/z")]
+    [InlineData("clean/sp ace/clean2/é", "/files/clean/sp%20ace/clean2/%C3%A9")]
     [InlineData("a?b#c/d", "/files/a%3Fb%23c/d")]
     [InlineData("100%/x", "/files/100%25/x")]
     [InlineData("/v1/x", "/files//v1/x")]

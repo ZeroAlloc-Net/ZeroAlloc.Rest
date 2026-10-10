@@ -136,7 +136,7 @@ internal static class ClientEmitter
             anyCallerCancellation |= EmitMethod(ctx, sb, model.InterfaceDisplayName, method, serializerFieldMap, errorMapperFieldMap, model.MaxErrorBodyBytes);
 
         EmitFormatHelpers(sb, model);
-        EmitEscapePathHelper(sb, model);
+        EmitEscapePathHelper(sb, model, errorMapperFieldMap);
 
         EmitRecordFailure(sb);
         if (anyCallerCancellation)
@@ -289,15 +289,16 @@ internal static class ClientEmitter
             : "_serializer";
 
         string? errorMapperField = null;
+        if (IsUnmappedStub(method, errorMapperFieldMap))
+        {
+            EmitUnmappedStub(sb, method);
+            return false;
+        }
         if (method.MapsError)
         {
             var errorTypeName = method.ErrorTypeName
                 ?? throw new global::System.InvalidOperationException("MapsError implies ErrorTypeName is set.");
-            if (!errorMapperFieldMap.TryGetValue(errorTypeName, out errorMapperField))
-            {
-                EmitUnmappedStub(sb, method);
-                return false;
-            }
+            errorMapperField = errorMapperFieldMap[errorTypeName];
         }
 
         sb.AppendLine($"    public async {method.ReturnTypeName} {method.Name}({BuildParamList(method.Parameters)})");
@@ -372,33 +373,56 @@ internal static class ClientEmitter
 
     // __EscapePath, only for a client with a {**name} token a route parameter binds. It escapes each
     // segment of the value and keeps the '/' between them, where {name} escapes the '/' too. A value
-    // without a '/' costs what Uri.EscapeDataString does; otherwise the one result string is built
-    // from the escaped segments.
-    private static void EmitEscapePathHelper(StringBuilder sb, ClientModel model)
+    // without a '/' costs what Uri.EscapeDataString does. Otherwise one builder collects the
+    // segments: a segment of unreserved characters only is appended as it is, and only a segment
+    // that needs escaping allocates.
+    private static void EmitEscapePathHelper(StringBuilder sb, ClientModel model, IReadOnlyDictionary<string, string> errorMapperFieldMap)
     {
         var needed = false;
         foreach (var method in model.Methods)
-            needed |= UsesEscapePath(method);
+            needed |= !IsUnmappedStub(method, errorMapperFieldMap) && UsesEscapePath(method);
         if (!needed)
             return;
 
         sb.AppendLine("    private static string __EscapePath(string value)");
         sb.AppendLine("    {");
-        sb.AppendLine("        var __slash = value.IndexOf('/');");
-        sb.AppendLine("        if (__slash < 0)");
+        sb.AppendLine("        if (value.IndexOf('/') < 0)");
         sb.AppendLine("            return global::System.Uri.EscapeDataString(value);");
         sb.AppendLine("        var __result = new global::System.Text.StringBuilder(value.Length + 16);");
         sb.AppendLine("        var __start = 0;");
-        sb.AppendLine("        while (__slash >= 0)");
+        sb.AppendLine("        while (true)");
         sb.AppendLine("        {");
-        sb.AppendLine("            __result.Append(global::System.Uri.EscapeDataString(value.Substring(__start, __slash - __start))).Append('/');");
-        sb.AppendLine("            __start = __slash + 1;");
-        sb.AppendLine("            __slash = value.IndexOf('/', __start);");
+        sb.AppendLine("            var __end = value.IndexOf('/', __start);");
+        sb.AppendLine("            if (__end < 0)");
+        sb.AppendLine("                __end = value.Length;");
+        sb.AppendLine("            var __clean = true;");
+        sb.AppendLine("            for (var __i = __start; __i < __end; __i++)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                var __c = value[__i];");
+        sb.AppendLine("                if (!((__c >= 'a' && __c <= 'z') || (__c >= 'A' && __c <= 'Z') || (__c >= '0' && __c <= '9') || __c == '-' || __c == '.' || __c == '_' || __c == '~'))");
+        sb.AppendLine("                {");
+        sb.AppendLine("                    __clean = false;");
+        sb.AppendLine("                    break;");
+        sb.AppendLine("                }");
+        sb.AppendLine("            }");
+        sb.AppendLine("            if (__clean)");
+        sb.AppendLine("                __result.Append(value, __start, __end - __start);");
+        sb.AppendLine("            else");
+        sb.AppendLine("                __result.Append(global::System.Uri.EscapeDataString(value.Substring(__start, __end - __start)));");
+        sb.AppendLine("            if (__end == value.Length)");
+        sb.AppendLine("                return __result.ToString();");
+        sb.AppendLine("            __result.Append('/');");
+        sb.AppendLine("            __start = __end + 1;");
         sb.AppendLine("        }");
-        sb.AppendLine("        return __result.Append(global::System.Uri.EscapeDataString(value.Substring(__start))).ToString();");
         sb.AppendLine("    }");
         sb.AppendLine();
     }
+
+    // A method whose error type has no mapper is emitted as a throwing stub, with no URL building.
+    private static bool IsUnmappedStub(MethodModel method, IReadOnlyDictionary<string, string> errorMapperFieldMap)
+        => method.MapsError
+            && !errorMapperFieldMap.ContainsKey(method.ErrorTypeName
+                ?? throw new global::System.InvalidOperationException("MapsError implies ErrorTypeName is set."));
 
     // Whether the method's route has a {**name} token that one of its route parameters binds.
     private static bool UsesEscapePath(MethodModel method)

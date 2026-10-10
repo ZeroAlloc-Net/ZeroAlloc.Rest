@@ -72,6 +72,39 @@ public class GeneratorCatchAllRouteTests
         Assert.DoesNotContain("__EscapePath", run.GeneratedSource, System.StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void CatchAllOnAMethodWithoutAnErrorMapper_IsAStub_AndNeedsNoHelper()
+    {
+        const string Stubbed = """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using ZeroAlloc.Rest.Attributes;
+            using ZeroAlloc.Results;
+            namespace MyApp;
+            public sealed record MissingError(string Code);
+            [ZeroAllocRestClient]
+            public interface IFilesApi
+            {
+                [Get("files/{**path}")]
+                Task<Result<string, MissingError>> GetAsync(string path, CancellationToken ct = default);
+            }
+            """;
+
+        var run = Generate(Stubbed);
+
+        Assert.Contains(run.GeneratorDiagnostics, d => d.Id == "ZRA002");
+        Assert.DoesNotContain("__EscapePath", run.GeneratedSource, System.StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Helper_AppendsCleanSegmentsDirectly_AndEscapesOnlyTheOthers()
+    {
+        var run = Generate(Source("files/{**path}"));
+
+        Assert.Contains("__result.Append(value, __start, __end - __start);", run.GeneratedSource);
+        Assert.Contains("__result.Append(global::System.Uri.EscapeDataString(value.Substring(__start, __end - __start)));", run.GeneratedSource);
+    }
+
     private static GeneratorHarness.GeneratorHarnessRun Generate(string source)
         => GeneratorHarness.Run(source, "MyApp.IFilesApi.g.cs");
 

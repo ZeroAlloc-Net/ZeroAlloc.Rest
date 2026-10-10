@@ -308,7 +308,9 @@ Severity: Warning.
 
 A parameter with none of `[Query]`, `[Header]`, `[Body]` or `[FormBody]`, other than the
 `CancellationToken`, is a route parameter: it replaces each `{name}` token in the route with exactly
-its name, case included, and is sent nowhere else. ZRA005 reports a mismatch in either direction:
+its name, case included, and is sent nowhere else. The catch-all forms `{*name}` and `{**name}`
+[bind the route parameter](routing.md#catch-all-tokens) `name` too. ZRA005 reports a mismatch in
+either direction:
 
 - **A route parameter with no `{name}` token** is never sent. The warning points at the parameter.
   This includes a route parameter on a [pathless method](routing.md#no-path), which has no tokens
@@ -320,6 +322,8 @@ its name, case included, and is sent nowhere else. ZRA005 reports a mismatch in 
     `[Query] int id`, `{id:D4}`, `{page + 1}`, or `{ApiInfo.Version}` naming a constant. The value is
     inserted without URL escaping. The message names where it comes from. Make it a route parameter
     with a matching token, so the value is escaped and the intent is clear.
+  - **A `{*name}` or `{**name}` token** is never evaluated as C#, whatever else the method has. When
+    no route parameter is called `name`, it is always sent as literal text, braces included.
   - **Otherwise** the token is sent as literal text, braces included. That covers a typo, which
     would not compile as C#, any token on a method with neither route nor `[Query]` parameters, and
     a token that could only reach the generated client's own fields and locals, or `this`. Add the
