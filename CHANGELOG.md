@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.3.1](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v3.3.0...v3.3.1) (2026-10-10)
+
+
+### Performance Improvements
+
+* skip allocation in catch-all route escaping when nothing needs escaping ([#426](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/426)) ([b0c0561](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/b0c056113d7628df66f13ea02124a37ee5de439c))
+
 ## [3.3.0](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v3.2.1...v3.3.0) (2026-10-10)
 
 
