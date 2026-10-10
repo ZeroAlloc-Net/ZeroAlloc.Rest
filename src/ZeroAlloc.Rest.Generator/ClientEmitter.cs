@@ -375,7 +375,8 @@ internal static class ClientEmitter
     // segment of the value and keeps the '/' between them, where {name} escapes the '/' too. A value
     // without a '/' costs what Uri.EscapeDataString does. Otherwise one builder collects the
     // segments: a segment of unreserved characters only is appended as it is, and only a segment
-    // that needs escaping allocates.
+    // that needs escaping allocates. A value of unreserved characters and '/' only, the usual
+    // one, is returned as it is before any of that, and costs nothing (#425).
     private static void EmitEscapePathHelper(StringBuilder sb, ClientModel model, IReadOnlyDictionary<string, string> errorMapperFieldMap)
     {
         var needed = false;
@@ -384,8 +385,23 @@ internal static class ClientEmitter
         if (!needed)
             return;
 
+        sb.AppendLine("    private static bool __IsUnreserved(char c)");
+        sb.AppendLine("        => (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '.' || c == '_' || c == '~';");
+        sb.AppendLine();
         sb.AppendLine("    private static string __EscapePath(string value)");
         sb.AppendLine("    {");
+        sb.AppendLine("        var __unchanged = true;");
+        sb.AppendLine("        for (var __k = 0; __k < value.Length; __k++)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            var __ch = value[__k];");
+        sb.AppendLine("            if (__ch != '/' && !__IsUnreserved(__ch))");
+        sb.AppendLine("            {");
+        sb.AppendLine("                __unchanged = false;");
+        sb.AppendLine("                break;");
+        sb.AppendLine("            }");
+        sb.AppendLine("        }");
+        sb.AppendLine("        if (__unchanged)");
+        sb.AppendLine("            return value;");
         sb.AppendLine("        if (value.IndexOf('/') < 0)");
         sb.AppendLine("            return global::System.Uri.EscapeDataString(value);");
         sb.AppendLine("        var __result = new global::System.Text.StringBuilder(value.Length + 16);");
@@ -399,7 +415,7 @@ internal static class ClientEmitter
         sb.AppendLine("            for (var __i = __start; __i < __end; __i++)");
         sb.AppendLine("            {");
         sb.AppendLine("                var __c = value[__i];");
-        sb.AppendLine("                if (!((__c >= 'a' && __c <= 'z') || (__c >= 'A' && __c <= 'Z') || (__c >= '0' && __c <= '9') || __c == '-' || __c == '.' || __c == '_' || __c == '~'))");
+        sb.AppendLine("                if (!__IsUnreserved(__c))");
         sb.AppendLine("                {");
         sb.AppendLine("                    __clean = false;");
         sb.AppendLine("                    break;");
