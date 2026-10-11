@@ -30,6 +30,7 @@ internal static class ModelExtractor
     private const string EnumerableOpenType = "System.Collections.Generic.IEnumerable<T>";
     private const string FlagsAttr = "System.FlagsAttribute";
     private const string FormattableInterface = "System.IFormattable";
+    private const string SpanFormattableInterface = "System.ISpanFormattable";
     private const int DefaultMaxErrorBodyBytes = 65536;
 
     // A namespace as a name, not as code: class.Models, where code would need @class.Models.
@@ -687,7 +688,26 @@ internal static class ModelExtractor
                 => HasPublicFormattableToString(type) ? ValueFormat.Invariant : ValueFormat.ExplicitInvariant,
             _ => ValueFormat.Text,
         };
-        return new ValueFormatModel(name, type.IsValueType, format, default, elementIsNullable);
+        var spanFormattable = format is ValueFormat.Invariant or ValueFormat.ExplicitInvariant or ValueFormat.Iso8601
+            && IsBclSpanFormattable(type, name);
+        return new ValueFormatModel(name, type.IsValueType, format, default, elementIsNullable, SpanFormattable: spanFormattable);
+    }
+
+    // The BCL types whose ISpanFormattable.TryFormat is documented to write what ToString writes,
+    // for the same format and provider.
+    private static bool IsBclSpanFormattable(ITypeSymbol type, string name)
+    {
+        var known = type.SpecialType switch
+        {
+            SpecialType.System_SByte or SpecialType.System_Byte or SpecialType.System_Int16 or SpecialType.System_UInt16
+                or SpecialType.System_Int32 or SpecialType.System_UInt32 or SpecialType.System_Int64 or SpecialType.System_UInt64
+                or SpecialType.System_IntPtr or SpecialType.System_UIntPtr or SpecialType.System_Single or SpecialType.System_Double
+                or SpecialType.System_Decimal or SpecialType.System_DateTime => true,
+            _ => name is "global::System.DateTimeOffset" or "global::System.DateOnly" or "global::System.TimeOnly"
+                or "global::System.TimeSpan" or "global::System.Guid" or "global::System.Half"
+                or "global::System.Int128" or "global::System.UInt128",
+        };
+        return known && type.AllInterfaces.Any(i => i.ToDisplayString() == SpanFormattableInterface);
     }
 
     // Whether `value.ToString(format, provider)` binds to a public method, or IFormattable is only

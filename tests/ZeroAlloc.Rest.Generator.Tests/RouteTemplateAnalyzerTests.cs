@@ -95,66 +95,66 @@ public class RouteTemplateAnalyzerTests
         // Before #333 the unmatched token became an interpolation hole naming an undefined variable,
         // a CS0103 in generated code on top of the ZRA005.
         Assert.Empty(run.CompileErrors);
-        Assert.Contains("var __url = $\"users/{{usrId}}\";", run.Sources["MyApp.IApi.g.cs"]);
+        Assert.Contains("var __url = \"users/{usrId}\";", run.Sources["MyApp.IApi.g.cs"]);
     }
 
     // A token no route parameter matches, which the URL built before ZRA005 filled with a working
-    // value, keeps being filled the same way. Each expected line is the URL line the generator
-    // emitted at ae0124f, the commit before #339, for the same method, copied byte for byte. The
-    // only difference since is the local's name, which #339 prefixed with "__".
+    // value, keeps being filled the same way: it stays a hole, its text unchanged, in an interpolated
+    // string with the route text around it. Each expected line is the line that appends it since
+    // #428; EvaluatedToken_SendsTheSameUrl runs these tokens and pins the URL each one sends.
     public static TheoryData<string, string, string, string> PreservedTokens => new()
     {
         {
             """[Get("users/{id}")] Task A1([Query] int id);""",
-            """        var urlBase = $"users/{id}";""",
+            """            __urlBuilder.AppendLiteral($"users/{id}");""",
             "id",
             "the query parameter 'id'"
         },
         {
             """[Get("users/{id}")] Task A2([Header("X-Id")] string id, [Query] int page);""",
-            """        var urlBase = $"users/{id}";""",
+            """            __urlBuilder.AppendLiteral($"users/{id}");""",
             "id",
             "the header parameter 'id'"
         },
         {
             """[Get("items/{id:D4}")] Task A3(int id);""",
-            """        var url = $"items/{id:D4}";""",
+            """        var __url = $"items/{id:D4}";""",
             "id:D4",
             "the route parameter 'id'"
         },
         {
             """[Get("v{ApiInfo.Version}/users/{id}")] Task A5(int id);""",
-            """        var url = $"v{ApiInfo.Version}/users/{(global::System.Uri.EscapeDataString(__FormatValue(id)))}";""",
+            """            __urlBuilder.AppendLiteral($"v{ApiInfo.Version}/users/");""",
             "ApiInfo.Version",
             "the C# expression 'ApiInfo.Version'"
         },
         {
             """[Get("y/{DateTime.UtcNow:yyyy}/{id}")] Task A8(int id);""",
-            """        var url = $"y/{DateTime.UtcNow:yyyy}/{(global::System.Uri.EscapeDataString(__FormatValue(id)))}";""",
+            """            __urlBuilder.AppendLiteral($"y/{DateTime.UtcNow:yyyy}/");""",
             "DateTime.UtcNow:yyyy",
             "the C# expression 'DateTime.UtcNow'"
         },
         {
             """[Post("b/{id}/{p}")] Task A9(int id, [Body] Payload p);""",
-            """        var url = $"b/{(global::System.Uri.EscapeDataString(__FormatValue(id)))}/{p}";""",
+            """            __urlBuilder.AppendLiteral($"/{p}");""",
             "p",
             "the body parameter 'p'"
         },
         {
             """[Get("x/{ct}/{id}")] Task A10(int id, CancellationToken ct);""",
-            """        var url = $"x/{ct}/{(global::System.Uri.EscapeDataString(__FormatValue(id)))}";""",
+            """            __urlBuilder.AppendLiteral($"x/{ct}/");""",
             "ct",
             "the cancellation token parameter 'ct'"
         },
         {
             """[Get("q/{page + 1}")] Task A11([Query] int page);""",
-            """        var urlBase = $"q/{page + 1}";""",
+            """            __urlBuilder.AppendLiteral($"q/{page + 1}");""",
             "page + 1",
             "the query parameter 'page'"
         },
         {
             """[Get("f/{form}")] Task A12([FormBody] Dictionary<string, string> form, [Query] int z);""",
-            """        var urlBase = $"f/{form}";""",
+            """            __urlBuilder.AppendLiteral($"f/{form}");""",
             "form",
             "the form body parameter 'form'"
         },
@@ -163,15 +163,13 @@ public class RouteTemplateAnalyzerTests
     [Theory]
     [MemberData(nameof(PreservedTokens))]
     public void TokenFilledBeforeZra005_KeepsItsUrl_AndIsReportedAtTheAttribute(
-        string member, string lineBefore339, string token, string source)
+        string member, string line, string token, string source)
     {
         var api = Api(member);
 
         var run = Run(api);
 
         Assert.Empty(run.CompileErrors);
-        var line = lineBefore339.Replace("var url ", "var __url ", StringComparison.Ordinal)
-            .Replace("var urlBase ", "var __urlBase ", StringComparison.Ordinal);
         Assert.Contains(line + "\n", run.Sources["MyApp.IApi.g.cs"]);
 
         // Only the token is reported: every route parameter reaches the URL.
@@ -223,11 +221,71 @@ public class RouteTemplateAnalyzerTests
         Assert.Equal("https://host/api/users/5?id=5", sent!.ToString());
     }
 
+    // Every evaluated token, run: the URL each sends, captured at 6e79d98 before #428 changed how
+    // the URL is built. The token keeps its C# meaning, format clause and current-culture formatting
+    // included, and is never escaped.
+    public static TheoryData<string, string, object[], string> EvaluatedTokenUrls => new()
+    {
+        { """[Get("users/{id}")] Task A1([Query] int id);""", "A1", [5], "users/5?id=5" },
+        { """[Get("users/{id}")] Task A2([Header("X-Id")] string id, [Query] int page);""", "A2", ["a b", 2], "users/a b?page=2" },
+        { """[Get("items/{id:D4}")] Task A3(int id);""", "A3", [7], "items/0007" },
+        { """[Get("v{ApiInfo.Version}/users/{id}")] Task A5(int id);""", "A5", [-5], "v2/users/-5" },
+        { """[Get("x/{ct}/{id}")] Task A10(int id, CancellationToken ct);""", "A10", [1, CancellationToken.None], "x/System.Threading.CancellationToken/1" },
+        { """[Get("q/{page + 1}")] Task A11([Query] int page);""", "A11", [2], "q/3?page=2" },
+        { """[Get("f/{form}")] Task A12([FormBody] Dictionary<string, string> form, [Query] int z);""", "A12", [new Dictionary<string, string>(StringComparer.Ordinal), 1], "f/System.Collections.Generic.Dictionary`2[System.String,System.String]?z=1" },
+        { """[Get("r/{ratio}/{{x}}/{ratio:F2}/{id}")] Task R1([Query] double ratio, int id);""", "R1", [1.5, 3], "r/1,5/{{x}}/1,50/3?ratio=1.5" },
+        { """[Get("{ratio}")] Task R2([Query] double ratio);""", "R2", [-2.25], "-2,25?ratio=-2.25" },
+    };
+
+    [Theory]
+    [MemberData(nameof(EvaluatedTokenUrls))]
+    public async Task EvaluatedToken_SendsTheSameUrl(string member, string method, object[] args, string expected)
+    {
+        var source = Api(member) + NoSerializer;
+        var run = Run(source);
+        Assert.Empty(run.CompileErrors);
+
+        using var stream = new System.IO.MemoryStream();
+        Assert.True(run.Output.Emit(stream).Success);
+        var assembly = System.Reflection.Assembly.Load(stream.ToArray());
+        Uri? sent = null;
+        using var httpClient = new System.Net.Http.HttpClient(new CaptureHandler(uri => sent = uri))
+        {
+            BaseAddress = new Uri("https://host/api/"),
+        };
+        var serializer = Activator.CreateInstance(assembly.GetType("MyApp.NoSerializer")!);
+        var client = Activator.CreateInstance(assembly.GetType("MyApp.ApiClient")!, httpClient, serializer)!;
+
+        var previous = CultureInfo.CurrentCulture;
+        CultureInfo.CurrentCulture = new CultureInfo("de-DE");
+        try
+        {
+            await (Task)client.GetType().GetMethod(method)!.Invoke(client, args)!;
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = previous;
+        }
+
+        Assert.Equal("https://host/api/" + expected, sent!.OriginalString);
+    }
+
+    private const string NoSerializer = """
+        public sealed class NoSerializer : ZeroAlloc.Rest.IRestSerializer
+        {
+            public string ContentType => "application/json";
+            public System.Threading.Tasks.ValueTask<T?> DeserializeAsync<T>(System.IO.Stream stream, CancellationToken ct = default)
+                => default;
+            public System.Threading.Tasks.ValueTask SerializeAsync<T>(System.IO.Stream stream, T value, CancellationToken ct = default)
+                => default;
+        }
+        """;
+
     [Theory]
     [InlineData("""[Get("u/{_httpClient}/{__httpMethod}/{__RestMethodTag}/{id}")] Task A6(int id);""",
-        """        var __url = $"u/{{_httpClient}}/{{__httpMethod}}/{{__RestMethodTag}}/{(global::System.Uri.EscapeDataString(__FormatValue(id)))}";""", 3)]
+        """            __urlBuilder.AppendLiteral("u/{_httpClient}/{__httpMethod}/{__RestMethodTag}/");""", 3)]
     [InlineData("""[Get("t/{this}/{id}")] Task A13(int id);""",
-        """        var __url = $"t/{{this}}/{(global::System.Uri.EscapeDataString(__FormatValue(id)))}";""", 1)]
+        """            __urlBuilder.AppendLiteral("t/{this}/");""", 1)]
     [InlineData("""[Get("users/{id}")] Task A4([Header("X-Id")] string id);""",
         """        var __url = "users/{id}";""", 1)]
     public void TokenThatOnlyReachedTheClientsOwnMembers_OrWasNeverInterpolated_IsLiteral(string member, string line, int reports)
@@ -340,8 +398,8 @@ public class RouteTemplateAnalyzerTests
         Assert.Empty(run.CompileErrors);
         var client = run.Sources["MyApp.IApi.g.cs"];
         Assert.Contains("""var __url = "a\\b/\"c\"";""", client);
-        Assert.Contains("""var __url = $"a\\b/\"c\"/{(global::System.Uri.EscapeDataString(__FormatValue(id)))}";""", client);
-        Assert.Contains("""var __urlBase = $"a\\b/\"c\"";""", client);
+        Assert.Contains("""__urlBuilder.AppendLiteral("a\\b/\"c\"/");""", client);
+        Assert.Contains("""__urlBuilder.AppendLiteral("a\\b/\"c\"");""", client);
     }
 
     [Fact]

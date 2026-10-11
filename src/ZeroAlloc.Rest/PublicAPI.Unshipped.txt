@@ -1,1 +1,11 @@
 #nullable enable
+ZeroAlloc.Rest.RestUrlBuilder
+ZeroAlloc.Rest.RestUrlBuilder.AppendEscaped(string! value) -> void
+ZeroAlloc.Rest.RestUrlBuilder.AppendEscaped<T>(T value, string? format) -> void
+ZeroAlloc.Rest.RestUrlBuilder.AppendLiteral(string! value) -> void
+ZeroAlloc.Rest.RestUrlBuilder.AppendPathEscaped(string! value) -> void
+ZeroAlloc.Rest.RestUrlBuilder.AppendPathEscaped<T>(T value, string? format) -> void
+ZeroAlloc.Rest.RestUrlBuilder.AppendQueryName(string! name) -> void
+ZeroAlloc.Rest.RestUrlBuilder.RestUrlBuilder() -> void
+ZeroAlloc.Rest.RestUrlBuilder.RestUrlBuilder(System.Span<char> initialBuffer) -> void
+ZeroAlloc.Rest.RestUrlBuilder.ToStringAndClear() -> string!

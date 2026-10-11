@@ -14,6 +14,11 @@ internal enum ValueFormat { Text, String, Boolean, Iso8601, Invariant, ExplicitI
 // JsonStringEnumConverter walks them when it writes a [Flags] combination: most bits set first,
 // then by ascending value. EnumUnderlyingType is the enum's underlying type, for writing a value
 // that no member or member combination names as a number, as STJ does.
+//
+// SpanFormattable is true for an Invariant, ExplicitInvariant or Iso8601 value of a BCL type whose
+// ISpanFormattable.TryFormat writes what its ToString writes, so a URL formats it straight into
+// its buffer instead of into a string first (#428). A type outside the BCL keeps its ToString:
+// nothing guarantees its TryFormat writes the same.
 internal sealed record ValueFormatModel(
     string TypeName,
     bool IsValueType,
@@ -21,7 +26,8 @@ internal sealed record ValueFormatModel(
     EquatableArray<EnumMemberModel> EnumMembers,
     bool ElementIsNullable = false,
     bool IsFlags = false,
-    string? EnumUnderlyingType = null);
+    string? EnumUnderlyingType = null,
+    bool SpanFormattable = false);
 
 // Key is the member's value as STJ compares it: sign-extended to ulong.
 internal sealed record EnumMemberModel(string Member, string Wire, ulong Key);

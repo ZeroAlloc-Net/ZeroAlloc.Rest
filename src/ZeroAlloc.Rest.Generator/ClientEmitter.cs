@@ -58,6 +58,9 @@ internal static class ClientEmitter
         sb.AppendLine("using System.Net.Http.Headers;");
         sb.AppendLine("using System.Threading;");
         sb.AppendLine("using System.Threading.Tasks;");
+        // No generated code uses ZeroAlloc.Collections since #428, but a route token compiled as C#
+        // was compiled with this using in scope, and keeps it so it binds as it did. RouteTokenBinding's
+        // probe declares the same usings.
         if (hasQueryParams)
             sb.AppendLine("using ZeroAlloc.Collections;");
         sb.AppendLine("using ZeroAlloc.Rest;");
@@ -136,7 +139,7 @@ internal static class ClientEmitter
             anyCallerCancellation |= EmitMethod(ctx, sb, model.InterfaceDisplayName, method, serializerFieldMap, errorMapperFieldMap, model.MaxErrorBodyBytes);
 
         EmitFormatHelpers(sb, model);
-        EmitEscapePathHelper(sb, model, errorMapperFieldMap);
+        EmitUrlValueHelpers(sb, model, errorMapperFieldMap);
 
         EmitRecordFailure(sb);
         if (anyCallerCancellation)
@@ -150,16 +153,6 @@ internal static class ClientEmitter
             EmitCreateHttpError(sb);
         if (errorMappings.Count > 0)
             EmitRecordMapperFailure(sb);
-
-        if (hasQueryParams)
-        {
-            sb.AppendLine("    private static void AppendToUrl(ZeroAlloc.Collections.HeapPooledList<char> list, System.ReadOnlySpan<char> value)");
-            sb.AppendLine("    {");
-            sb.AppendLine("        for (var i = 0; i < value.Length; i++) list.Add(value[i]);");
-            sb.AppendLine("    }");
-            sb.AppendLine("    private static void AppendToUrl(ZeroAlloc.Collections.HeapPooledList<char> list, char value)");
-            sb.AppendLine("        => list.Add(value);");
-        }
 
         sb.AppendLine("}");
 
@@ -371,66 +364,59 @@ internal static class ClientEmitter
         }
     }
 
-    // __EscapePath, only for a client with a {**name} token a route parameter binds. It escapes each
-    // segment of the value and keeps the '/' between them, where {name} escapes the '/' too. A value
-    // without a '/' costs what Uri.EscapeDataString does. Otherwise one builder collects the
-    // segments: a segment of unreserved characters only is appended as it is, and only a segment
-    // that needs escaping allocates. A value of unreserved characters and '/' only, the usual
-    // one, is returned as it is before any of that, and costs nothing (#425).
-    private static void EmitEscapePathHelper(StringBuilder sb, ClientModel model, IReadOnlyDictionary<string, string> errorMapperFieldMap)
+    // One __AppendEscaped overload per type a query value or {name} route value has, and one
+    // __AppendPathEscaped per type a {**name} value has, mirroring __FormatValue's overloads: a value
+    // type also gets a Nullable<T> overload, which appends nothing for null as __FormatValue's ""
+    // did. A BCL value formats straight into the URL's buffer; any other goes through __FormatValue.
+    // Either is escaped as Uri.EscapeDataString escapes it, a {**name} value segment by segment,
+    // keeping each '/'. Nothing is allocated but the string a non-BCL value formats to (#428).
+    private static void EmitUrlValueHelpers(StringBuilder sb, ClientModel model, IReadOnlyDictionary<string, string> errorMapperFieldMap)
     {
-        var needed = false;
+        var escaped = new Dictionary<string, ValueFormatModel>(System.StringComparer.Ordinal);
+        var pathEscaped = new Dictionary<string, ValueFormatModel>(System.StringComparer.Ordinal);
         foreach (var method in model.Methods)
-            needed |= !IsUnmappedStub(method, errorMapperFieldMap) && UsesEscapePath(method);
-        if (!needed)
-            return;
+        {
+            if (IsUnmappedStub(method, errorMapperFieldMap))
+                continue;
+            foreach (var parameter in method.Parameters)
+            {
+                if (parameter.Format is not { } format)
+                    continue;
+                if (parameter.Kind == ParameterKind.Query)
+                {
+                    escaped[format.TypeName] = format;
+                    continue;
+                }
+                if (parameter.Kind != ParameterKind.Path)
+                    continue;
+                foreach (var token in RouteTemplate.Tokens(method.Route))
+                {
+                    if (!string.Equals(token.Name, parameter.Name, System.StringComparison.Ordinal))
+                        continue;
+                    if (token.CatchAll == RouteTemplate.CatchAllKind.DoubleStar)
+                        pathEscaped[format.TypeName] = format;
+                    else
+                        escaped[format.TypeName] = format;
+                }
+            }
+        }
 
-        sb.AppendLine("    private static bool __IsUnreserved(char c)");
-        sb.AppendLine("        => (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '.' || c == '_' || c == '~';");
-        sb.AppendLine();
-        sb.AppendLine("    private static string __EscapePath(string value)");
-        sb.AppendLine("    {");
-        sb.AppendLine("        var __unchanged = true;");
-        sb.AppendLine("        for (var __k = 0; __k < value.Length; __k++)");
-        sb.AppendLine("        {");
-        sb.AppendLine("            var __ch = value[__k];");
-        sb.AppendLine("            if (__ch != '/' && !__IsUnreserved(__ch))");
-        sb.AppendLine("            {");
-        sb.AppendLine("                __unchanged = false;");
-        sb.AppendLine("                break;");
-        sb.AppendLine("            }");
-        sb.AppendLine("        }");
-        sb.AppendLine("        if (__unchanged)");
-        sb.AppendLine("            return value;");
-        sb.AppendLine("        if (value.IndexOf('/') < 0)");
-        sb.AppendLine("            return global::System.Uri.EscapeDataString(value);");
-        sb.AppendLine("        var __result = new global::System.Text.StringBuilder(value.Length + 16);");
-        sb.AppendLine("        var __start = 0;");
-        sb.AppendLine("        while (true)");
-        sb.AppendLine("        {");
-        sb.AppendLine("            var __end = value.IndexOf('/', __start);");
-        sb.AppendLine("            if (__end < 0)");
-        sb.AppendLine("                __end = value.Length;");
-        sb.AppendLine("            var __clean = true;");
-        sb.AppendLine("            for (var __i = __start; __i < __end; __i++)");
-        sb.AppendLine("            {");
-        sb.AppendLine("                var __c = value[__i];");
-        sb.AppendLine("                if (!__IsUnreserved(__c))");
-        sb.AppendLine("                {");
-        sb.AppendLine("                    __clean = false;");
-        sb.AppendLine("                    break;");
-        sb.AppendLine("                }");
-        sb.AppendLine("            }");
-        sb.AppendLine("            if (__clean)");
-        sb.AppendLine("                __result.Append(value, __start, __end - __start);");
-        sb.AppendLine("            else");
-        sb.AppendLine("                __result.Append(global::System.Uri.EscapeDataString(value.Substring(__start, __end - __start)));");
-        sb.AppendLine("            if (__end == value.Length)");
-        sb.AppendLine("                return __result.ToString();");
-        sb.AppendLine("            __result.Append('/');");
-        sb.AppendLine("            __start = __end + 1;");
-        sb.AppendLine("        }");
-        sb.AppendLine("    }");
+        foreach (var format in escaped.Values)
+            EmitUrlValueHelper(sb, format, "__AppendEscaped", "AppendEscaped");
+        foreach (var format in pathEscaped.Values)
+            EmitUrlValueHelper(sb, format, "__AppendPathEscaped", "AppendPathEscaped");
+    }
+
+    private static void EmitUrlValueHelper(StringBuilder sb, ValueFormatModel format, string helper, string append)
+    {
+        const string Builder = "ref global::ZeroAlloc.Rest.RestUrlBuilder builder";
+        var type = format.TypeName;
+        var argument = !format.SpanFormattable
+            ? "__FormatValue(value)"
+            : format.Format == ValueFormat.Iso8601 ? "value, \"O\"" : "value, null";
+        sb.AppendLine($"    private static void {helper}({Builder}, {type} value) => builder.{append}({argument});");
+        if (format.IsValueType)
+            sb.AppendLine($"    private static void {helper}({Builder}, {type}? value) {{ if (value.HasValue) {helper}(ref builder, value.GetValueOrDefault()); }}");
         sb.AppendLine();
     }
 
@@ -439,23 +425,6 @@ internal static class ClientEmitter
         => method.MapsError
             && !errorMapperFieldMap.ContainsKey(method.ErrorTypeName
                 ?? throw new global::System.InvalidOperationException("MapsError implies ErrorTypeName is set."));
-
-    // Whether the method's route has a {**name} token that one of its route parameters binds.
-    private static bool UsesEscapePath(MethodModel method)
-    {
-        foreach (var token in RouteTemplate.Tokens(method.Route))
-        {
-            if (token.CatchAll != RouteTemplate.CatchAllKind.DoubleStar)
-                continue;
-            foreach (var parameter in method.Parameters)
-            {
-                if (parameter.Kind == ParameterKind.Path
-                    && string.Equals(parameter.Name, token.Name, System.StringComparison.Ordinal))
-                    return true;
-            }
-        }
-        return false;
-    }
 
     private static void EmitFormatHelper(StringBuilder sb, ValueFormatModel format)
     {
@@ -541,6 +510,10 @@ internal static class ClientEmitter
             ? "@" + name
             : name;
 
+    // A URL with route or query values is written by a local function into one RestUrlBuilder over
+    // a stack buffer, and costs the one string it returns (#428). A local function, because the
+    // builder is a ref struct, which an async method cannot hold before C# 13. It is not static, so
+    // a route token compiled as C# still sees everything it saw before.
     private static void EmitUrlBuilding(StringBuilder sb, string route,
         List<ParameterModel> pathParams, List<ParameterModel> queryParams, EquatableArray<string> evaluatedTokens)
     {
@@ -552,55 +525,53 @@ internal static class ClientEmitter
             return;
         }
 
-        var routeExpr = RouteExpression(route, pathParams, evaluatedTokens);
+        // A route whose tokens no route parameter binds, with no query parameters, is the string it
+        // always was: a constant, or an interpolated string around its evaluated tokens.
+        if (queryParams.Count == 0 && !BindsAToken(route, pathParams))
+        {
+            var pieces = new List<(string Text, string? Hole)>();
+            CollectRoutePieces(route, 0, route.Length, pathParams, evaluatedTokens, pieces);
+            sb.AppendLine($"        var __url = {RouteTextExpression(pieces) ?? "\"\""};");
+            return;
+        }
 
-        if (queryParams.Count == 0)
+        sb.AppendLine("        var __url = __BuildUrl();");
+        sb.AppendLine("        string __BuildUrl()");
+        sb.AppendLine("        {");
+        sb.AppendLine("            var __urlBuilder = new global::ZeroAlloc.Rest.RestUrlBuilder(stackalloc char[256]);");
+        EmitRoute(sb, route, pathParams, evaluatedTokens);
+        foreach (var q in queryParams)
         {
-            sb.AppendLine($"        var __url = $\"{routeExpr}\";");
-        }
-        else
-        {
-            sb.AppendLine($"        var __urlBase = $\"{routeExpr}\";");
-            sb.AppendLine("        using var __urlBuilder = new ZeroAlloc.Collections.HeapPooledList<char>(__urlBase.Length + 64);");
-            sb.AppendLine("        AppendToUrl(__urlBuilder, __urlBase.AsSpan());");
-            sb.AppendLine("        var __hasQuery = false;");
-            foreach (var q in queryParams)
+            var appendName = $"__urlBuilder.AppendQueryName(\"{q.QueryName}\");";
+            if (q.IsCollection)
             {
-                if (q.IsCollection)
-                {
-                    sb.AppendLine($"        if ({Identifier(q)} != null)");
-                    sb.AppendLine("        {");
-                    sb.AppendLine($"            foreach (var __item in {Identifier(q)})");
-                    sb.AppendLine("            {");
-                    if (q.Format is not { ElementIsNullable: false })
-                        sb.AppendLine("                if (__item == null) continue;");
-                    sb.AppendLine($"                AppendToUrl(__urlBuilder, __hasQuery ? '&' : '?');");
-                    sb.AppendLine($"                AppendToUrl(__urlBuilder, \"{q.QueryName}=\".AsSpan());");
-                    sb.AppendLine($"                AppendToUrl(__urlBuilder, global::System.Uri.EscapeDataString(__FormatValue(__item)).AsSpan());");
-                    sb.AppendLine("                __hasQuery = true;");
-                    sb.AppendLine("            }");
-                    sb.AppendLine("        }");
-                }
-                else if (q.IsNullable)
-                {
-                    sb.AppendLine($"        if ({Identifier(q)} != null)");
-                    sb.AppendLine("        {");
-                    sb.AppendLine($"            AppendToUrl(__urlBuilder, __hasQuery ? '&' : '?');");
-                    sb.AppendLine($"            AppendToUrl(__urlBuilder, \"{q.QueryName}=\".AsSpan());");
-                    sb.AppendLine($"            AppendToUrl(__urlBuilder, global::System.Uri.EscapeDataString(__FormatValue({Identifier(q)})).AsSpan());");
-                    sb.AppendLine("            __hasQuery = true;");
-                    sb.AppendLine("        }");
-                }
-                else
-                {
-                    sb.AppendLine($"        AppendToUrl(__urlBuilder, __hasQuery ? '&' : '?');");
-                    sb.AppendLine($"        AppendToUrl(__urlBuilder, \"{q.QueryName}=\".AsSpan());");
-                    sb.AppendLine($"        AppendToUrl(__urlBuilder, global::System.Uri.EscapeDataString(__FormatValue({Identifier(q)})).AsSpan());");
-                    sb.AppendLine("        __hasQuery = true;");
-                }
+                sb.AppendLine($"            if ({Identifier(q)} != null)");
+                sb.AppendLine("            {");
+                sb.AppendLine($"                foreach (var __item in {Identifier(q)})");
+                sb.AppendLine("                {");
+                if (q.Format is not { ElementIsNullable: false })
+                    sb.AppendLine("                    if (__item == null) continue;");
+                sb.AppendLine($"                    {appendName}");
+                sb.AppendLine("                    __AppendEscaped(ref __urlBuilder, __item);");
+                sb.AppendLine("                }");
+                sb.AppendLine("            }");
             }
-            sb.AppendLine("        var __url = new string(__urlBuilder.AsReadOnlySpan());");
+            else if (q.IsNullable)
+            {
+                sb.AppendLine($"            if ({Identifier(q)} != null)");
+                sb.AppendLine("            {");
+                sb.AppendLine($"                {appendName}");
+                sb.AppendLine($"                __AppendEscaped(ref __urlBuilder, {Identifier(q)});");
+                sb.AppendLine("            }");
+            }
+            else
+            {
+                sb.AppendLine($"            {appendName}");
+                sb.AppendLine($"            __AppendEscaped(ref __urlBuilder, {Identifier(q)});");
+            }
         }
+        sb.AppendLine("            return __urlBuilder.ToStringAndClear();");
+        sb.AppendLine("        }");
     }
 
     private static void EmitRequestCreation(StringBuilder sb, MethodModel method,
@@ -1169,34 +1140,82 @@ internal static class ClientEmitter
             : name;
     }
 
-    // The route as the contents of an interpolated string: each {token} a route parameter binds
-    // becomes a hole holding its escaped value. An evaluated token stays the hole it has always
-    // been, its text unchanged, so a URL that worked before ZRA005 is sent the same. Everything else
-    // is literal text, braces doubled, so a token that would name an undefined variable, or the
-    // client's own fields and locals, is sent as written. ZRA005 reports both.
-    private static string RouteExpression(string route, List<ParameterModel> pathParams, EquatableArray<string> evaluatedTokens)
+    // The route, appended piece by piece: each {token} a route parameter binds appends its escaped
+    // value, and the text between them is appended as it is. An evaluated token stays the hole it
+    // has always been, its text unchanged, in an interpolated string with the text around it, so a
+    // URL that worked before ZRA005 is sent the same. Everything else is literal text, so a token
+    // that would name an undefined variable, or the client's own fields and locals, is sent as
+    // written. ZRA005 reports both.
+    private static void EmitRoute(StringBuilder sb, string route, List<ParameterModel> pathParams, EquatableArray<string> evaluatedTokens)
     {
-        var sb = new StringBuilder(route.Length + 32);
+        // The route text and evaluated holes since the last bound token; a piece is one or the other.
+        var pieces = new List<(string Text, string? Hole)>();
         var next = 0;
         foreach (var token in RouteTemplate.Tokens(route))
         {
-            var parameter = pathParams.Find(p => string.Equals(p.Name, token.Name, System.StringComparison.Ordinal));
-            if (parameter is null && !Contains(evaluatedTokens, token.Text)) continue;
-            AppendLiteral(sb, route.Substring(next, token.Start - next), interpolated: true);
-            if (parameter is not null)
-            {
-                // Parenthesized: a bare `global::` would end the hole's expression at its colon.
-                var escape = token.CatchAll == RouteTemplate.CatchAllKind.DoubleStar
-                    ? "__EscapePath"
-                    : "global::System.Uri.EscapeDataString";
-                sb.Append("{(").Append(escape).Append("(__FormatValue(").Append(Identifier(parameter)).Append(")))}");
-            }
-            else
-                sb.Append('{').Append(token.Text).Append('}');
+            var parameter = BoundParameter(token, pathParams);
+            if (parameter is null) continue;
+            CollectRoutePieces(route, next, token.Start, pathParams, evaluatedTokens, pieces);
+            if (RouteTextExpression(pieces) is { } text)
+                sb.AppendLine($"            __urlBuilder.AppendLiteral({text});");
+            pieces.Clear();
+            var helper = token.CatchAll == RouteTemplate.CatchAllKind.DoubleStar
+                ? "__AppendPathEscaped"
+                : "__AppendEscaped";
+            sb.AppendLine($"            {helper}(ref __urlBuilder, {Identifier(parameter)});");
             next = token.Start + token.Length;
         }
-        AppendLiteral(sb, route.Substring(next), interpolated: true);
-        return sb.ToString();
+        CollectRoutePieces(route, next, route.Length, pathParams, evaluatedTokens, pieces);
+        if (RouteTextExpression(pieces) is { } rest)
+            sb.AppendLine($"            __urlBuilder.AppendLiteral({rest});");
+    }
+
+    private static ParameterModel? BoundParameter(RouteTemplate.Token token, List<ParameterModel> pathParams)
+        => pathParams.Find(p => string.Equals(p.Name, token.Name, System.StringComparison.Ordinal));
+
+    private static bool BindsAToken(string route, List<ParameterModel> pathParams)
+    {
+        foreach (var token in RouteTemplate.Tokens(route))
+        {
+            if (BoundParameter(token, pathParams) is not null)
+                return true;
+        }
+        return false;
+    }
+
+    // The route between start and end, which no bound token is in, as literal text and the holes of
+    // its evaluated tokens. Any other token is literal text.
+    private static void CollectRoutePieces(string route, int start, int end, List<ParameterModel> pathParams,
+        EquatableArray<string> evaluatedTokens, List<(string Text, string? Hole)> pieces)
+    {
+        var next = start;
+        foreach (var token in RouteTemplate.Tokens(route))
+        {
+            if (token.Start < start || token.Start + token.Length > end) continue;
+            if (BoundParameter(token, pathParams) is not null || !Contains(evaluatedTokens, token.Text)) continue;
+            pieces.Add((route.Substring(next, token.Start - next), null));
+            pieces.Add((string.Empty, token.Text));
+            next = token.Start + token.Length;
+        }
+        pieces.Add((route.Substring(next, end - next), null));
+    }
+
+    // The pieces as a C# string literal, or an interpolated string when one is an evaluated hole;
+    // null when they are empty.
+    private static string? RouteTextExpression(List<(string Text, string? Hole)> pieces)
+    {
+        var interpolated = pieces.Exists(p => p.Hole is not null);
+        var text = new StringBuilder();
+        foreach (var (literal, hole) in pieces)
+        {
+            if (hole is not null)
+                text.Append('{').Append(hole).Append('}');
+            else
+                AppendLiteral(text, literal, interpolated);
+        }
+        if (text.Length == 0)
+            return null;
+        return (interpolated ? "$\"" : "\"") + text + "\"";
     }
 
     private static bool Contains(EquatableArray<string> values, string value)

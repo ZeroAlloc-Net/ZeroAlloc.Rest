@@ -176,8 +176,8 @@ public class GeneratorEmissionTests
             }
             """;
         var output = GetGeneratedSource(source, "MyApp.IEvalApi.g.cs");
-        Assert.Contains("var __urlBase = $\"\";", output);
-        Assert.Contains("\"x=\"", output);
+        Assert.Contains("__urlBuilder.AppendQueryName(\"x\");", output);
+        Assert.DoesNotContain("__urlBuilder.AppendLiteral(", output);
     }
 
     [Fact]
@@ -198,9 +198,8 @@ public class GeneratorEmissionTests
             """;
         var (output, errors) = CompileGenerated(source, "MyApp.IEvalApi.g.cs");
         Assert.Empty(errors);
-        // A path-kind parameter forces the interpolated form; there is no "{id}" token in an
-        // empty route for it to bind to, so the interpolation still produces an empty URL.
-        Assert.Contains("var __url = $\"\";", output);
+        // There is no "{id}" token in an empty route for it to bind to, so the URL is empty.
+        Assert.Contains("var __url = \"\";", output);
     }
 
     [Fact]
@@ -237,7 +236,7 @@ public class GeneratorEmissionTests
             """;
         var output = GetGeneratedSource(source, "MyApp.ISearchApi.g.cs");
         Assert.DoesNotContain("if (page != null)", output);
-        Assert.Contains("\"page=\"", output);
+        Assert.Contains("__urlBuilder.AppendQueryName(\"page\");", output);
     }
 
     [Fact]
@@ -878,8 +877,8 @@ public class GeneratorEmissionTests
             """;
         var output = GetGeneratedSource(source, "MyApp.ISearchApi.g.cs");
         Assert.Contains("foreach", output);
-        Assert.Contains("\"tags=\"", output);
-        Assert.Contains("EscapeDataString", output);
+        Assert.Contains("__urlBuilder.AppendQueryName(\"tags\");", output);
+        Assert.Contains("__AppendEscaped(ref __urlBuilder, __item);", output);
     }
 
     [Fact]

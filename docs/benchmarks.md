@@ -54,7 +54,7 @@ ZeroAlloc.Rest is **1.7–3.6× faster than Refit** across every shape of call (
 
 **GET / POST:** ZeroAlloc.Rest runs at roughly 1.7–3.2× the raw baseline, covering the generated call frame and serialization dispatch. Refit pays for reflection-based attribute scanning and expression-tree invocation on every call — 5.6–6.1× over baseline.
 
-**Query parameters:** ZeroAlloc.Rest uses a `HeapPooledList<char>` rented from `ArrayPool<T>.Shared` — 2× the raw baseline. Refit rebuilds the URL via reflection on every call, landing at 7.4× over baseline.
+**Query parameters:** ZeroAlloc.Rest writes the route, the escaped values and the query string into one stack buffer and allocates only the final URL string; values of BCL types such as `int`, `Guid` or `DateTimeOffset` are formatted straight into that buffer, without an intermediate string. Refit rebuilds the URL via reflection on every call, landing at 7.4× over baseline.
 
 **DELETE (void return):** No deserialization path; ZeroAlloc.Rest is essentially at parity with raw `HttpClient` (0.92×, slightly under because BDN's noise floor on sub-microsecond delta measurements). Refit is 2.2×.
 
