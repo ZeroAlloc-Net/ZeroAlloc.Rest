@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.3.2](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v3.3.1...v3.3.2) (2026-10-11)
+
+
+### Performance Improvements
+
+* build generated URLs in one stack buffer ([#429](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/429)) ([480495a](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/480495a418f5278418242a27d7c3d0680e8fd95e)), closes [#428](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/428)
+
 ## [3.3.1](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v3.3.0...v3.3.1) (2026-10-10)
 
 
