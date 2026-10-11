@@ -44,12 +44,35 @@ public class GeneratorValueFormatTests
     {
         var client = Generate(Source);
 
-        Assert.Contains("{(global::System.Uri.EscapeDataString(__FormatValue(when)))}", client);
-        Assert.Contains("global::System.Uri.EscapeDataString(__FormatValue(__item))", client);
-        Assert.Contains("global::System.Uri.EscapeDataString(__FormatValue(limit))", client);
-        Assert.Contains("global::System.Uri.EscapeDataString(__FormatValue(active))", client);
+        Assert.Contains("__AppendEscaped(ref __urlBuilder, when);", client);
+        Assert.Contains("__AppendEscaped(ref __urlBuilder, __item);", client);
+        Assert.Contains("__AppendEscaped(ref __urlBuilder, limit);", client);
+        Assert.Contains("__AppendEscaped(ref __urlBuilder, active);", client);
         Assert.Contains("if (trace is not null)\n            __request.Headers.TryAddWithoutValidation(\"X-Trace\", __FormatValue(trace));", client);
         Assert.DoesNotContain(".ToString()!", client);
+    }
+
+    // Issue #428: a BCL value is formatted straight into the URL's buffer, invariantly and in the
+    // same form as __FormatValue writes it, with no string in between. Any other value still goes
+    // through __FormatValue, so its text is exactly what it was.
+    [Fact]
+    public void UrlValueHelpers_FormatBclValuesIntoTheUrl_AndEverythingElseThroughFormatValue()
+    {
+        var client = Generate(Source);
+        const string Builder = "ref global::ZeroAlloc.Rest.RestUrlBuilder builder";
+
+        Assert.Contains($"private static void __AppendEscaped({Builder}, global::System.DateTimeOffset value) => builder.AppendEscaped(value, \"O\");", client);
+        Assert.Contains($"private static void __AppendEscaped({Builder}, global::System.DateOnly value) => builder.AppendEscaped(value, \"O\");", client);
+        Assert.Contains($"private static void __AppendEscaped({Builder}, int value) => builder.AppendEscaped(value, null);", client);
+        Assert.Contains($"private static void __AppendEscaped({Builder}, int? value) {{ if (value.HasValue) __AppendEscaped(ref builder, value.GetValueOrDefault()); }}", client);
+        Assert.Contains($"private static void __AppendEscaped({Builder}, bool value) => builder.AppendEscaped(__FormatValue(value));", client);
+        Assert.Contains($"private static void __AppendEscaped({Builder}, global::MyApp.Mood value) => builder.AppendEscaped(__FormatValue(value));", client);
+        // A header value is never part of the URL.
+        Assert.DoesNotContain($"__AppendEscaped({Builder}, string value)", client);
+        Assert.Equal(1, Occurrences(client, $"__AppendEscaped({Builder}, int value)"));
+        Assert.DoesNotContain("HeapPooledList", client);
+        Assert.DoesNotContain("__urlBase", client);
+        Assert.DoesNotContain("EscapeDataString", client);
     }
 
     // Ruling F1: a value-type element can never be null, and `__item == null` on it is CS8073 or
@@ -196,8 +219,10 @@ public class GeneratorValueFormatTests
         Assert.Contains("private static string __FormatValue(global::MyApp.Perm value) => __FormatFlags(value);", client);
         Assert.Contains("case global::MyApp.Perm.ReadWrite: return \"rw\";", client);
         Assert.Contains("return __bits == 0 && __text is not null ? __text : ((byte)value).ToString(global::System.Globalization.CultureInfo.InvariantCulture);", client);
-        Assert.Contains("{(global::System.Uri.EscapeDataString(__FormatValue(when)))}", client);
+        Assert.Contains("__AppendEscaped(ref __urlBuilder, when);", client);
         Assert.Contains("private static string __FormatValue(bool? value)", client);
+        // A type outside the BCL is written with its own ToString, never its TryFormat.
+        Assert.Contains("private static void __AppendEscaped(ref global::ZeroAlloc.Rest.RestUrlBuilder builder, global::MyApp.Code value) => builder.AppendEscaped(__FormatValue(value));", client);
     }
 
     private static string Generate(string source)

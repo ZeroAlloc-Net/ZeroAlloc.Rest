@@ -3,7 +3,7 @@ using Xunit;
 namespace ZeroAlloc.Rest.Generator.Tests;
 
 // Issue #422: {**name} keeps the '/' separators of the value it binds, {*name} and {name} escape
-// them. Only a client with a {**name} token carries the __EscapePath helper.
+// them. Only a client with a {**name} token carries an __AppendPathEscaped helper.
 public class GeneratorCatchAllRouteTests
 {
     private static string Source(string route, string parameters = "string path") => $$"""
@@ -19,44 +19,38 @@ public class GeneratorCatchAllRouteTests
         }
         """;
 
+    // Since #428 the URL is written by RestUrlBuilder, whose AppendPathEscaped escapes each segment
+    // as the __EscapePath helper did; RestUrlBuilderTests holds it to that helper's output.
     [Fact]
-    public void DoubleStarToken_EmitsTheHelper_AndCallsItInTheHole()
+    public void DoubleStarToken_AppendsThePathEscapedValue()
     {
         var run = Generate(Source("files/{**path}"));
 
-        Assert.Contains("var __url = $\"files/{(__EscapePath(__FormatValue(path)))}\";", run.GeneratedSource);
-        Assert.Contains("private static string __EscapePath(string value)", run.GeneratedSource);
-        Assert.Equal(1, Occurrences(run.GeneratedSource, "private static string __EscapePath("));
-        Assert.DoesNotContain("Uri.EscapeDataString(__FormatValue(path))", run.GeneratedSource, System.StringComparison.Ordinal);
-        Assert.Empty(run.Problems);
-    }
-
-    // Issue #425: a value of unreserved characters and '/' is returned as it is, before the builder.
-    [Fact]
-    public void Helper_ReturnsACleanValueUnchanged_BeforeAnythingAllocates()
-    {
-        var run = Generate(Source("files/{**path}"));
-        var source = run.GeneratedSource;
-
-        var scan = source.IndexOf("if (__ch != '/' && !__IsUnreserved(__ch))", System.StringComparison.Ordinal);
-        var unchanged = source.IndexOf("return value;", System.StringComparison.Ordinal);
-        var builder = source.IndexOf("new global::System.Text.StringBuilder", System.StringComparison.Ordinal);
-        Assert.True(scan >= 0 && scan < unchanged && unchanged < builder, "The clean-value scan and return must come before the builder.");
-        Assert.Equal(1, Occurrences(source, "private static bool __IsUnreserved(char c)"));
-        Assert.Equal(1, Occurrences(source, "c >= 'a' && c <= 'z'"));
-        Assert.Equal(2, Occurrences(source, "__IsUnreserved(__c"));
+        Assert.Contains(
+            Lines(
+                "__urlBuilder.AppendLiteral(\"files/\");",
+                "__AppendPathEscaped(ref __urlBuilder, path);",
+                "return __urlBuilder.ToStringAndClear();"),
+            run.GeneratedSource,
+            System.StringComparison.Ordinal);
+        Assert.Contains(
+            "private static void __AppendPathEscaped(ref global::ZeroAlloc.Rest.RestUrlBuilder builder, string value) => builder.AppendPathEscaped(__FormatValue(value));",
+            run.GeneratedSource,
+            System.StringComparison.Ordinal);
+        Assert.DoesNotContain("__AppendEscaped(", run.GeneratedSource, System.StringComparison.Ordinal);
+        Assert.DoesNotContain("__EscapePath", run.GeneratedSource, System.StringComparison.Ordinal);
         Assert.Empty(run.Problems);
     }
 
     [Theory]
     [InlineData("files/{*path}")]
     [InlineData("files/{path}")]
-    public void SingleStarAndPlainTokens_EscapeTheWholeValue_AndEmitNoHelper(string route)
+    public void SingleStarAndPlainTokens_EscapeTheWholeValue(string route)
     {
         var run = Generate(Source(route));
 
-        Assert.Contains("var __url = $\"files/{(global::System.Uri.EscapeDataString(__FormatValue(path)))}\";", run.GeneratedSource);
-        Assert.DoesNotContain("__EscapePath", run.GeneratedSource, System.StringComparison.Ordinal);
+        Assert.Contains("__AppendEscaped(ref __urlBuilder, path);", run.GeneratedSource, System.StringComparison.Ordinal);
+        Assert.DoesNotContain("__AppendPathEscaped", run.GeneratedSource, System.StringComparison.Ordinal);
         Assert.Empty(run.Problems);
     }
 
@@ -65,7 +59,13 @@ public class GeneratorCatchAllRouteTests
     {
         var run = Generate(Source("api/{**path}/end"));
 
-        Assert.Contains("var __url = $\"api/{(__EscapePath(__FormatValue(path)))}/end\";", run.GeneratedSource);
+        Assert.Contains(
+            Lines(
+                "__urlBuilder.AppendLiteral(\"api/\");",
+                "__AppendPathEscaped(ref __urlBuilder, path);",
+                "__urlBuilder.AppendLiteral(\"/end\");"),
+            run.GeneratedSource,
+            System.StringComparison.Ordinal);
         Assert.Empty(run.Problems);
     }
 
@@ -75,8 +75,13 @@ public class GeneratorCatchAllRouteTests
         var run = Generate(Source("orgs/{id}/files/{**path}", "int id, string path"));
 
         Assert.Contains(
-            "var __url = $\"orgs/{(global::System.Uri.EscapeDataString(__FormatValue(id)))}/files/{(__EscapePath(__FormatValue(path)))}\";",
-            run.GeneratedSource);
+            Lines(
+                "__urlBuilder.AppendLiteral(\"orgs/\");",
+                "__AppendEscaped(ref __urlBuilder, id);",
+                "__urlBuilder.AppendLiteral(\"/files/\");",
+                "__AppendPathEscaped(ref __urlBuilder, path);"),
+            run.GeneratedSource,
+            System.StringComparison.Ordinal);
         Assert.Empty(run.Problems);
     }
 
@@ -85,8 +90,9 @@ public class GeneratorCatchAllRouteTests
     {
         var run = Generate(Source("files/{**typo}"));
 
-        Assert.Contains("{{**typo}}", run.GeneratedSource);
-        Assert.DoesNotContain("__EscapePath", run.GeneratedSource, System.StringComparison.Ordinal);
+        Assert.Contains("var __url = \"files/{**typo}\";", run.GeneratedSource, System.StringComparison.Ordinal);
+        Assert.DoesNotContain("__AppendPathEscaped", run.GeneratedSource, System.StringComparison.Ordinal);
+        Assert.DoesNotContain("RestUrlBuilder", run.GeneratedSource, System.StringComparison.Ordinal);
     }
 
     [Fact]
@@ -110,27 +116,13 @@ public class GeneratorCatchAllRouteTests
         var run = Generate(Stubbed);
 
         Assert.Contains(run.GeneratorDiagnostics, d => d.Id == "ZRA002");
-        Assert.DoesNotContain("__EscapePath", run.GeneratedSource, System.StringComparison.Ordinal);
+        Assert.DoesNotContain("__AppendPathEscaped", run.GeneratedSource, System.StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void Helper_AppendsCleanSegmentsDirectly_AndEscapesOnlyTheOthers()
-    {
-        var run = Generate(Source("files/{**path}"));
-
-        Assert.Contains("__result.Append(value, __start, __end - __start);", run.GeneratedSource);
-        Assert.Contains("__result.Append(global::System.Uri.EscapeDataString(value.Substring(__start, __end - __start)));", run.GeneratedSource);
-    }
+    // The lines as the generated method body indents them.
+    private static string Lines(params string[] lines)
+        => string.Join("\n", System.Array.ConvertAll(lines, l => "            " + l));
 
     private static GeneratorHarness.GeneratorHarnessRun Generate(string source)
         => GeneratorHarness.Run(source, "MyApp.IFilesApi.g.cs");
-
-    private static int Occurrences(string text, string value)
-    {
-        var count = 0;
-        for (var i = text.IndexOf(value, System.StringComparison.Ordinal); i >= 0;
-            i = text.IndexOf(value, i + value.Length, System.StringComparison.Ordinal))
-            count++;
-        return count;
-    }
 }

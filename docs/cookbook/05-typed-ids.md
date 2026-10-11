@@ -34,8 +34,8 @@ dotnet add package ZeroAlloc.ValueObjects
 ```
 
 The Rest generator does not need to know anything about `[TypedId]` — the
-emitted code uses the same `Uri.EscapeDataString(value.ToString())` shape
-that any custom struct with a meaningful `ToString()` would benefit from.
+emitted code writes the value's `ToString()`, escaped as `Uri.EscapeDataString` escapes it,
+as it does for any custom struct with a meaningful `ToString()`.
 
 ## 2. Declare the typed ID
 
@@ -77,26 +77,32 @@ public sealed record UserDto(UserId Id, string Name);
 public sealed record CreateUserRequest(string Name);
 ```
 
-The generator emits, for the route segment:
+The generator writes each URL into one `RestUrlBuilder` over a stack buffer. For the route
+segment of `GetUserAsync` it emits:
 
 ```csharp
-var __url = $"/users/{Uri.EscapeDataString(id.ToString())}";
+__urlBuilder.AppendLiteral("/users/");
+__AppendEscaped(ref __urlBuilder, id);
 ```
 
-…and for the nullable `[Query]` parameter:
+…and for the nullable `[Query]` parameter of `SearchAsync`:
 
 ```csharp
+__urlBuilder.AppendLiteral("/users");
 if (since != null)
 {
-    AppendToUrl(__urlBuilder, __hasQuery ? '&' : '?');
-    AppendToUrl(__urlBuilder, "since=".AsSpan());
-    AppendToUrl(__urlBuilder, Uri.EscapeDataString(since!.ToString()!).AsSpan());
-    __hasQuery = true;
+    __urlBuilder.AppendQueryName("since");
+    __AppendEscaped(ref __urlBuilder, since);
 }
 ```
 
-Because `UserId.ToString()` is the ULID string, the resulting URL is
-`/users/01J9XGE7T0H8YQ7K3M4DFB1HJG?since=01J9XGE5RM7AY2WTC0K7P0G42S`.
+`__AppendEscaped` writes the value's `ToString()`, escaped with the rules of
+`Uri.EscapeDataString`. Only BCL types such as `int`, `Guid` or `DateTimeOffset` are formatted
+straight into the buffer; a type of your own, a typed ID included, is always written with its
+own `ToString()`.
+
+Because `UserId.ToString()` is the ULID string, the resulting URLs are
+`/users/01J9XGE7T0H8YQ7K3M4DFB1HJG` and `/users?since=01J9XGE5RM7AY2WTC0K7P0G42S`.
 
 ## 4. Round-trip with WireMock.Net
 
