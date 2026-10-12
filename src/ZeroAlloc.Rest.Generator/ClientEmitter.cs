@@ -1034,11 +1034,8 @@ internal static class ClientEmitter
         sb.AppendLine("    private static global::ZeroAlloc.Rest.HttpError __CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind kind, global::System.Net.Http.HttpResponseMessage? response, global::System.Exception? exception, global::System.ReadOnlyMemory<byte> body = default, bool bodyTruncated = false)");
         sb.AppendLine("    {");
         sb.AppendLine("        global::System.Net.HttpStatusCode statusCode;");
-        // `headers` stays the concrete Dictionary, not the IReadOnlyDictionary that HttpError
-        // wants: assigning a Dictionary<,> to an interface-typed local boxes its struct enumerator
-        // on any later enumeration through that local (NetFabric.Hyperlinq.Analyzer HLQ001).
-        // Passing it as a constructor argument below converts it without ever going through such
-        // an assignment, and `__noHeaders` needs no wrapping since it is already interface-typed.
+        // `headers` stays null when no response arrived; `headers ?? __noHeaders` at the return
+        // supplies the shared empty instance, so the no-response branch allocates nothing.
         sb.AppendLine("        global::System.Collections.Generic.Dictionary<string, global::System.Collections.Generic.IReadOnlyList<string>>? headers = null;");
         sb.AppendLine("        string? contentType = null;");
         sb.AppendLine("        if (response is not null)");
