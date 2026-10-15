@@ -6,7 +6,7 @@
 [![AOT](https://img.shields.io/badge/AOT--Compatible-passing-brightgreen)](https://learn.microsoft.com/dotnet/core/deploying/native-aot/)
 [![GitHub Sponsors](https://img.shields.io/github/sponsors/MarcelRoozekrans?style=flat&logo=githubsponsors&color=ea4aaa&label=Sponsor)](https://github.com/sponsors/MarcelRoozekrans)
 
-**ZeroAlloc.Rest** is a source-generated, Native AOT-compatible REST client for .NET 10+. Define your HTTP API as a C# interface — the Roslyn generator emits a fully type-safe, zero-reflection implementation at compile time. No runtime code generation, no IL emit, no allocations beyond the HTTP layer itself.
+**ZeroAlloc.Rest** is a source-generated, Native AOT-compatible REST client for .NET 10+. Define your HTTP API as a C# interface — the Roslyn generator emits a fully type-safe, zero-reflection implementation at compile time. No runtime code generation, no IL emit, and no per-call allocation beyond what the same call written by hand against `HttpClient` allocates.
 
 ## Install
 
@@ -69,7 +69,13 @@ public interface IUserApi
 **2. Register in DI:**
 
 ```csharp
+using System.Text.Json.Serialization;
+using ZeroAlloc.Rest.SystemTextJson;
+
+// Every type the client reads or writes needs an entry: a context-only serializer throws for any other.
 [JsonSerializable(typeof(UserDto))]
+[JsonSerializable(typeof(List<UserDto>))]
+[JsonSerializable(typeof(CreateUserRequest))]
 internal partial class AppJsonContext : JsonSerializerContext { }
 
 builder.Services.AddIUserApi(options =>
@@ -109,6 +115,8 @@ See [docs/benchmarks.md](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/blob/ma
 
 ZA is **1.7–3.6× faster than Refit** across every call shape with **1.3–1.5× less allocation**. Refit pays for reflection-based attribute scanning + expression-tree invocation on every call; ZA's generated client lives within 1.7–3.2× of the raw HttpClient floor.
 
+Allocation is pinned by `GetCallAllocationTests` with `AllocationGate`: a generated GET of a small DTO against an in-memory handler allocates **1,688 B per call** on .NET 10 x64, which is exactly what the same request written by hand allocates. Most of it is `HttpClient`, the request and response objects and the DTO. The generated call adds a 40 B URL string and 136 B for its per-request `Accept` header over a bare `HttpClient.GetAsync` with a literal URL; the Accept header is tracked in [#441](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/441).
+
 ## Features
 
 - **Source-generated** — zero runtime reflection; compile-time type safety
@@ -117,8 +125,8 @@ ZA is **1.7–3.6× faster than Refit** across every call shape with **1.3–1.5
 - **Path, query, body, and header parameters** — `{id}`, `{**path}` catch-all, `[Query]`, `[Body]`, `[Header("X-Api-Key")]`
 - **`Result<T, HttpError>`** — typed success/error returns via `ZeroAlloc.Results`; no exception on 4xx/5xx, network failures, timeouts or unreadable response bodies — or your own error type via `[ErrorMapper]`
 - **OpenAPI code generation** — the `zeroalloc generate` CLI (`ZeroAlloc.Rest.Tools`), or `<ZeroAllocApiSpec>` items with the `ZeroAlloc.Rest.Tools.MSBuild` task, generates the interface, its models and a JSON context
-- **Pluggable serializers** — System.Text.Json, MemoryPack, MessagePack, or bring your own
-- **IHttpClientFactory integration** — `AddI{Interface}` generated extension method
+- **Pluggable serializers** — System.Text.Json (`ZeroAlloc.Rest.SystemTextJson`), MemoryPack (`ZeroAlloc.Rest.MemoryPack`), MessagePack (`ZeroAlloc.Rest.MessagePack`), or bring your own `IRestSerializer`
+- **IHttpClientFactory integration** — generated `Add{I}` extension method named after the interface, such as `AddIUserApi`
 - **Resilience bridge** — `ZeroAlloc.Rest.Resilience` wraps any client with `[Retry]`, `[Timeout]`, `[CircuitBreaker]`, and `[RateLimit]` via `AddRestResilience<,,>()`
 
 ## Telemetry
@@ -153,6 +161,8 @@ services.AddOpenTelemetry()
 | [Testing](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/blob/main/docs/testing.md) | Testing patterns with WireMock.Net |
 | [Advanced](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/blob/main/docs/advanced.md) | `Result<T, HttpError>`, or your own error type via `[ErrorMapper]`, multiple serializers, edge cases |
 | [Resilience](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/blob/main/docs/resilience.md) | Retry, timeout, circuit-breaker, and rate-limit via `ZeroAlloc.Rest.Resilience` |
+| [Migrating to 2.0](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/blob/main/docs/migrating-to-v2.md) | Upgrading from 1.x |
+| [Migrating to 3.0](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/blob/main/docs/migrating-to-v3.md) | Upgrading from 2.x |
 | [Cookbook](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/tree/main/docs/cookbook/) | End-to-end recipes |
 
 ## License
