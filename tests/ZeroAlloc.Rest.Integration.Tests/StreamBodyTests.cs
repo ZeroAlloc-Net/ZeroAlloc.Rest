@@ -5,6 +5,7 @@ using Xunit;
 using ZeroAlloc.Rest.Attributes;
 using ZeroAlloc.Rest.SystemTextJson;
 using ZeroAlloc.Results;
+using ZeroAlloc.TestHelpers;
 
 namespace ZeroAlloc.Rest.Integration.Tests;
 
@@ -43,6 +44,15 @@ public interface IMappedFileApi
 public sealed class StreamBodyTests
 {
     private const int LargeBody = 1024 * 1024;
+
+    // Each call copies a whole LargeBody, so fewer iterations than a small call's gate.
+    private const int LargeBodyIterations = 100;
+
+    // The whole call, measured on .NET 10 x64, Release, through a synchronous stub: HttpClient, the
+    // request and response, the stub's own objects, and no copy of the body. A copy would add at
+    // least LargeBody.
+    private const int LargeUploadBytesPerCall = 1_512;
+    private const int LargeDownloadBytesPerCall = 1_040;
 
     [Fact]
     public async Task StreamBody_IsSentWithItsDeclaredMediaTypeAndLength()
@@ -156,8 +166,8 @@ public sealed class StreamBodyTests
         Assert.IsType<IOException>(result.Error.Exception!.InnerException);
     }
 
-    [Fact]
-    public async Task LargeUpload_IsNotCopied()
+    [OptimizedBuildFact]
+    public void LargeUpload_IsNotCopied()
     {
         var bytes = new byte[LargeBody];
         new Random(358).NextBytes(bytes);
@@ -171,14 +181,21 @@ public sealed class StreamBodyTests
             return new HttpResponseMessage(HttpStatusCode.NoContent);
         });
         var api = Api(http);
-        using var warmUp = new MemoryStream(bytes, writable: false);
-        await api.UploadAsync("warm", warmUp);
-
         using var body = new UnseekableStream(bytes);
-        var allocated = await AllocatedByAsync(() => api.UploadAsync("big", body));
+
+        // Every call sends the whole body again: the call disposes its request, but the stream
+        // reads on after Rewind.
+        AllocationGate.AssertBudget(
+            LargeUploadBytesPerCall,
+            LargeBodyIterations,
+            () =>
+            {
+                body.Rewind();
+                SynchronousCall.Require(api.UploadAsync("big", body));
+            },
+            $"generated PUT of a {LargeBody}-byte stream body");
 
         Assert.Equal(LargeBody, sentLength);
-        Assert.True(allocated < LargeBody / 16, $"Allocated {allocated} bytes to upload a {LargeBody}-byte body.");
     }
 
     [Fact]
@@ -224,26 +241,30 @@ public sealed class StreamBodyTests
         Assert.True(content.Disposed);
     }
 
-    [Fact]
-    public async Task LargeDownload_IsNotCopied()
+    [OptimizedBuildFact]
+    public void LargeDownload_IsNotCopied()
     {
         var bytes = new byte[LargeBody];
         new Random(358).NextBytes(bytes);
         using var http = Http((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new TrackingContent(bytes) }));
         var api = Api(http);
-        await using (var warmUp = await api.DownloadAsync("warm"))
-            await warmUp.CopyToAsync(Stream.Null);
-
         var counter = new CountingStream();
-        var allocated = await AllocatedByAsync(async () =>
+
+        SynchronousCall.Require(DownloadAsync(api, counter));
+        Assert.Equal(LargeBody, counter.Count);
+
+        AllocationGate.AssertBudget(
+            LargeDownloadBytesPerCall,
+            LargeBodyIterations,
+            () => SynchronousCall.Require(DownloadAsync(api, counter)),
+            $"generated GET of a {LargeBody}-byte stream response, read to the end");
+
+        static async Task DownloadAsync(IFileApi api, CountingStream counter)
         {
             var stream = await api.DownloadAsync("big").ConfigureAwait(false);
             await using (stream.ConfigureAwait(false))
                 await stream.CopyToAsync(counter).ConfigureAwait(false);
-        });
-
-        Assert.Equal(LargeBody, counter.Count);
-        Assert.True(allocated < LargeBody / 16, $"Allocated {allocated} bytes to download a {LargeBody}-byte body.");
+        }
     }
 
     [Fact]
@@ -424,17 +445,6 @@ public sealed class StreamBodyTests
     private static HttpClient Http(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> send)
         => new(new StubHandler(send)) { BaseAddress = ResultErrorMapperTests.BaseAddress };
 
-    // Every step of these calls completes synchronously, so the whole call runs on this thread.
-    private static async Task<long> AllocatedByAsync(Func<Task> call)
-    {
-        var before = GC.GetAllocatedBytesForCurrentThread();
-        var task = call();
-        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-        Assert.True(task.IsCompletedSuccessfully, "The call did not complete synchronously, so its allocations were not all on this thread.");
-        await task.ConfigureAwait(false);
-        return allocated;
-    }
-
     // Counts the bytes written to it and keeps none, as a connection's transport does.
     private sealed class CountingStream : Stream
     {
@@ -497,6 +507,9 @@ public sealed class StreamBodyTests
             get => throw new NotSupportedException();
             set => throw new NotSupportedException();
         }
+
+        // Starts the body over, so one stream can be sent by every call of an allocation gate.
+        public void Rewind() => _position = 0;
 
         public override int Read(byte[] buffer, int offset, int count) => Read(buffer.AsSpan(offset, count));
 

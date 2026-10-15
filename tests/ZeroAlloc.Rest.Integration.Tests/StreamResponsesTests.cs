@@ -6,6 +6,7 @@ using Xunit;
 using ZeroAlloc.Rest.Attributes;
 using ZeroAlloc.Rest.SystemTextJson;
 using ZeroAlloc.Results;
+using ZeroAlloc.TestHelpers;
 
 namespace ZeroAlloc.Rest.Integration.Tests;
 
@@ -76,6 +77,9 @@ public interface INumbersApi
 public sealed class StreamResponsesTests
 {
     private const string Rex = "{\"name\":\"Rex\"}";
+
+    // Iterations per AllocationGate measurement. Each call reads a body of up to 16K numbers.
+    private const int Iterations = 100;
 
     [Fact]
     public async Task Success_IsReadFromTheStream_WithoutBuffering()
@@ -394,24 +398,13 @@ public sealed class StreamResponsesTests
         Assert.Equal(numbers, await api.GetBufferedAsync().ConfigureAwait(false));
         Assert.Equal(numbers, await api.GetStreamedAsync().ConfigureAwait(false));
 
-        var buffered = await AllocatedByAsync(() => api.GetBufferedAsync()).ConfigureAwait(false);
-        var streamed = await AllocatedByAsync(() => api.GetStreamedAsync()).ConfigureAwait(false);
+        var buffered = AllocationGate.MeasureBytesPerCall(Iterations, () => SynchronousCall.Require(api.GetBufferedAsync()));
+        var streamed = AllocationGate.MeasureBytesPerCall(Iterations, () => SynchronousCall.Require(api.GetStreamedAsync()));
 
         // Both calls allocate the int[] result, so less than that means the measurement missed the call.
         Assert.True(buffered >= numbers.Length * sizeof(int), $"Buffered allocated {buffered} bytes: less than its own result, so the measurement missed the call.");
         Assert.True(streamed >= numbers.Length * sizeof(int), $"Streamed allocated {streamed} bytes: less than its own result, so the measurement missed the call.");
         return (body.Length, buffered, streamed);
-    }
-
-    // Every step of these calls completes synchronously, so the whole call runs on this thread.
-    private static async Task<long> AllocatedByAsync(Func<Task<int[]>> call)
-    {
-        var before = GC.GetAllocatedBytesForCurrentThread();
-        var task = call();
-        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-        Assert.True(task.IsCompletedSuccessfully, "The call did not complete synchronously, so its allocations were not all on this thread.");
-        await task.ConfigureAwait(false);
-        return allocated;
     }
 
     // A body with a Content-Length whose stream cannot seek, as a connection's is, and that

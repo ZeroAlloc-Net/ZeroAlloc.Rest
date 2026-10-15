@@ -1,6 +1,7 @@
 using MemoryPack;
 using Xunit;
 using ZeroAlloc.Rest.MemoryPack;
+using ZeroAlloc.TestHelpers;
 
 namespace ZeroAlloc.Rest.Tests.Serializers;
 
@@ -10,6 +11,16 @@ public sealed class MemoryPackSerializerBufferTests
 {
     private const int PayloadInts = 8 * 1024;
     private const int PayloadBytes = PayloadInts * sizeof(int);
+
+    private const int Iterations = 1_000;
+
+    // Measured on .NET 10 x64, Release. The body is gathered in an array rented from the pool, so
+    // a call allocates no copy of it, which would add at least PayloadBytes. What a call does
+    // allocate is its PooledBuffer, the 32 B object that holds the rented array, tracked in #445,
+    // and for a read its int[] result: PayloadBytes plus the 24 B array header.
+    private const int PooledBufferBytes = 32;
+    private const int DeserializeBytesPerCall = PayloadBytes + 24 + PooledBufferBytes;
+    private const int SerializeBytesPerCall = PooledBufferBytes;
 
     private readonly MemoryPackRestSerializer _sut = new(types => types.Add<MemPackTestDto>());
 
@@ -57,34 +68,40 @@ public sealed class MemoryPackSerializerBufferTests
     public async Task NonSeekableStream_DoesNotCopyThePayload()
     {
         var bytes = MemoryPackSerializer.Serialize(Payload());
-        // Warm up: the first call rents the pool's arrays and JITs the path.
-        await _sut.DeserializeAsync<int[]>(new TrickleStream(bytes, chunk: 4096));
-
         var stream = new TrickleStream(bytes, chunk: 4096);
-        var before = GC.GetAllocatedBytesForCurrentThread();
-        var result = await _sut.DeserializeAsync<int[]>(stream);
-        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
 
-        Assert.Equal(PayloadInts, result!.Length);
-        // The result array itself is PayloadBytes. A copy of the body, as a MemoryStream and its
-        // ToArray made, would add at least as much again.
-        Assert.True(allocated < PayloadBytes + 4096, $"Allocated {allocated} bytes for a {PayloadBytes}-byte payload.");
+        AllocationGate.AssertBudgetValueTask(
+            DeserializeBytesPerCall,
+            Iterations,
+            () =>
+            {
+                stream.Rewind();
+                return _sut.DeserializeAsync<int[]>(stream);
+            },
+            $"MemoryPack read of a {PayloadBytes}-byte payload from a non-seekable stream");
+
+        stream.Rewind();
+        Assert.Equal(PayloadInts, (await _sut.DeserializeAsync<int[]>(stream))!.Length);
     }
 
     [Fact]
     public async Task SeekableStream_DoesNotCopyThePayload()
     {
         var bytes = MemoryPackSerializer.Serialize(Payload());
-        using var warmUp = new MemoryStream(bytes, writable: false);
-        await _sut.DeserializeAsync<int[]>(warmUp);
-
         using var stream = new MemoryStream(bytes, writable: false);
-        var before = GC.GetAllocatedBytesForCurrentThread();
-        var result = await _sut.DeserializeAsync<int[]>(stream);
-        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
 
-        Assert.Equal(PayloadInts, result!.Length);
-        Assert.True(allocated < PayloadBytes + 4096, $"Allocated {allocated} bytes for a {PayloadBytes}-byte payload.");
+        AllocationGate.AssertBudgetValueTask(
+            DeserializeBytesPerCall,
+            Iterations,
+            () =>
+            {
+                stream.Position = 0;
+                return _sut.DeserializeAsync<int[]>(stream);
+            },
+            $"MemoryPack read of a {PayloadBytes}-byte payload from a seekable stream");
+
+        stream.Position = 0;
+        Assert.Equal(PayloadInts, (await _sut.DeserializeAsync<int[]>(stream))!.Length);
     }
 
     [Fact]
@@ -92,17 +109,20 @@ public sealed class MemoryPackSerializerBufferTests
     {
         var payload = Payload();
         using var destination = new MemoryStream(capacity: PayloadBytes * 2);
-        await _sut.SerializeAsync(destination, payload);
-        var expected = destination.ToArray();
+
+        AllocationGate.AssertBudget(
+            SerializeBytesPerCall,
+            Iterations,
+            () =>
+            {
+                destination.SetLength(0);
+                RequireSynchronous(_sut.SerializeAsync(destination, payload));
+            },
+            $"MemoryPack write of a {PayloadBytes}-byte payload");
+
         destination.SetLength(0);
-
-        var before = GC.GetAllocatedBytesForCurrentThread();
         await _sut.SerializeAsync(destination, payload);
-        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-
-        Assert.Equal(expected, destination.ToArray());
-        Assert.Equal(MemoryPackSerializer.Serialize(payload), expected);
-        Assert.True(allocated < 4096, $"Allocated {allocated} bytes to serialize a {PayloadBytes}-byte payload.");
+        Assert.Equal(MemoryPackSerializer.Serialize(payload), destination.ToArray());
     }
 
     [Fact]
@@ -129,6 +149,15 @@ public sealed class MemoryPackSerializerBufferTests
 
         var buffer = Assert.Single(stream.Buffers);
         Assert.DoesNotContain(buffer, b => b != 0);
+    }
+
+    // AllocationGate counts this thread only, so the call must complete synchronously. A plain
+    // check rather than an assertion: an assertion object would allocate in the loop.
+    private static void RequireSynchronous(ValueTask call)
+    {
+        if (!call.IsCompletedSuccessfully)
+            throw new InvalidOperationException("The call did not complete synchronously, so not all its allocations were on this thread.");
+        call.GetAwaiter().GetResult();
     }
 
     private static int[] Payload()
@@ -189,6 +218,9 @@ public sealed class MemoryPackSerializerBufferTests
     private sealed class TrickleStream(byte[] body, int chunk) : Stream
     {
         private int _position;
+
+        // Starts the body over, so one stream can be read by every call of an allocation gate.
+        public void Rewind() => _position = 0;
 
         public override bool CanRead => true;
         public override bool CanSeek => false;
