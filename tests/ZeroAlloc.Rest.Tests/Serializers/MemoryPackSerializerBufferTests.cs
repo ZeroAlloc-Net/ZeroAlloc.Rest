@@ -14,12 +14,19 @@ public sealed class MemoryPackSerializerBufferTests
 
     private const int Iterations = 1_000;
 
+    // The gated calls use a smaller payload: a 32 KB result is larger than the GC's 8 KB allocation
+    // quantum, and on CI one window of such calls read 8,168 B over its exact budget, which no
+    // local run reproduced. A 4 KB payload keeps every object within one quantum, and a copy of
+    // the body would still break the exact budget.
+    private const int GatedPayloadInts = 1024;
+    private const int GatedPayloadBytes = GatedPayloadInts * sizeof(int);
+
     // Measured on .NET 10 x64, Release. The body is gathered in an array rented from the pool, so
-    // a call allocates no copy of it, which would add at least PayloadBytes. What a call does
+    // a call allocates no copy of it, which would add at least GatedPayloadBytes. What a call does
     // allocate is its PooledBuffer, the 32 B object that holds the rented array, tracked in #445,
-    // and for a read its int[] result: PayloadBytes plus the 24 B array header.
+    // and for a read its int[] result: GatedPayloadBytes plus the 24 B array header.
     private const int PooledBufferBytes = 32;
-    private const int DeserializeBytesPerCall = PayloadBytes + 24 + PooledBufferBytes;
+    private const int DeserializeBytesPerCall = GatedPayloadBytes + 24 + PooledBufferBytes;
     private const int SerializeBytesPerCall = PooledBufferBytes;
 
     private readonly MemoryPackRestSerializer _sut = new(types => types.Add<MemPackTestDto>());
@@ -27,7 +34,7 @@ public sealed class MemoryPackSerializerBufferTests
     [Fact]
     public async Task NonSeekableStream_LargePayload_RoundTrips_AcrossShortReads()
     {
-        var payload = Payload();
+        var payload = Payload(PayloadInts);
         var bytes = MemoryPackSerializer.Serialize(payload);
 
         var result = await _sut.DeserializeAsync<int[]>(new TrickleStream(bytes, chunk: 1000));
@@ -67,7 +74,7 @@ public sealed class MemoryPackSerializerBufferTests
     [Fact]
     public async Task NonSeekableStream_DoesNotCopyThePayload()
     {
-        var bytes = MemoryPackSerializer.Serialize(Payload());
+        var bytes = MemoryPackSerializer.Serialize(Payload(GatedPayloadInts));
         var stream = new TrickleStream(bytes, chunk: 4096);
 
         AllocationGate.AssertBudgetValueTask(
@@ -78,16 +85,16 @@ public sealed class MemoryPackSerializerBufferTests
                 stream.Rewind();
                 return _sut.DeserializeAsync<int[]>(stream);
             },
-            $"MemoryPack read of a {PayloadBytes}-byte payload from a non-seekable stream");
+            $"MemoryPack read of a {GatedPayloadBytes}-byte payload from a non-seekable stream");
 
         stream.Rewind();
-        Assert.Equal(PayloadInts, (await _sut.DeserializeAsync<int[]>(stream))!.Length);
+        Assert.Equal(GatedPayloadInts, (await _sut.DeserializeAsync<int[]>(stream))!.Length);
     }
 
     [Fact]
     public async Task SeekableStream_DoesNotCopyThePayload()
     {
-        var bytes = MemoryPackSerializer.Serialize(Payload());
+        var bytes = MemoryPackSerializer.Serialize(Payload(GatedPayloadInts));
         using var stream = new MemoryStream(bytes, writable: false);
 
         AllocationGate.AssertBudgetValueTask(
@@ -98,17 +105,17 @@ public sealed class MemoryPackSerializerBufferTests
                 stream.Position = 0;
                 return _sut.DeserializeAsync<int[]>(stream);
             },
-            $"MemoryPack read of a {PayloadBytes}-byte payload from a seekable stream");
+            $"MemoryPack read of a {GatedPayloadBytes}-byte payload from a seekable stream");
 
         stream.Position = 0;
-        Assert.Equal(PayloadInts, (await _sut.DeserializeAsync<int[]>(stream))!.Length);
+        Assert.Equal(GatedPayloadInts, (await _sut.DeserializeAsync<int[]>(stream))!.Length);
     }
 
     [Fact]
     public async Task Serialize_DoesNotCopyThePayload()
     {
-        var payload = Payload();
-        using var destination = new MemoryStream(capacity: PayloadBytes * 2);
+        var payload = Payload(GatedPayloadInts);
+        using var destination = new MemoryStream(capacity: GatedPayloadBytes * 2);
 
         AllocationGate.AssertBudget(
             SerializeBytesPerCall,
@@ -118,7 +125,7 @@ public sealed class MemoryPackSerializerBufferTests
                 destination.SetLength(0);
                 RequireSynchronous(_sut.SerializeAsync(destination, payload));
             },
-            $"MemoryPack write of a {PayloadBytes}-byte payload");
+            $"MemoryPack write of a {GatedPayloadBytes}-byte payload");
 
         destination.SetLength(0);
         await _sut.SerializeAsync(destination, payload);
@@ -160,9 +167,9 @@ public sealed class MemoryPackSerializerBufferTests
         call.GetAwaiter().GetResult();
     }
 
-    private static int[] Payload()
+    private static int[] Payload(int count)
     {
-        var payload = new int[PayloadInts];
+        var payload = new int[count];
         for (var i = 0; i < payload.Length; i++)
             payload[i] = i * 31;
         return payload;
