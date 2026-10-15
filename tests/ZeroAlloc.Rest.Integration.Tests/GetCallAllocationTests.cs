@@ -27,7 +27,9 @@ public sealed class GetCallAllocationTests
     // JsonSerializer, 1,512 B, the generated call adds 176 B: 136 B for the per-request Accept
     // header and 40 B for the URL string built from the id. A hand-written call that sends the
     // same Accept header and builds the same URL allocates the same 1,688 B, as the second test
-    // pins. The Accept header is tracked in #441.
+    // pins. The 136 B is HttpClient's per-header cost: setting Accept on DefaultRequestHeaders
+    // allocates the same, because SendAsync merges the defaults into each request. Kept by
+    // design, see #441.
     private const int GeneratedGetBytesPerCall = 1_688;
 
     private static readonly byte[] UserJson = Encoding.UTF8.GetBytes("""{"id":1,"name":"Alice"}""");
