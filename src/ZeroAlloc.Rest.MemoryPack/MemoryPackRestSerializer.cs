@@ -56,18 +56,45 @@ public sealed class MemoryPackRestSerializer : IRestSerializer
         if (stream.CanSeek && stream.Position >= stream.Length) return default;
         // MemoryPack reads from one contiguous span, so the body is gathered first: into a pooled
         // buffer, cleared before it goes back, never into an array of this call's own.
+        // The buffer is a struct local, so it lives in this method's state machine and a call
+        // allocates no holder for it. It is disposed in a finally, not through `using`: a using
+        // variable is read-only, and its mutating calls would run on defensive copies.
         var length = stream.CanSeek ? RemainingLength(stream) : -1;
-        using var body = new PooledBuffer(length < 0 ? UnknownLengthRent : length);
-        await body.FillAsync(stream, length, ct).ConfigureAwait(false);
-        return Read<T>(body.Written);
+        var body = new PooledBuffer(length < 0 ? UnknownLengthRent : length);
+        try
+        {
+            // Reads `stream` to its end, or until `length` bytes when the length is known.
+            while (length < 0 || body.WrittenCount < length)
+            {
+                var read = await stream.ReadAsync(body.GetMemory(1), ct).ConfigureAwait(false);
+                body.Advance(read);
+                if (read == 0)
+                    break;
+            }
+
+            return Read<T>(body.Written);
+        }
+        finally
+        {
+            body.Dispose();
+        }
     }
 
     public async ValueTask SerializeAsync<T>(Stream stream, T value, CancellationToken ct = default)
     {
         EnsureServed<T>();
-        using var buffer = new PooledBuffer(UnknownLengthRent);
-        MemoryPackSerializer.Serialize(buffer, value);
-        await stream.WriteAsync(buffer.WrittenMemory, ct).ConfigureAwait(false);
+        // A struct local disposed in a finally, as in DeserializeAsync. MemoryPack writes through a
+        // reference to it, so the writes land in this local and not in a copy.
+        var buffer = new PooledBuffer(UnknownLengthRent);
+        try
+        {
+            MemoryPackSerializer.Serialize(in buffer, value);
+            await stream.WriteAsync(buffer.WrittenMemory, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            buffer.Dispose();
+        }
     }
 
     // The first rent for a body of unknown length. The buffer doubles from here as needed.
@@ -181,8 +208,9 @@ public sealed class MemoryPackRestSerializer : IRestSerializer
     }
 
     // An IBufferWriter over ArrayPool<byte>.Shared. It grows by renting a larger array, and every
-    // array it lets go of is cleared first: a body can hold tokens or PII.
-    private sealed class PooledBuffer : IBufferWriter<byte>, IDisposable
+    // array it lets go of is cleared first: a body can hold tokens or PII. It is a mutable struct,
+    // owned by one call: hold it in a plain local, never a read-only one, and never copy it.
+    private struct PooledBuffer : IBufferWriter<byte>, IDisposable
     {
         private byte[] _buffer;
         private int _written;
@@ -197,21 +225,11 @@ public sealed class MemoryPackRestSerializer : IRestSerializer
             _buffer = ArrayPool<byte>.Shared.Rent(Math.Max(initialSize, 1));
         }
 
-        internal ReadOnlySpan<byte> Written => _buffer.AsSpan(0, _written);
+        internal readonly int WrittenCount => _written;
 
-        internal ReadOnlyMemory<byte> WrittenMemory => _buffer.AsMemory(0, _written);
+        internal readonly ReadOnlySpan<byte> Written => _buffer.AsSpan(0, _written);
 
-        // Reads `stream` to its end, or until `length` bytes when the length is known.
-        internal async ValueTask FillAsync(Stream stream, int length, CancellationToken ct)
-        {
-            while (length < 0 || _written < length)
-            {
-                var read = await stream.ReadAsync(GetMemory(1), ct).ConfigureAwait(false);
-                Advance(read);
-                if (read == 0)
-                    return;
-            }
-        }
+        internal readonly ReadOnlyMemory<byte> WrittenMemory => _buffer.AsMemory(0, _written);
 
         public void Advance(int count)
         {
@@ -265,6 +283,6 @@ public sealed class MemoryPackRestSerializer : IRestSerializer
         }
 
         // The bytes of the array that may hold body data.
-        private int DirtyLength => _spanOutstanding ? _buffer.Length : _written;
+        private readonly int DirtyLength => _spanOutstanding ? _buffer.Length : _written;
     }
 }
