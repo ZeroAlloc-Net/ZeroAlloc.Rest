@@ -22,12 +22,11 @@ public sealed class MemoryPackSerializerBufferTests
     private const int GatedPayloadBytes = GatedPayloadInts * sizeof(int);
 
     // Measured on .NET 10 x64, Release. The body is gathered in an array rented from the pool, so
-    // a call allocates no copy of it, which would add at least GatedPayloadBytes. What a call does
-    // allocate is its PooledBuffer, the 32 B object that holds the rented array, tracked in #445,
-    // and for a read its int[] result: GatedPayloadBytes plus the 24 B array header.
-    private const int PooledBufferBytes = 32;
-    private const int DeserializeBytesPerCall = GatedPayloadBytes + 24 + PooledBufferBytes;
-    private const int SerializeBytesPerCall = PooledBufferBytes;
+    // a call allocates no copy of it, which would add at least GatedPayloadBytes. The buffer that
+    // holds the rented array is a struct local since #445, so a write allocates nothing and a read
+    // allocates only its int[] result: GatedPayloadBytes plus the 24 B array header.
+    private const int DeserializeBytesPerCall = GatedPayloadBytes + 24;
+    private const int SerializeBytesPerCall = 0;
 
     private readonly MemoryPackRestSerializer _sut = new(types => types.Add<MemPackTestDto>());
 

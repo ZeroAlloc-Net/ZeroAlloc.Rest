@@ -110,7 +110,8 @@ remains is the deserialized array. Timings are not shown: they were within noise
 `MemoryPackBodyBenchmarks` measures `MemoryPackRestSerializer` on its own. It reads a body through
 pooled buffers that it clears before returning them, so for 1000 users, about 20 KB, reading a
 body allocates 80 KB, which is the result, instead of 122 KB from a stream that cannot seek or
-101 KB from a seekable one. Writing a body allocates 32 B instead of 64 KB.
+101 KB from a seekable one. Writing a body allocates nothing instead of 64 KB;
+`MemoryPackSerializerBufferTests` pins the write at 0 B.
 
 ---
 
