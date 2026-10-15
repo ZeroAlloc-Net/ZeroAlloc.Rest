@@ -13,5 +13,6 @@
     <PackageReference Include="MessagePack" />
     <ProjectReference Include="../../src/ZeroAlloc.Rest.MemoryPack/ZeroAlloc.Rest.MemoryPack.csproj" />
     <PackageReference Include="MemoryPack" />
+    <PackageReference Include="ZeroAlloc.TestHelpers" />
   </ItemGroup>
 </Project>

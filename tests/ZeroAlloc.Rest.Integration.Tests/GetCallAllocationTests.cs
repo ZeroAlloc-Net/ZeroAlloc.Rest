@@ -41,7 +41,7 @@ public sealed class GetCallAllocationTests
         AllocationGate.AssertBudget(
             GeneratedGetBytesPerCall,
             Iterations,
-            () => RequireSynchronous(api.GetUserAsync(1)),
+            () => SynchronousCall.Require(api.GetUserAsync(1)),
             "generated GET returning a small DTO");
     }
 
@@ -55,8 +55,8 @@ public sealed class GetCallAllocationTests
 
         AllocationGate.AssertNoMoreThan(
             Iterations,
-            baseline: () => RequireSynchronous(HandWrittenGetAsync(http, serializer, id)),
-            candidate: () => RequireSynchronous(api.GetUserAsync(id)),
+            baseline: () => SynchronousCall.Require(HandWrittenGetAsync(http, serializer, id)),
+            candidate: () => SynchronousCall.Require(api.GetUserAsync(id)),
             "generated GET against the same call written by hand");
     }
 
@@ -74,14 +74,6 @@ public sealed class GetCallAllocationTests
         return await serializer.DeserializeAsync<UserDto>(stream).ConfigureAwait(false);
     }
 
-    // AllocationGate counts this thread only, so every step of the call must complete synchronously.
-    // A plain check rather than an assertion: an assertion object would allocate in the loop.
-    private static void RequireSynchronous<T>(Task<T> call)
-    {
-        if (!call.IsCompletedSuccessfully)
-            throw new InvalidOperationException("The call did not complete synchronously, so not all its allocations were on this thread.");
-    }
-
     private static HttpClient CreateHttpClient() =>
         new(new StubHandler(static (_, _) =>
         {
@@ -92,15 +84,4 @@ public sealed class GetCallAllocationTests
         {
             BaseAddress = new Uri("http://localhost/"),
         };
-}
-
-// Allocation budgets hold for optimized builds. A Debug build compiles every async method's state
-// machine as a class, so the generated client allocates it on each call there.
-[AttributeUsage(AttributeTargets.Method)]
-public sealed class OptimizedBuildFactAttribute : FactAttribute
-{
-#if DEBUG
-    public OptimizedBuildFactAttribute() =>
-        Skip = "Allocation budgets apply to Release builds; Debug compiles async state machines as classes.";
-#endif
 }

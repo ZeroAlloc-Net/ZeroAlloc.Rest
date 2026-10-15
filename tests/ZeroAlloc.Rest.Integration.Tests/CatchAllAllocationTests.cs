@@ -3,6 +3,7 @@ using System.Net.Http;
 using Xunit;
 using ZeroAlloc.Rest.Attributes;
 using ZeroAlloc.Rest.SystemTextJson;
+using ZeroAlloc.TestHelpers;
 
 namespace ZeroAlloc.Rest.Integration.Tests;
 
@@ -30,8 +31,14 @@ public interface ICatchAllAllocationApi
 [Collection("rest-telemetry-non-parallel")]
 public sealed class CatchAllAllocationTests
 {
-    [Fact]
-    public async Task CatchAllHole_AddsNoAllocation_WhenTheValueNeedsNoEscaping()
+    private const int Iterations = 1_000;
+
+    // The whole {**path} call, measured on .NET 10 x64, Release, through a synchronous stub that
+    // returns an empty 200. It equals the constant route's call.
+    private const int CatchAllBytesPerCall = 1_232;
+
+    [OptimizedBuildFact]
+    public void CatchAllHole_AddsNoAllocation_WhenTheValueNeedsNoEscaping()
     {
         using var http = new HttpClient(new StubHandler(static (_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK))))
         {
@@ -40,29 +47,15 @@ public sealed class CatchAllAllocationTests
         ICatchAllAllocationApi api = new CatchAllAllocationApiClient(http, new SystemTextJsonSerializer());
         const string value = "v1/systemone"; // the constant route sends the same path
 
-        // Warm both paths, so one-time costs such as statics and JIT tiers are not measured.
-        for (var i = 0; i < 50; i++)
-        {
-            await api.CatchAllAsync(value);
-            await api.ConstantAsync();
-        }
-
-        var catchAll = await AllocatedByAsync(() => api.CatchAllAsync(value));
-        var constant = await AllocatedByAsync(() => api.ConstantAsync());
-
-        Assert.True(
-            catchAll <= constant,
-            $"The {{**path}} call allocated {catchAll} bytes, the constant route {constant}.");
-    }
-
-    // Every step of these calls completes synchronously, so the whole call runs on this thread.
-    private static async Task<long> AllocatedByAsync(Func<Task> call)
-    {
-        var before = GC.GetAllocatedBytesForCurrentThread();
-        var task = call();
-        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-        Assert.True(task.IsCompletedSuccessfully, "The call did not complete synchronously, so its allocations were not all on this thread.");
-        await task.ConfigureAwait(false);
-        return allocated;
+        AllocationGate.AssertBudget(
+            CatchAllBytesPerCall,
+            Iterations,
+            () => SynchronousCall.Require(api.CatchAllAsync(value)),
+            "generated GET with a {**path} value that needs no escaping");
+        AllocationGate.AssertNoMoreThan(
+            Iterations,
+            baseline: () => SynchronousCall.Require(api.ConstantAsync()),
+            candidate: () => SynchronousCall.Require(api.CatchAllAsync(value)),
+            "{**path} call against the same URL as a constant route");
     }
 }

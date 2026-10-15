@@ -6,6 +6,7 @@ using Xunit;
 using ZeroAlloc.Rest.Attributes;
 using ZeroAlloc.Rest.Integration.Tests.TestInterfaces;
 using ZeroAlloc.Rest.SystemTextJson;
+using ZeroAlloc.TestHelpers;
 
 namespace ZeroAlloc.Rest.Integration.Tests;
 
@@ -39,8 +40,17 @@ public interface IParameterAllocationApi
 [Collection("rest-telemetry-non-parallel")]
 public sealed class NoListenerAllocationTests
 {
-    [Fact]
-    public async Task GeneratedCall_AllocatesNoMoreThanHandWritten_WithNothingListening()
+    private const int Iterations = 1_000;
+
+    // The bytes each whole generated call allocates, measured on .NET 10 x64, Release, through a
+    // synchronous stub that returns an empty 200: HttpClient, the request and its Accept header,
+    // the response, and what the generated code adds. Each equals the same call written by hand.
+    private const int PingBytesPerCall = 1_136;
+    private const int PathBytesPerCall = 1_352;
+    private const int BodyBytesPerCall = 1_848;
+
+    [OptimizedBuildFact]
+    public void GeneratedCall_AllocatesNoMoreThanHandWritten_WithNothingListening()
     {
         var serializer = new SystemTextJsonSerializer();
         using var http = new HttpClient(new StubHandler(static (_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK))))
@@ -49,60 +59,59 @@ public sealed class NoListenerAllocationTests
         };
         IPingApi api = new PingApiClient(http, serializer);
 
-        // Warm both paths, so one-time costs such as statics and JIT tiers are not measured.
-        for (var i = 0; i < 50; i++)
-        {
-            await api.PingAsync();
-            await HandWrittenAsync(http, serializer);
-        }
-
-        var generated = await AllocatedByAsync(() => api.PingAsync());
-        var handWritten = await AllocatedByAsync(() => HandWrittenAsync(http, serializer));
-
-        Assert.True(
-            generated <= handWritten,
-            $"The generated call allocated {generated} bytes, the hand-written one {handWritten}.");
+        AssertBudgetAndNoMoreThanHandWritten(
+            PingBytesPerCall,
+            () => api.PingAsync(),
+            () => HandWrittenAsync(http, serializer),
+            "generated GET with no parameters");
     }
 
     // A hand-written call formats its values straight into one interpolated string, invariantly,
     // and escapes the text values: one string for the URL, and one per value that needs escaping.
-    [Fact]
-    public async Task GeneratedCallWithPathParameters_AllocatesNoMoreThanHandWritten()
+    [OptimizedBuildFact]
+    public void GeneratedCallWithPathParameters_AllocatesNoMoreThanHandWritten()
     {
         var (http, serializer, api) = CreateParameterClient();
         using var _ = http;
 
-        await AssertNoMoreThanHandWrittenAsync(
+        AssertBudgetAndNoMoreThanHandWritten(
+            PathBytesPerCall,
             () => api.PathAsync(12345, "widget"),
             () => SendAsync(http, serializer, HttpMethod.Get,
-                string.Create(CultureInfo.InvariantCulture, $"users/{12345}/items/{Uri.EscapeDataString("widget")}"), null));
+                string.Create(CultureInfo.InvariantCulture, $"users/{12345}/items/{Uri.EscapeDataString("widget")}"), null),
+            "generated GET with path parameters");
     }
 
-    [Theory]
-    [InlineData("plain")]
-    [InlineData("needs escaping/ü")]
-    public async Task GeneratedCallWithQueryParameters_AllocatesNoMoreThanHandWritten(string q)
+    // The value that needs escaping costs its escaped string on both sides.
+    [OptimizedBuildTheory]
+    [InlineData("plain", 1_400)]
+    [InlineData("needs escaping/ü", 2_280)]
+    public void GeneratedCallWithQueryParameters_AllocatesNoMoreThanHandWritten(string q, int bytesPerCall)
     {
         var (http, serializer, api) = CreateParameterClient();
         using var _ = http;
 
-        await AssertNoMoreThanHandWrittenAsync(
+        AssertBudgetAndNoMoreThanHandWritten(
+            bytesPerCall,
             () => api.QueryAsync(q, 3, 0.25, null),
             () => SendAsync(http, serializer, HttpMethod.Get,
-                string.Create(CultureInfo.InvariantCulture, $"search?q={Uri.EscapeDataString(q)}&page={3}&ratio={0.25}"), null));
+                string.Create(CultureInfo.InvariantCulture, $"search?q={Uri.EscapeDataString(q)}&page={3}&ratio={0.25}"), null),
+            $"generated GET with query parameters, q = \"{q}\"");
     }
 
-    [Fact]
-    public async Task GeneratedCallWithBodyParameter_AllocatesNoMoreThanHandWritten()
+    [OptimizedBuildFact]
+    public void GeneratedCallWithBodyParameter_AllocatesNoMoreThanHandWritten()
     {
         var (http, serializer, api) = CreateParameterClient();
         using var _ = http;
         var payload = new AllocationPayload("widget", 3);
 
-        await AssertNoMoreThanHandWrittenAsync(
+        AssertBudgetAndNoMoreThanHandWritten(
+            BodyBytesPerCall,
             () => api.BodyAsync(9876543210L, payload),
             () => SendAsync(http, serializer, HttpMethod.Post,
-                string.Create(CultureInfo.InvariantCulture, $"users/{9876543210L}"), payload));
+                string.Create(CultureInfo.InvariantCulture, $"users/{9876543210L}"), payload),
+            "generated POST with a JSON body");
     }
 
     private static (HttpClient Http, SystemTextJsonSerializer Serializer, IParameterAllocationApi Api) CreateParameterClient()
@@ -115,21 +124,16 @@ public sealed class NoListenerAllocationTests
         return (http, serializer, new ParameterAllocationApiClient(http, serializer));
     }
 
-    private static async Task AssertNoMoreThanHandWrittenAsync(Func<Task> generatedCall, Func<Task> handWrittenCall)
+    // The whole generated call is held to its measured bytes, and to no more than the same call
+    // written by hand, both measured in this run.
+    private static void AssertBudgetAndNoMoreThanHandWritten(int bytesPerCall, Func<Task> generatedCall, Func<Task> handWrittenCall, string label)
     {
-        // Warm both paths, so one-time costs such as statics and JIT tiers are not measured.
-        for (var i = 0; i < 50; i++)
-        {
-            await generatedCall().ConfigureAwait(false);
-            await handWrittenCall().ConfigureAwait(false);
-        }
-
-        var generated = await AllocatedByAsync(generatedCall).ConfigureAwait(false);
-        var handWritten = await AllocatedByAsync(handWrittenCall).ConfigureAwait(false);
-
-        Assert.True(
-            generated <= handWritten,
-            $"The generated call allocated {generated} bytes, the hand-written one {handWritten}.");
+        AllocationGate.AssertBudget(bytesPerCall, Iterations, () => SynchronousCall.Require(generatedCall()), label);
+        AllocationGate.AssertNoMoreThan(
+            Iterations,
+            baseline: () => SynchronousCall.Require(handWrittenCall()),
+            candidate: () => SynchronousCall.Require(generatedCall()),
+            label + " against the same call written by hand");
     }
 
     // The body is serialized into a MemoryStream and sent from its buffer, without a copy.
@@ -156,16 +160,5 @@ public sealed class NoListenerAllocationTests
         request.Headers.TryAddWithoutValidation("Accept", serializer.ContentType);
         using var response = await http.SendAsync(request).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
-    }
-
-    // Every step of these calls completes synchronously, so the whole call runs on this thread.
-    private static async Task<long> AllocatedByAsync(Func<Task> call)
-    {
-        var before = GC.GetAllocatedBytesForCurrentThread();
-        var task = call();
-        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-        Assert.True(task.IsCompletedSuccessfully, "The call did not complete synchronously, so its allocations were not all on this thread.");
-        await task.ConfigureAwait(false);
-        return allocated;
     }
 }
