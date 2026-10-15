@@ -1,5 +1,24 @@
 # Changelog
 
+## [3.3.3](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v3.3.2...v3.3.3) (2026-10-15)
+
+
+### Performance Improvements
+
+* drop the per-call buffer holder from the memorypack serializer ([#450](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/450)) ([7e72349](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/7e723491b3453fee4e6243d2d92ce897ef221138)), closes [#445](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/445)
+
+
+### Documentation
+
+* explain why the per-request accept header stays ([#449](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/449)) ([ff37dcc](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/ff37dcc9d2f3e2afcdf606c5d348ba8d28f65dba)), closes [#441](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/441)
+* replace unbacked allocation claim and fix readme quick start ([#443](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/443)) ([cd03e32](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/cd03e3273175189049deeaa303ed807d2472fee0))
+
+
+### Tests
+
+* gate MemoryPack calls with a payload within one allocation quantum ([#447](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/447)) ([15eb81b](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/15eb81b11504722de5a56222dffea07b1baa440a))
+* migrate hand-rolled allocation tests to AllocationGate ([#446](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/446)) ([c62d162](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/c62d1626d154488362a8a8cc7a0732e9c6bd8165)), closes [#442](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/442)
+
 ## [3.3.2](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v3.3.1...v3.3.2) (2026-10-11)
 
 
