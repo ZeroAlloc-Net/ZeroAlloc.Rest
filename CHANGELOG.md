@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.3.4](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v3.3.3...v3.3.4) (2026-10-16)
+
+
+### Documentation
+
+* rewrite the readme as a product page ([#459](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/459)) ([672ddee](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/672ddee3fdc4e5390cbaf1b6c6f652dbb3470c1e))
+
 ## [3.3.3](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v3.3.2...v3.3.3) (2026-10-15)
 
 
