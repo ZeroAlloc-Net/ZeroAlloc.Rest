@@ -7,23 +7,26 @@ namespace ZeroAlloc.Rest.DuplicateGeneratorTests;
 // the packed package into a throwaway consumer and builds it, so it covers what a unit test of the task
 // cannot: that the package layout, the targets and the UsingTask path load the task, that the generated
 // file is compiled together with the source-generated client, and that ZRT001 reaches the build output.
+[Collection(PackedFeedCollection.Name)]
 public sealed class MSBuildTaskPackageTests
 {
     private const string PackageId = "ZeroAlloc.Rest.Tools.MSBuild";
 
+    private readonly PackedFeed _feed;
+
+    public MSBuildTaskPackageTests(PackedFeed feed) => _feed = feed;
+
     [Fact]
     public async Task ConsumerBuild_GeneratesAndCompilesClients_AndReportsZRT001()
     {
-        var feed = ConsumerProcess.LocateFeed();
         // ZeroAlloc.Rest is packed into the same feed at the same version.
-        var taskNupkgPath = ConsumerProcess.FindPackage(feed, PackageId);
-        var version = ConsumerProcess.GetPackageVersion(taskNupkgPath, PackageId);
+        _ = ConsumerProcess.FindPackage(_feed.FeedDirectory, PackageId);
 
         var workDir = Path.Combine(Path.GetTempPath(), "za-rest-msbuild-task-" + Path.GetRandomFileName());
         Directory.CreateDirectory(workDir);
         try
         {
-            ScaffoldConsumer(workDir, feed, version);
+            ScaffoldConsumer(workDir, _feed);
 
             var (exitCode, stdout, stderr) = await ConsumerProcess.RunDotnetAsync(workDir, "build", "-c", "Release");
             var combined = stdout + "\n" + stderr;
@@ -59,7 +62,7 @@ public sealed class MSBuildTaskPackageTests
         }
     }
 
-    private static void ScaffoldConsumer(string workDir, string feed, string version)
+    private static void ScaffoldConsumer(string workDir, PackedFeed feed)
     {
         ConsumerProcess.WriteNuGetConfig(workDir, feed);
 
@@ -75,8 +78,8 @@ public sealed class MSBuildTaskPackageTests
                 <RestorePackagesPath>$(MSBuildProjectDirectory)/packages</RestorePackagesPath>
               </PropertyGroup>
               <ItemGroup>
-                <PackageReference Include="ZeroAlloc.Rest" Version="{version}" />
-                <PackageReference Include="{PackageId}" Version="{version}" />
+                <PackageReference Include="ZeroAlloc.Rest" Version="{feed.Version}" />
+                <PackageReference Include="{PackageId}" Version="{feed.Version}" />
               </ItemGroup>
               <ItemGroup>
                 <ZeroAllocApiSpec Include="pets.yaml"

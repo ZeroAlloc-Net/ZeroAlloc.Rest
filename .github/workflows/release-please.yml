@@ -22,6 +22,7 @@ jobs:
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
+      version: ${{ steps.release.outputs.version }}
       # Read by ship-release-tracking. A step output is only visible to another job
       # when the job re-exports it here; without these the job's `if:` is always false.
       prs_created: ${{ steps.release.outputs.prs_created }}
@@ -68,66 +69,23 @@ jobs:
       # its push triggers the release PR's checks like release-please's own.
       RELEASE_BOT_PRIVATE_KEY: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
 
+  # Builds the release tag, packs every packable project, checks the versions inside the
+  # packages, pushes them, and waits until nuget.org serves every one of them. Shared from
+  # ZeroAlloc-Net/.github so a fix there reaches every repository; see ZeroAlloc-Net/.github#49.
+  #
+  # The package consumer tests pack the packages they restore themselves, so the default
+  # test step runs them with nothing set up first.
   publish:
     needs: release-please
     if: needs.release-please.outputs.release_created == 'true'
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v6
-        with:
-          # Installs the SDK global.json pins. Without it the job never installs
-          # that SDK at all and only works when the runner image happens to ship one
-          # satisfying the pin, which is how a publish failed on a lagging image.
-          global-json-file: global.json
-          dotnet-version: '10.0.x'
-
-      - name: Extract version from tag
-        id: version
-        run: echo "version=${TAG#v}" >> $GITHUB_OUTPUT
-        env:
-          TAG: ${{ needs.release-please.outputs.tag_name }}
-
-      - name: Restore
-        run: dotnet restore ZeroAlloc.Rest.slnx
-
-      - name: Build
-        run: dotnet build ZeroAlloc.Rest.slnx --no-restore -c Release -p:Version=${{ steps.version.outputs.version }}
-
-      # DuplicateGeneratorDiagnosticTests scaffolds a consumer project that restores
-      # ZeroAlloc.Rest and ZeroAlloc.Rest.Generator from a local feed, and asserts the
-      # build fails with ZR9001. Without this step the feed does not exist and the test
-      # fails on its first assertion — which is what stranded v1.2.2 and v1.3.0: the
-      # release was tagged, the publish job died here, and nothing reached NuGet.
-      # ci.yml has always had this step; the publish job never did. MSBuildTaskPackageTests
-      # restores ZeroAlloc.Rest.Tools.MSBuild from the same feed. PackageDependencyTests and
-      # CoreOnlyConsumerTests also need the DI package alongside core.
-      #
-      # --no-build, unlike ci.yml's copy: a plain `dotnet pack` here would rebuild these
-      # projects at the default version and overwrite the output the Pack step below
-      # publishes with --no-build, shipping assemblies stamped 1.0.0 inside a package
-      # labelled with the real version.
-      - name: Pack ZA.Rest packages into local feed (for the package consumer tests)
-        run: |
-          dotnet pack src/ZeroAlloc.Rest/ZeroAlloc.Rest.csproj --no-build -c Release -p:PackageVersion=${{ steps.version.outputs.version }} -o artifacts/local
-          dotnet pack src/ZeroAlloc.Rest.Generator/ZeroAlloc.Rest.Generator.csproj --no-build -c Release -p:PackageVersion=${{ steps.version.outputs.version }} -o artifacts/local
-          dotnet pack src/ZeroAlloc.Rest.Tools.MSBuild/ZeroAlloc.Rest.Tools.MSBuild.csproj --no-build -c Release -p:PackageVersion=${{ steps.version.outputs.version }} -o artifacts/local
-          dotnet pack src/ZeroAlloc.Rest.DependencyInjection/ZeroAlloc.Rest.DependencyInjection.csproj --no-build -c Release -p:PackageVersion=${{ steps.version.outputs.version }} -o artifacts/local
-
-      - name: Test
-        run: dotnet test ZeroAlloc.Rest.slnx --no-build -c Release
-
-      - name: Pack
-        run: dotnet pack ZeroAlloc.Rest.slnx --no-build -c Release -p:Version=${{ steps.version.outputs.version }} -o ./nupkg
-
-      - name: Push to NuGet (stable)
-        run: |
-          dotnet nuget push ./nupkg/*.nupkg \
-            --api-key ${{ secrets.NUGET_API_KEY }} \
-            --source https://api.nuget.org/v3/index.json \
-            --skip-duplicate
+    uses: ZeroAlloc-Net/.github/.github/workflows/publish.yml@main
+    with:
+      tag: ${{ needs.release-please.outputs.tag_name }}
+      version: ${{ needs.release-please.outputs.version }}
+      solution: ZeroAlloc.Rest.slnx
+      # This repository has never published to GitHub Packages or attached its packages to
+      # the GitHub release; the migration keeps its destinations as they are.
+      github-packages: false
+      release-assets: false
+    secrets:
+      NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}

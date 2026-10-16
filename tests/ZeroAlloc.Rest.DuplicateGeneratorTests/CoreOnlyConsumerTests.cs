@@ -8,22 +8,28 @@ namespace ZeroAlloc.Rest.DuplicateGeneratorTests;
 // no Microsoft.Extensions.* anywhere in its restore graph, and one that also references
 // ZeroAlloc.Rest.DependencyInjection gets the generated Add{I} registration on top. A unit test
 // cannot see what a real restore pulls in, so these build and run a throwaway console project
-// against the packages in artifacts/local, the same way MSBuildTaskPackageTests does.
+// against the packages PackedFeed packs, the same way MSBuildTaskPackageTests does.
+[Collection(PackedFeedCollection.Name)]
 public sealed class CoreOnlyConsumerTests
 {
     private const string CorePackageId = "ZeroAlloc.Rest";
     private const string DiPackageId = "ZeroAlloc.Rest.DependencyInjection";
 
+    private readonly PackedFeed _feed;
+
+    public CoreOnlyConsumerTests(PackedFeed feed) => _feed = feed;
+
     [Fact]
     public async Task ConsumerWithCoreOnly_BuildsAndRuns_WithoutMicrosoftExtensions()
     {
-        var (feed, version) = LocateFeedAndVersion();
+        _ = ConsumerProcess.FindPackage(_feed.FeedDirectory, CorePackageId);
+        var version = _feed.Version;
 
         var workDir = Path.Combine(Path.GetTempPath(), "za-rest-core-only-" + Path.GetRandomFileName());
         Directory.CreateDirectory(workDir);
         try
         {
-            ConsumerProcess.WriteNuGetConfig(workDir, feed);
+            ConsumerProcess.WriteNuGetConfig(workDir, _feed);
             WritePingApiFiles(workDir);
 
             File.WriteAllText(Path.Combine(workDir, "Consumer.csproj"),
@@ -71,14 +77,15 @@ public sealed class CoreOnlyConsumerTests
     [Fact]
     public async Task ConsumerWithDependencyInjection_GetsAddMethod()
     {
-        var (feed, version) = LocateFeedAndVersion();
-        _ = ConsumerProcess.FindPackage(feed, DiPackageId);
+        _ = ConsumerProcess.FindPackage(_feed.FeedDirectory, CorePackageId);
+        _ = ConsumerProcess.FindPackage(_feed.FeedDirectory, DiPackageId);
+        var version = _feed.Version;
 
         var workDir = Path.Combine(Path.GetTempPath(), "za-rest-core-di-" + Path.GetRandomFileName());
         Directory.CreateDirectory(workDir);
         try
         {
-            ConsumerProcess.WriteNuGetConfig(workDir, feed);
+            ConsumerProcess.WriteNuGetConfig(workDir, _feed);
             WritePingApiFiles(workDir);
 
             File.WriteAllText(Path.Combine(workDir, "Consumer.csproj"),
@@ -240,14 +247,6 @@ public sealed class CoreOnlyConsumerTests
         Assert.True(offenders.Count == 0,
             "project.assets.json restored Microsoft.Extensions.* libraries for a core-only consumer: "
             + string.Join(", ", offenders));
-    }
-
-    private static (string Feed, string Version) LocateFeedAndVersion()
-    {
-        var feed = ConsumerProcess.LocateFeed();
-        var corePath = ConsumerProcess.FindPackage(feed, CorePackageId);
-        var version = ConsumerProcess.GetPackageVersion(corePath, CorePackageId);
-        return (feed, version);
     }
 
     private static void TryDelete(string workDir)

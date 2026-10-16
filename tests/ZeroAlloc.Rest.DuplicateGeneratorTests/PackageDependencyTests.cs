@@ -8,19 +8,23 @@ namespace ZeroAlloc.Rest.DuplicateGeneratorTests;
 
 // Issue #336: ZeroAlloc.Rest depends on ZeroAlloc.Results and ZeroAlloc.Collections only, and
 // ZeroAlloc.Rest.DependencyInjection depends on core and Microsoft.Extensions.Http only. A unit
-// test cannot see a packed nuspec, so this opens the actual .nupkg from artifacts/local and reads
+// test cannot see a packed nuspec, so this opens the actual .nupkg PackedFeed packed and reads
 // its dependency list, so a regression that reintroduces Microsoft.Extensions or
 // ZeroAlloc.Serialisation/ValueObjects into core — or drops a dependency from the DI package —
 // fails the build instead of only showing up once a consumer restores the real package.
+[Collection(PackedFeedCollection.Name)]
 public sealed class PackageDependencyTests
 {
+    private readonly PackedFeed _feed;
+
+    public PackageDependencyTests(PackedFeed feed) => _feed = feed;
+
     [Theory]
     [InlineData("ZeroAlloc.Rest", new[] { "ZeroAlloc.Collections", "ZeroAlloc.Results" })]
     [InlineData("ZeroAlloc.Rest.DependencyInjection", new[] { "Microsoft.Extensions.Http", "ZeroAlloc.Rest" })]
     public void Package_DependsOnExactly(string packageId, string[] expected)
     {
-        var feed = ConsumerProcess.LocateFeed();
-        var nupkgPath = ConsumerProcess.FindPackage(feed, packageId);
+        var nupkgPath = ConsumerProcess.FindPackage(_feed.FeedDirectory, packageId);
 
         using var archive = ZipFile.OpenRead(nupkgPath);
         var entry = archive.GetEntry(packageId + ".nuspec");

@@ -3,27 +3,28 @@ using Xunit;
 
 namespace ZeroAlloc.Rest.DuplicateGeneratorTests;
 
+[Collection(PackedFeedCollection.Name)]
 public sealed class DuplicateGeneratorDiagnosticTests
 {
+    private readonly PackedFeed _feed;
+
+    public DuplicateGeneratorDiagnosticTests(PackedFeed feed) => _feed = feed;
+
     [Fact]
     public async Task Build_Fails_With_ZR9001_When_Both_Packages_Referenced()
     {
-        var feed = ConsumerProcess.LocateFeed();
-
         // ConsumerProcess.FindPackage keeps only the file whose id ends where the version
         // begins, with a digit, so "ZeroAlloc.Rest" does not also match the sibling packages
         // "ZeroAlloc.Rest.Generator.<version>" and "ZeroAlloc.Rest.Tools.MSBuild.<version>" that
         // the plain "ZeroAlloc.Rest.*.nupkg" glob would otherwise catch.
-        var restNupkgPath = ConsumerProcess.FindPackage(feed, "ZeroAlloc.Rest");
-        _ = ConsumerProcess.FindPackage(feed, "ZeroAlloc.Rest.Generator");
-
-        var version = ConsumerProcess.GetPackageVersion(restNupkgPath, "ZeroAlloc.Rest");
+        _ = ConsumerProcess.FindPackage(_feed.FeedDirectory, "ZeroAlloc.Rest");
+        _ = ConsumerProcess.FindPackage(_feed.FeedDirectory, "ZeroAlloc.Rest.Generator");
 
         var workDir = Path.Combine(Path.GetTempPath(), "za-rest-dup-gen-" + Path.GetRandomFileName());
         Directory.CreateDirectory(workDir);
         try
         {
-            ScaffoldConsumer(workDir, feed, version);
+            ScaffoldConsumer(workDir, _feed);
             var (exitCode, stdout, stderr) = await ConsumerProcess.RunDotnetAsync(workDir, "build", "-c", "Release");
             Assert.NotEqual(0, exitCode);
             var combined = stdout + "\n" + stderr;
@@ -37,7 +38,7 @@ public sealed class DuplicateGeneratorDiagnosticTests
         }
     }
 
-    private static void ScaffoldConsumer(string workDir, string feed, string version)
+    private static void ScaffoldConsumer(string workDir, PackedFeed feed)
     {
         ConsumerProcess.WriteNuGetConfig(workDir, feed);
 
@@ -49,8 +50,8 @@ public sealed class DuplicateGeneratorDiagnosticTests
                 <Nullable>enable</Nullable>
               </PropertyGroup>
               <ItemGroup>
-                <PackageReference Include="ZeroAlloc.Rest" Version="{version}" />
-                <PackageReference Include="ZeroAlloc.Rest.Generator" Version="{version}" />
+                <PackageReference Include="ZeroAlloc.Rest" Version="{feed.Version}" />
+                <PackageReference Include="ZeroAlloc.Rest.Generator" Version="{feed.Version}" />
               </ItemGroup>
             </Project>
             """);

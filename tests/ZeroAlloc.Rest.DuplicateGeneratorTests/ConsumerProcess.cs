@@ -5,7 +5,7 @@ using Xunit;
 
 namespace ZeroAlloc.Rest.DuplicateGeneratorTests;
 
-// Shared by the tests that scaffold a consumer project against the packages in artifacts/local.
+// Shared by the tests that scaffold a consumer project against the packages PackedFeed packs.
 internal static class ConsumerProcess
 {
     public static async Task<(int ExitCode, string StdOut, string StdErr)> RunDotnetAsync(
@@ -35,19 +35,6 @@ internal static class ConsumerProcess
         return dir?.FullName ?? throw new DirectoryNotFoundException("Could not find repo root (Directory.Build.props)");
     }
 
-    // The local nupkg feed every consumer test restores from. Fails the calling test, naming
-    // every project a full local pack needs, instead of letting restore fail later with an
-    // opaque "package not found".
-    public static string LocateFeed()
-    {
-        var feed = Path.Combine(LocateRepoRoot(), "artifacts", "local");
-        Assert.True(Directory.Exists(feed),
-            $"Local nupkg feed not found at {feed}. Run `dotnet pack -c Release -p:Version=0.0.0-dev -o artifacts/local` " +
-            "on src/ZeroAlloc.Rest, src/ZeroAlloc.Rest.Generator, src/ZeroAlloc.Rest.Tools.MSBuild and " +
-            "src/ZeroAlloc.Rest.DependencyInjection first.");
-        return feed;
-    }
-
     // The single "<packageId>.<version>.nupkg" in feed. The remainder after "<packageId>." must
     // start with a digit, so "ZeroAlloc.Rest" does not match a sibling such as
     // "ZeroAlloc.Rest.DependencyInjection.<version>.nupkg" or "ZeroAlloc.Rest.Generator.<version>.nupkg".
@@ -70,28 +57,28 @@ internal static class ConsumerProcess
         return matches[0];
     }
 
-    // The version a packed nupkg carries: its file name with "<packageId>." stripped off the front.
-    public static string GetPackageVersion(string nupkgPath, string packageId)
-        => Path.GetFileNameWithoutExtension(nupkgPath).Substring(packageId.Length + 1);
-
     private static bool IsVersionedMatch(string path, string packageId)
     {
         var remainder = Path.GetFileNameWithoutExtension(path).Substring(packageId.Length + 1);
         return remainder.Length > 0 && char.IsDigit(remainder[0]);
     }
 
-    // The NuGet.config every scaffolded consumer needs: the local feed first, then nuget.org for
+    // The NuGet.config every scaffolded consumer needs: the packed feed first, then nuget.org for
     // the transitive dependencies core and the DI package still pull in for real (Results,
-    // Collections, Microsoft.Extensions.Http, ...).
-    public static void WriteNuGetConfig(string workDir, string feed)
+    // Collections, Microsoft.Extensions.Http, ...), restored into the feed's private packages
+    // folder rather than the machine-wide cache.
+    public static void WriteNuGetConfig(string workDir, PackedFeed feed)
     {
         File.WriteAllText(Path.Combine(workDir, "NuGet.config"),
             $"""
             <?xml version="1.0" encoding="utf-8"?>
             <configuration>
+              <config>
+                <add key="globalPackagesFolder" value="{feed.PackagesFolder}" />
+              </config>
               <packageSources>
                 <clear />
-                <add key="local" value="{feed}" />
+                <add key="local" value="{feed.FeedDirectory}" />
                 <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
               </packageSources>
             </configuration>
