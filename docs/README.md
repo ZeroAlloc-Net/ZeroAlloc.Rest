@@ -23,6 +23,7 @@ Source-generated, Native AOT-compatible REST client for .NET 10+.
 - [Testing](testing.md)
 - [Advanced](advanced.md)
 - [Resilience](resilience.md)
+- [Telemetry](telemetry.md)
 - [Migrating to 2.0](migrating-to-v2.md)
 - [Migrating to 3.0](migrating-to-v3.md)
 - [Cookbook](cookbook/)
