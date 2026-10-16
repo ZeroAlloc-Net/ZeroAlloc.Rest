@@ -31,6 +31,9 @@ Or via `<PackageReference>`:
 adds `Microsoft.Extensions.Http`. Skip it if you build the client by hand instead; see
 [Dependency Injection: Without dependency injection](dependency-injection.md#without-dependency-injection).
 
+The standalone `ZeroAlloc.Rest.Generator` package is still published for backwards compatibility with
+existing direct PackageReferences, but new consumers should reference only `ZeroAlloc.Rest`.
+
 ## Define an interface
 
 Decorate your interface with `[ZeroAllocRestClient]`. The source generator picks it up and emits a concrete implementation at compile time.
