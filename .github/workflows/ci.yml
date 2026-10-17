@@ -10,6 +10,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write   # Codecov upload via OIDC, no token secret
 
     steps:
       - uses: actions/checkout@v7
@@ -42,7 +45,7 @@ jobs:
         run: dotnet build ZeroAlloc.Rest.slnx --no-restore -c Release -p:Version=${{ steps.gitversion.outputs.semver }}
 
       - name: Test
-        run: dotnet test ZeroAlloc.Rest.slnx --no-build -c Release --logger "trx" --results-directory ./test-results
+        run: dotnet test ZeroAlloc.Rest.slnx --no-build -c Release --logger "trx" --results-directory ./test-results --settings coverage.runsettings
 
       # The core-only consumer under JIT: ZeroAlloc.Rest without the DI package; see #336.
       - name: Run core-only consumer (JIT)
@@ -54,6 +57,15 @@ jobs:
         with:
           name: test-results
           path: ./test-results
+
+      - name: Upload coverage to Codecov
+        if: '!cancelled()'
+        uses: codecov/codecov-action@v5
+        with:
+          use_oidc: true
+          files: "test-results/**/coverage.cobertura.xml"
+          disable_search: true   # only the files above, not every *.xml the search finds
+          fail_ci_if_error: false
 
       - name: Pack
         run: dotnet pack ZeroAlloc.Rest.slnx --no-build -c Release -p:Version=${{ steps.gitversion.outputs.semver }} -o ./nupkg
