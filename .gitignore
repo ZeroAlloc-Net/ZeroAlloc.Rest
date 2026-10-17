@@ -26,3 +26,6 @@ BenchmarkDotNet.Artifacts/
 # OS
 .DS_Store
 Thumbs.db
+
+# Test results and coverage reports (CI writes them to test-results/)
+test-results/
