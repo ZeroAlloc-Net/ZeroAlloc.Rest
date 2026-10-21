@@ -12,10 +12,20 @@ description: Performance comparison of ZeroAlloc.Rest vs Refit and raw HttpClien
 
 All benchmarks use an in-memory `HttpMessageHandler` that returns a fixed pre-serialized response. This isolates library overhead from network I/O.
 
-- Runtime: .NET 10.0.4, X64 RyuJIT AVX2
-- Platform: Windows 11 (10.0.26200)
-- Tool: BenchmarkDotNet v0.14.0
-- Baseline: `RawHttpClient_Get` (manual `HttpClient` + `JsonSerializer.DeserializeAsync`)
+Measured 2026-10-21 on an otherwise idle machine:
+
+```
+BenchmarkDotNet v0.15.8, Windows 11 (10.0.26300.9711)
+12th Gen Intel Core i9-12900HK 2.50GHz, 1 CPU, 20 logical and 14 physical cores
+.NET SDK 10.0.402
+  [Host] : .NET 10.0.13 (10.0.13, 10.0.1326.50504), X64 RyuJIT x86-64-v3
+```
+
+> Allocations are exact. Speed is shown as same-run ratios; absolute timings are not published.
+
+Every benchmark ran out of process in three launches, pinned to two performance cores. Ratios
+come from one run, with the lowest and highest of the three launches in brackets. Refit 16.4.0,
+MemoryPack 1.21.4, MessagePack 3.1.12.
 
 Source: `tests/ZeroAlloc.Rest.Benchmarks/`
 
@@ -26,41 +36,32 @@ Source: `tests/ZeroAlloc.Rest.Benchmarks/`
 The measured time covers URL building, request construction, body serialization, sending, and response deserialization. Serializer: System.Text.Json (camelCase defaults). Response body: `{ "id": 1, "name": "Alice" }`.
 
 <!-- BENCH:START -->
-_Last refreshed: 2026-05-13_
+_Last refreshed: 2026-10-21_
 
-.NET 10.0.7, i9-12900HK, BenchmarkDotNet v0.15.8.
+Each row's time relative to the raw `HttpClient` call of the same shape, and Refit's relative to ZeroAlloc.Rest's.
 
-| Method | Mean | Ratio | Allocated | vs Refit |
-|---|---:|---:|---:|---:|
-| RawHttpClient_Get | 2.09 μs | 1.00 | 1.38 KB | — |
-| **ZeroAlloc_Get** | **3.52 μs** | **1.68** | **1.88 KB** | **3.6× faster** |
-| Refit_Get | 12.70 μs | 6.07 | 2.88 KB | — |
-| RawHttpClient_Post | 3.12 μs | 1.49 | 1.70 KB | — |
-| **ZeroAlloc_Post** | **6.70 μs** | **3.20** | **2.64 KB** | **1.7× faster** |
-| Refit_Post | 11.62 μs | 5.56 | 3.46 KB | — |
-| RawHttpClient_QueryParam | 2.16 μs | 1.03 | 1.45 KB | — |
-| **ZeroAlloc_QueryParam** | **4.28 μs** | **2.04** | **1.99 KB** | **3.6× faster** |
-| Refit_QueryParam | 15.51 μs | 7.41 | 3.55 KB | — |
-| RawHttpClient_Delete | 1.10 μs | 0.53 | 1.11 KB | — |
-| **ZeroAlloc_Delete** | **1.92 μs** | **0.92** | **1.61 KB** | **2.4× faster** |
-| Refit_Delete | 4.62 μs | 2.21 | 2.45 KB | — |
-| RawHttpClient_Result | 2.04 μs | 0.98 | 1.32 KB | — |
-| **ZeroAlloc_Result** | **4.07 μs** | **1.95** | **1.92 KB** | Refit lacks `Result<T>` |
+| Call | Raw `HttpClient` | ZeroAlloc.Rest | Refit | ZeroAlloc.Rest vs Refit | Allocated: raw / ZA / Refit |
+|---|---:|---:|---:|---:|---:|
+| GET | 1.00 | 1.24 | 1.86 | **1.49× faster** (1.47–1.51) | 1,408 / **1,584** / 2,056 B |
+| POST | 1.00 | 1.27 | 1.63 | **1.29× faster** (1.26–1.31) | 1,744 / **2,088** / 2,816 B |
+| GET with query parameter | 1.00 | 1.22 | 2.39 | **1.96× faster** (1.57–2.30) | 1,480 / **1,616** / 2,128 B |
+| DELETE | 1.00 | 1.21 | 1.32 | **1.09× faster** (0.99–1.17) | 1,136 / **1,312** / 1,416 B |
+| GET returning `Result<T, HttpError>` | 1.00 | 1.24 | — | Refit lacks `Result<T>` | 1,352 / **1,632** / — |
 
-ZeroAlloc.Rest is **1.7–3.6× faster than Refit** across every shape of call (GET / POST / GET-with-query / DELETE) with **1.3–1.5× less allocation**. Refit pays for reflection-based attribute scanning and expression-tree invocation on every call (6–8× over the raw `HttpClient` baseline); ZA's generated client is 1.7–3.2× over raw — closer to the floor.
+ZeroAlloc.Rest is **1.1–2.0× faster than Refit** across every shape of call (GET / POST / GET-with-query / DELETE) and allocates **1.1–1.35× less**. It runs at 1.21–1.27× the raw `HttpClient` baseline on every shape. Refit, at 1.3–2.4× over raw, has narrowed the gap since the May capture, which measured it against ZeroAlloc.Rest at 1.7–3.6×; Refit has been upgraded three times since then, to 16.2, 16.3 and 16.4.
 <!-- BENCH:END -->
 
 ### Interpretation
 
-**GET / POST:** ZeroAlloc.Rest runs at roughly 1.7–3.2× the raw baseline, covering the generated call frame and serialization dispatch. Refit pays for reflection-based attribute scanning and expression-tree invocation on every call — 5.6–6.1× over baseline.
+**GET / POST:** ZeroAlloc.Rest runs at roughly 1.24–1.27× the raw baseline, covering the generated call frame and serialization dispatch. Refit pays for reflection-based attribute scanning and expression-tree invocation on every call — 1.6–1.9× over baseline.
 
-**Query parameters:** ZeroAlloc.Rest writes the route, the escaped values and the query string into one stack buffer and allocates only the final URL string; values of BCL types such as `int`, `Guid` or `DateTimeOffset` are formatted straight into that buffer, without an intermediate string. Refit rebuilds the URL via reflection on every call, landing at 7.4× over baseline.
+**Query parameters:** ZeroAlloc.Rest writes the route, the escaped values and the query string into one stack buffer and allocates only the final URL string; values of BCL types such as `int`, `Guid` or `DateTimeOffset` are formatted straight into that buffer, without an intermediate string. Refit rebuilds the URL via reflection on every call, landing at 2.4× over baseline, the widest gap in the table.
 
-**DELETE (void return):** No deserialization path; ZeroAlloc.Rest is essentially at parity with raw `HttpClient` (0.92×, slightly under because BDN's noise floor on sub-microsecond delta measurements). Refit is 2.2×.
+**DELETE (void return):** No deserialization path, so all three are closest here: ZeroAlloc.Rest at 1.21× raw, Refit at 1.32×.
 
-**Result<T, HttpError>:** ZA's typed-error return adds no measurable overhead vs the equivalent raw `HttpClient` + success-check pattern (1.95× vs 0.98×, the gap matches the GET delta). Refit has no equivalent surface.
+**Result<T, HttpError>:** ZA's typed-error return costs the same over its raw `HttpClient` equivalent as a plain GET, 1.24×. Refit has no equivalent surface.
 
-**Allocations:** ZeroAlloc.Rest allocates 1.3–1.5× of raw `HttpClient` per call. Refit allocates 1.8–2.6×. At 10,000 req/s the difference is ~5–15 MB/s less GC pressure.
+**Allocations:** ZeroAlloc.Rest allocates 1.1–1.2× of raw `HttpClient` per call. Refit allocates 1.25–1.6×.
 
 ---
 
@@ -76,23 +77,23 @@ The 136 B is what `HttpClient` charges for sending any header, not a cost of how
 
 Measured in isolation — serialize or deserialize a single `{ "id": 42, "name": "Alice" }` object. Baseline: `Serialize_SystemTextJson`.
 
-| Method | Mean | Ratio | Allocated | Alloc Ratio |
-|---|---:|---:|---:|---:|
-| Serialize_SystemTextJson | 494 ns | 1.00 | 608 B | 1.00 |
-| Serialize_MemoryPack | 191 ns | **0.39** | 464 B | 0.76 |
-| Serialize_MessagePack | 515 ns | 1.06 | 416 B | 0.68 |
-| | | | | |
-| Deserialize_SystemTextJson | 1,190 ns | 2.44 | 248 B | 0.41 |
-| Deserialize_MemoryPack | 485 ns | **0.99** | 720 B | 1.18 |
-| Deserialize_MessagePack | 823 ns | 1.69 | 480 B | 0.79 |
+| Method | Ratio | Launch range | Allocated |
+|---|---:|---:|---:|
+| Serialize_SystemTextJson | 1.00 | | 608 B |
+| Serialize_MemoryPack | **0.40** | 0.40–0.41 | 416 B |
+| Serialize_MessagePack | 1.01 | 0.90–1.04 | 416 B |
+| | | | |
+| Deserialize_SystemTextJson | 1.79 | 1.77–1.81 | 200 B |
+| Deserialize_MemoryPack | **0.49** | 0.48–0.50 | 200 B |
+| Deserialize_MessagePack | 1.13 | 1.10–1.17 | 200 B |
 
 ### Interpretation
 
-**MemoryPack** is the clear throughput winner: 2.5× faster to serialize and 2.5× faster to deserialize than System.Text.Json. It requires `[MemoryPackable]` on your DTOs and uses a proprietary binary wire format — not suitable for public HTTP APIs but ideal for internal service-to-service communication.
+**MemoryPack** is the clear throughput winner: 2.5× faster to serialize and 3.7× faster to deserialize than System.Text.Json. It requires `[MemoryPackable]` on your DTOs and uses a proprietary binary wire format — not suitable for public HTTP APIs but ideal for internal service-to-service communication.
 
-**MessagePack** serializes at parity with STJ but deserializes ~1.4× faster, with the lowest allocation footprint on the wire (416 B). Uses the widely-supported MessagePack binary format. Requires `[MessagePackObject]` / `[Key]` attributes on DTOs.
+**MessagePack** serializes at parity with STJ but deserializes ~1.6× faster, and serializes with less allocation (416 B against 608 B). Uses the widely-supported MessagePack binary format. Requires `[MessagePackObject]` / `[Key]` attributes on DTOs.
 
-**System.Text.Json** has no DTO annotation requirements and produces human-readable JSON — the right default for public APIs. The STJ deserializer is slower than the binary formats but allocates the least during deserialization (248 B) since it can leverage `Utf8JsonReader` spans.
+**System.Text.Json** has no DTO annotation requirements and produces human-readable JSON — the right default for public APIs. It is the slowest of the three here. All three deserializers allocate the same 200 B, the deserialized object itself.
 
 Use `options.UseSerializer(new MemoryPackRestSerializer(types => types.Add<UserDto>()))` or `options.UseSerializer<MessagePackRestSerializer>()` to switch serializers in your client registration. MemoryPack needs each `[MemoryPackable]` type registered; see [Serialization](serialization.md#memorypack).
 
@@ -107,13 +108,14 @@ does. `Users` sets the body size: 1 user is about 25 bytes, 1000 users about 30 
 
 | Method | Users | Allocated | Alloc Ratio |
 |---|---:|---:|---:|
-| Buffered | 1 | 2.39 KB | 1.00 |
-| Streamed | 1 | 2.27 KB | 0.95 |
-| Buffered | 1000 | 124.64 KB | 1.00 |
-| Streamed | 1000 | 96.45 KB | 0.77 |
+| Buffered | 1 | 2,112 B | 1.00 |
+| Streamed | 1 | 1,992 B | 0.94 |
+| Buffered | 1000 | 127,296 B | 1.00 |
+| Streamed | 1000 | 98,425 B | 0.77 |
 
 Streaming removes the copy `HttpClient` makes of the body, about 28 KB for the 30 KB body. What
-remains is the deserialized array. Timings are not shown: they were within noise of each other.
+remains is the deserialized array. Streamed takes 0.97× and 1.02× the buffered time for 1 and
+1000 users, within the launch spread of each other.
 
 `MemoryPackBodyBenchmarks` measures `MemoryPackRestSerializer` on its own. It reads a body through
 pooled buffers that it clears before returning them, so for 1000 users, about 20 KB, reading a
@@ -127,7 +129,7 @@ body allocates 80 KB, which is the result, instead of 122 KB from a stream that 
 
 ```sh
 cd tests/ZeroAlloc.Rest.Benchmarks
-dotnet run -c Release -- --filter "*"
+dotnet run -c Release -- --filter "*" --launchCount 3
 ```
 
 BenchmarkDotNet requires Release mode. Debug builds produce incorrect numbers. `--filter "*"` runs

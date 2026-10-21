@@ -12,7 +12,7 @@ Describe your HTTP API as a C# interface and get a typed REST client generated a
 ## Why ZeroAlloc.Rest
 
 - **Allocates exactly what hand-written `HttpClient` code does.** A generated GET of a small DTO allocates 1,688 B per call, the same as the request written by hand, and a test fails the build if it ever allocates more.
-- **1.7–3.6× faster than Refit** with 1.3–1.5× less allocation per call, measured in the same run.
+- **1.1–2.0× faster than Refit** with 1.1–1.35× less allocation per call, measured in the same run.
 - **Works under NativeAOT and trimming.** No reflection, no IL emit, no `DynamicMethod`; CI publishes a NativeAOT app and fails on any trim or AOT warning.
 - **Mistakes surface at compile time.** A route template that does not match the method's parameters, or a `Result` error type with no mapper, is a compiler diagnostic.
 
@@ -75,13 +75,13 @@ The generator writes `UserApiClient`, a sealed class implementing `IUserApi`, at
 
 ## Performance
 
-Against Refit, in-memory handler, no network I/O. .NET 10.0.7, i9-12900HK, BenchmarkDotNet v0.15.8. Allocations as BenchmarkDotNet reports them; speed is a same-run ratio.
+Against Refit 16.4, in-memory handler, no network I/O. .NET 10.0.13, BenchmarkDotNet v0.15.8. Allocations are exact; speed is a same-run ratio.
 
 | Call | ZA vs Refit | Refit alloc | ZA alloc |
 |---|---:|---:|---:|
-| GET | **3.6× faster** | 2.88 KB | **1.88 KB** |
-| GET with query parameter | **3.6× faster** | 3.55 KB | **1.99 KB** |
-| POST | **1.7× faster** | 3.46 KB | **2.64 KB** |
+| GET | **1.5× faster** | 2,056 B | **1,584 B** |
+| GET with query parameter | **2.0× faster** | 2,128 B | **1,616 B** |
+| POST | **1.3× faster** | 2,816 B | **2,088 B** |
 
 Refit scans attributes with reflection and invokes expression trees on every call; the generated client is plain code. Raw `HttpClient` rows, DELETE, `Result<T>`, serializer throughput and the per-call allocation breakdown: [docs/benchmarks.md](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/blob/main/docs/benchmarks.md).
 
