@@ -4,7 +4,7 @@ using System.Text.Json;
 namespace ZeroAlloc.Rest.Anthropic.Recorder;
 
 /// <summary>
-/// Saves the request body as sent, the response body as received and a meta file with the status and two
+/// Saves, for a successful response only, the request body as sent, the response body as received and a meta file with the status and two
 /// allowlisted response headers. It never reads a request header, so the key cannot reach a file.
 /// </summary>
 internal sealed class RecordingHandler(string directory, HttpMessageHandler inner) : DelegatingHandler(inner)
@@ -36,6 +36,10 @@ internal sealed class RecordingHandler(string directory, HttpMessageHandler inne
             buffered.Headers.TryAddWithoutValidation(header.Key, header.Value);
         response.Content.Dispose();
         response.Content = buffered;
+
+        // An error body is never a fixture: leave it unsaved; the recorder fails on the error itself.
+        if (!response.IsSuccessStatusCode)
+            return response;
 
         var contentType = response.Content.Headers.ContentType?.ToString();
         var isSse = contentType?.StartsWith("text/event-stream", StringComparison.OrdinalIgnoreCase) == true;

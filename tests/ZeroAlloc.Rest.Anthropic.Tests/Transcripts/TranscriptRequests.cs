@@ -6,8 +6,10 @@ namespace ZeroAlloc.Rest.Anthropic.Transcripts;
 
 /// <summary>
 /// The requests behind the recorded transcripts. The recorder sends them, and the replay tests send the same ones
-/// against the recorded responses, so a request lives here once. The streaming requests are the plain ones: the
-/// client sets <c>stream</c> itself.
+/// against the recorded responses, so a request lives here once. The streaming requests are the plain ones: they
+/// leave <c>stream</c> unset, and <c>StreamMessageAsync</c> adds <c>"stream":true</c> to the body it sends. A replay
+/// that compares bytes with a recorded stream request must serialize <c>request with { Stream = true }</c>. That
+/// property is internal; the tests assembly sees it through InternalsVisibleTo.
 /// </summary>
 public static class TranscriptRequests
 {

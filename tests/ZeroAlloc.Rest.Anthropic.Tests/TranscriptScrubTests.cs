@@ -69,12 +69,17 @@ public sealed class TranscriptScrubTests
     [Fact]
     public void Recordings_lift_the_skip_on_the_three_files_check()
     {
-        var skip = typeof(TranscriptScrubTests).GetMethod(nameof(Every_transcript_has_its_three_files))!
-            .GetCustomAttribute<FactAttribute>()!.Skip;
-        var recorded = Files().Any();
+        var method = typeof(TranscriptScrubTests).GetMethod(nameof(Every_transcript_has_its_three_files));
+        Assert.NotNull(method);
+        var fact = method.GetCustomAttribute<FactAttribute>();
+        Assert.NotNull(fact);
+        var recorded = Files().Length > 0;
 
         // Red: record a transcript while the Skip stays on Every_transcript_has_its_three_files; this then fails.
-        Assert.True(!recorded || skip is null, "Transcripts are recorded: delete the Skip on Every_transcript_has_its_three_files.");
+        // Red: lift the Skip while Transcripts holds nothing, or the copy glob breaks; this then fails, so the
+        // scrub guard cannot pass over an empty folder once recordings are expected.
+        Assert.True(recorded == (fact.Skip is null),
+            "Delete the Skip on Every_transcript_has_its_three_files exactly when Transcripts holds recordings.");
     }
 
     private static void AddIfMissing(List<string> missing, string file)

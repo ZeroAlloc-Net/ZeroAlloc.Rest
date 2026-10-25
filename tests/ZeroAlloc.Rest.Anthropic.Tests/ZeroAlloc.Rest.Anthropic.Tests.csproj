@@ -12,5 +12,10 @@
   <ItemGroup>
     <None Include="DocumentedExamples/**" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Transcripts/**" Exclude="Transcripts/**/*.cs" CopyToOutputDirectory="PreserveNewest" />
+    <Compile Include="../ZeroAlloc.Rest.Anthropic.Recorder/TranscriptPublisher.cs" Link="Support/TranscriptPublisher.cs" />
   </ItemGroup>
+  <!-- PreserveNewest never removes a copy whose source is gone, so clear the output folder first. -->
+  <Target Name="ClearStaleTranscripts" BeforeTargets="CopyFilesToOutputDirectory">
+    <RemoveDir Directories="$(OutDir)Transcripts" />
+  </Target>
 </Project>

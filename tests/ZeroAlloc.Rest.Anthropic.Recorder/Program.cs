@@ -4,8 +4,10 @@ using ZeroAlloc.Rest.Anthropic.Recorder;
 using ZeroAlloc.Rest.Anthropic.Transcripts;
 
 // Records the transcripts of the Anthropic client against the real API: ANTHROPIC_API_KEY in the environment,
-// optionally the target directory as the only argument. Exit codes: 0 recorded, 1 a call or the cache check
-// failed, 2 no key. The key is read once, handed to the client and never printed or written.
+// optionally the target directory as the only argument. Exit codes: 0 recorded and published, 1 a call or the cache
+// check failed, 2 no key. The key is read once, handed to the client and never printed or written.
+// Everything is recorded into a fresh scratch directory. Only a complete run replaces the recordings in the target;
+// any other end deletes the scratch directory and leaves the target as it was.
 const int MaxCacheAttempts = 3;
 
 var apiKey = Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY");
@@ -22,20 +24,52 @@ if (directory is null)
     return 1;
 }
 
-Directory.CreateDirectory(directory);
-using var recorder = new RecordingHandler(directory, new HttpClientHandler());
-using var http = new HttpClient(recorder);
-// No retries: one request is one call is one set of files, and a retry would also cost again.
-var client = AnthropicClient.Create(http, new AnthropicClientOptions { ApiKey = apiKey, MaxRetries = 0 });
-
+var scratch = Path.Combine(Path.GetTempPath(), "anthropic-transcripts-" + Guid.NewGuid().ToString("N"));
+Directory.CreateDirectory(scratch);
 try
+{
+    using var recorder = new RecordingHandler(scratch, new HttpClientHandler());
+    using var http = new HttpClient(recorder);
+    // No retries: one request is one call is one set of files, and a retry would also cost again.
+    var client = AnthropicClient.Create(http, new AnthropicClientOptions { ApiKey = apiKey, MaxRetries = 0 });
+
+    var code = await RecordAsync(client, recorder).ConfigureAwait(false);
+    if (code != 0)
+        return code;
+
+    var missing = TranscriptPublisher.Publish(scratch, directory, TranscriptRequests.Names);
+    if (missing.Count > 0)
+    {
+        Console.Error.WriteLine($"The recording is incomplete, nothing was published. Missing: {string.Join(", ", missing)}.");
+        return 1;
+    }
+
+    Console.WriteLine($"Recorded {TranscriptRequests.Names.Count} transcripts in {directory}.");
+    return 0;
+}
+catch (AnthropicApiException ex)
+{
+    Console.Error.WriteLine($"Failed: {DescribeError(ex.Error)}");
+    return 1;
+}
+catch (Exception ex)
+{
+    Console.Error.WriteLine($"Failed with {ex.GetType().Name}.");
+    return 1;
+}
+finally
+{
+    Directory.Delete(scratch, recursive: true);
+}
+
+static async Task<int> RecordAsync(AnthropicClient client, RecordingHandler recorder)
 {
     recorder.Name = "text";
     if (await CreateAsync(client, TranscriptRequests.Text()).ConfigureAwait(false) is null)
         return 1;
 
     recorder.Name = "stream-text";
-    if (!await StreamAsync(client, TranscriptRequests.StreamText()).ConfigureAwait(false))
+    if (!await StreamAsync(client, TranscriptRequests.StreamText(), requireToolUse: false).ConfigureAwait(false))
         return 1;
 
     recorder.Name = "tool-use";
@@ -60,7 +94,7 @@ try
     }
 
     recorder.Name = "stream-tool-use";
-    if (!await StreamAsync(client, TranscriptRequests.StreamToolUse()).ConfigureAwait(false))
+    if (!await StreamAsync(client, TranscriptRequests.StreamToolUse(), requireToolUse: true).ConfigureAwait(false))
         return 1;
 
     var lines = TranscriptRequests.InitialPaddingLines;
@@ -75,20 +109,12 @@ try
             return 1;
 
         if (write.Usage?.CacheCreationInputTokens > 0 && read.Usage?.CacheReadInputTokens > 0)
-        {
-            Console.WriteLine($"Recorded {TranscriptRequests.Names.Count} transcripts in {directory}.");
             return 0;
-        }
 
         Console.Error.WriteLine("The cache pair did not hold; raising the padding.");
     }
 
     Console.Error.WriteLine($"The cache pair did not hold after {MaxCacheAttempts} attempts. Not retrying.");
-    return 1;
-}
-catch (AnthropicApiException ex)
-{
-    Console.Error.WriteLine($"{recorder.Name}: {ex.Error.Type}: {ex.Error.Message}");
     return 1;
 }
 
@@ -97,24 +123,36 @@ static async Task<MessageResponse?> CreateAsync(AnthropicClient client, MessageR
     var result = await client.CreateMessageAsync(request, CancellationToken.None).ConfigureAwait(false);
     if (!result.IsSuccess)
     {
-        Console.Error.WriteLine($"Request failed: {result.Error.Type}: {result.Error.Message}");
+        Console.Error.WriteLine($"Request failed: {DescribeError(result.Error)}");
         return null;
     }
 
-    Console.WriteLine(Describe(result.Value.Usage));
+    Console.WriteLine(DescribeUsage(result.Value.Usage));
     return result.Value;
 }
 
-static async Task<bool> StreamAsync(AnthropicClient client, MessageRequest request)
+static async Task<bool> StreamAsync(AnthropicClient client, MessageRequest request, bool requireToolUse)
 {
     var events = 0;
-    await foreach (var _ in client.StreamMessageAsync(request, CancellationToken.None).ConfigureAwait(false))
+    var sawToolUse = false;
+    await foreach (var e in client.StreamMessageAsync(request, CancellationToken.None).ConfigureAwait(false))
+    {
         events++;
+        sawToolUse |= e is ContentBlockStartEvent { ContentBlock: ToolUseBlock };
+    }
+
     Console.WriteLine($"{events} stream events");
-    return events > 0;
+    if (requireToolUse && !sawToolUse)
+        Console.Error.WriteLine("stream-tool-use: no tool_use content block in the stream.");
+    return events > 0 && (!requireToolUse || sawToolUse);
 }
 
-static string Describe(Usage? usage) => usage is null
+// The error's type and status. The message is the API's own text for a described failure; for a transport failure
+// it comes from the exception, so it is left out.
+static string DescribeError(AnthropicApiError error) =>
+    error.Status > 0 ? $"{error.Type}, status {error.Status}: {error.Message}" : error.Type;
+
+static string DescribeUsage(Usage? usage) => usage is null
     ? "no usage"
     : string.Create(CultureInfo.InvariantCulture,
         $"input {usage.InputTokens}, output {usage.OutputTokens}, cache write {usage.CacheCreationInputTokens}, cache read {usage.CacheReadInputTokens}");
