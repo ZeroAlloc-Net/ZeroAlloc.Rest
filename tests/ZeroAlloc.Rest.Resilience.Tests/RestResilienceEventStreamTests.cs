@@ -229,18 +229,23 @@ public sealed class RestResilienceEventStreamFailureTests
             (inner, sp) => new ISlowStreamingApiResilienceProxy(inner, sp.GetRequiredService<SlowStreamingApiResiliencePolicies>()));
         var api = provider.GetRequiredService<ISlowStreamingApi>();
 
-        // Red: pass CancellationToken.None to FollowAsync; the 10 minute back-off is then never
-        // cancelled and the test hangs. With BackoffMs = 1 this line fails instead, with a
-        // ResilienceException once the attempts run out.
+        // Red: pass CancellationToken.None to EnumerateAsync; the 10 minute back-off is then never
+        // cancelled and WaitAsync fails this line with a TimeoutException after 30 seconds. With
+        // BackoffMs = 1 this line fails instead, with a ResilienceException once the attempts run out.
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
         {
-            await foreach (var item in api.FollowAsync(cts.Token).ConfigureAwait(false))
-                Assert.Fail("No event was expected.");
+            await EnumerateAsync(api, cts.Token).WaitAsync(TimeSpan.FromSeconds(30)).ConfigureAwait(false);
         });
 
         // Guards against a library regression that keeps retrying after the cancellation, which
         // would show as more than one request. It cannot be made red from this repo.
         Assert.Single(_handler.Requests);
+    }
+
+    private static async Task EnumerateAsync(ISlowStreamingApi api, CancellationToken ct)
+    {
+        await foreach (var item in api.FollowAsync(ct).ConfigureAwait(false))
+            Assert.Fail("No event was expected.");
     }
 
     private ServiceProvider Build<TInterface, TClient, TProxy>(
