@@ -11,5 +11,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="DocumentedExamples/**" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Transcripts/**" Exclude="Transcripts/**/*.cs" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

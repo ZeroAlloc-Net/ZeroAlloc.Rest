@@ -27,5 +27,6 @@
     <Project Path="tests/ZeroAlloc.Rest.Benchmarks/ZeroAlloc.Rest.Benchmarks.csproj" />
     <Project Path="tests/ZeroAlloc.Rest.Resilience.Tests/ZeroAlloc.Rest.Resilience.Tests.csproj" />
     <Project Path="tests/ZeroAlloc.Rest.Anthropic.Tests/ZeroAlloc.Rest.Anthropic.Tests.csproj" />
+    <Project Path="tests/ZeroAlloc.Rest.Anthropic.Recorder/ZeroAlloc.Rest.Anthropic.Recorder.csproj" />
   </Folder>
 </Solution>

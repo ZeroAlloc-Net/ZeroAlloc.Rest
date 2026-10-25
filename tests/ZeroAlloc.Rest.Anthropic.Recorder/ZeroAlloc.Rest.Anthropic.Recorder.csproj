@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Records the Anthropic transcripts against the real API. Run by hand with a key; never packed, never a test. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>false</IsTestProject>
+    <RootNamespace>ZeroAlloc.Rest.Anthropic.Recorder</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/ZeroAlloc.Rest.Anthropic/ZeroAlloc.Rest.Anthropic.csproj" />
+    <Compile Include="../ZeroAlloc.Rest.Anthropic.Tests/Transcripts/TranscriptRequests.cs" Link="TranscriptRequests.cs" />
+  </ItemGroup>
+</Project>
