@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>ZeroAlloc.Rest.Anthropic</PackageId>
+    <Description>A typed, AOT-compatible Anthropic Messages API client for .NET, built on ZeroAlloc.Rest: messages create and stream, tools, prompt caching and usage.</Description>
+    <PackageTags>$(PackageTags);anthropic;claude;llm</PackageTags>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../ZeroAlloc.Rest/ZeroAlloc.Rest.csproj" />
+    <ProjectReference Include="../ZeroAlloc.Rest.SystemTextJson/ZeroAlloc.Rest.SystemTextJson.csproj" />
+    <ProjectReference Include="../ZeroAlloc.Rest.DependencyInjection/ZeroAlloc.Rest.DependencyInjection.csproj" />
+    <ProjectReference Include="../ZeroAlloc.Rest.Resilience/ZeroAlloc.Rest.Resilience.csproj" />
+    <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" PrivateAssets="all" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="ZeroAlloc.Rest.Anthropic.Tests" />
+  </ItemGroup>
+  <ItemGroup>
+    <AdditionalFiles Include="PublicAPI.Shipped.txt" />
+    <AdditionalFiles Include="PublicAPI.Unshipped.txt" />
+  </ItemGroup>
+</Project>

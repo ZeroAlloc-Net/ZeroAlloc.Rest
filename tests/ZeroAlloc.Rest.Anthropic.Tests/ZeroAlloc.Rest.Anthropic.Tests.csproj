@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- MA0048: several small test types per file -->
+    <NoWarn>$(NoWarn);MA0048</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="coverlet.collector">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <ProjectReference Include="../../src/ZeroAlloc.Rest.Anthropic/ZeroAlloc.Rest.Anthropic.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="DocumentedExamples/**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

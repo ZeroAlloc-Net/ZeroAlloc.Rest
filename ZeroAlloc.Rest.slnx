@@ -9,6 +9,7 @@
     <Project Path="src/ZeroAlloc.Rest.Tools/ZeroAlloc.Rest.Tools.csproj" />
     <Project Path="src/ZeroAlloc.Rest.Resilience/ZeroAlloc.Rest.Resilience.csproj" />
     <Project Path="src/ZeroAlloc.Rest.DependencyInjection/ZeroAlloc.Rest.DependencyInjection.csproj" />
+    <Project Path="src/ZeroAlloc.Rest.Anthropic/ZeroAlloc.Rest.Anthropic.csproj" />
   </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/ZeroAlloc.Rest.AotSmoke/ZeroAlloc.Rest.AotSmoke.csproj" />
@@ -25,5 +26,6 @@
     <Project Path="tests/ZeroAlloc.Rest.Tools.Tests/ZeroAlloc.Rest.Tools.Tests.csproj" />
     <Project Path="tests/ZeroAlloc.Rest.Benchmarks/ZeroAlloc.Rest.Benchmarks.csproj" />
     <Project Path="tests/ZeroAlloc.Rest.Resilience.Tests/ZeroAlloc.Rest.Resilience.Tests.csproj" />
+    <Project Path="tests/ZeroAlloc.Rest.Anthropic.Tests/ZeroAlloc.Rest.Anthropic.Tests.csproj" />
   </Folder>
 </Solution>

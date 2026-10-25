@@ -1,0 +1,457 @@
+#nullable enable
+ZeroAlloc.Rest.Anthropic.CacheControl
+ZeroAlloc.Rest.Anthropic.CacheControl.<Clone>$() -> ZeroAlloc.Rest.Anthropic.CacheControl!
+ZeroAlloc.Rest.Anthropic.CacheControl.CacheControl(string? ttl) -> void
+ZeroAlloc.Rest.Anthropic.CacheControl.Equals(ZeroAlloc.Rest.Anthropic.CacheControl? other) -> bool
+ZeroAlloc.Rest.Anthropic.CacheControl.Ttl.get -> string?
+ZeroAlloc.Rest.Anthropic.CacheControl.Ttl.init -> void
+ZeroAlloc.Rest.Anthropic.CacheControl.Type.get -> string!
+ZeroAlloc.Rest.Anthropic.CacheCreation
+ZeroAlloc.Rest.Anthropic.CacheCreation.<Clone>$() -> ZeroAlloc.Rest.Anthropic.CacheCreation!
+ZeroAlloc.Rest.Anthropic.CacheCreation.CacheCreation(int? Ephemeral5mInputTokens, int? Ephemeral1hInputTokens) -> void
+ZeroAlloc.Rest.Anthropic.CacheCreation.Deconstruct(out int? Ephemeral5mInputTokens, out int? Ephemeral1hInputTokens) -> void
+ZeroAlloc.Rest.Anthropic.CacheCreation.Ephemeral1hInputTokens.get -> int?
+ZeroAlloc.Rest.Anthropic.CacheCreation.Ephemeral1hInputTokens.init -> void
+ZeroAlloc.Rest.Anthropic.CacheCreation.Ephemeral5mInputTokens.get -> int?
+ZeroAlloc.Rest.Anthropic.CacheCreation.Ephemeral5mInputTokens.init -> void
+ZeroAlloc.Rest.Anthropic.CacheCreation.Equals(ZeroAlloc.Rest.Anthropic.CacheCreation? other) -> bool
+ZeroAlloc.Rest.Anthropic.ContentBlock
+ZeroAlloc.Rest.Anthropic.ContentBlock.ContentBlock() -> void
+ZeroAlloc.Rest.Anthropic.ContentBlock.ContentBlock(ZeroAlloc.Rest.Anthropic.ContentBlock! original) -> void
+ZeroAlloc.Rest.Anthropic.ContentBlockDeltaEvent
+ZeroAlloc.Rest.Anthropic.ContentBlockDeltaEvent.ContentBlockDeltaEvent(int Index, ZeroAlloc.Rest.Anthropic.ContentDelta! Delta) -> void
+ZeroAlloc.Rest.Anthropic.ContentBlockDeltaEvent.Deconstruct(out int Index, out ZeroAlloc.Rest.Anthropic.ContentDelta! Delta) -> void
+ZeroAlloc.Rest.Anthropic.ContentBlockDeltaEvent.Delta.get -> ZeroAlloc.Rest.Anthropic.ContentDelta!
+ZeroAlloc.Rest.Anthropic.ContentBlockDeltaEvent.Delta.init -> void
+ZeroAlloc.Rest.Anthropic.ContentBlockDeltaEvent.Equals(ZeroAlloc.Rest.Anthropic.ContentBlockDeltaEvent? other) -> bool
+ZeroAlloc.Rest.Anthropic.ContentBlockDeltaEvent.Index.get -> int
+ZeroAlloc.Rest.Anthropic.ContentBlockDeltaEvent.Index.init -> void
+ZeroAlloc.Rest.Anthropic.ContentBlockParam
+ZeroAlloc.Rest.Anthropic.ContentBlockParam.ContentBlockParam() -> void
+ZeroAlloc.Rest.Anthropic.ContentBlockParam.ContentBlockParam(ZeroAlloc.Rest.Anthropic.ContentBlockParam! original) -> void
+ZeroAlloc.Rest.Anthropic.ContentBlockStartEvent
+ZeroAlloc.Rest.Anthropic.ContentBlockStartEvent.ContentBlock.get -> ZeroAlloc.Rest.Anthropic.ContentBlock!
+ZeroAlloc.Rest.Anthropic.ContentBlockStartEvent.ContentBlock.init -> void
+ZeroAlloc.Rest.Anthropic.ContentBlockStartEvent.ContentBlockStartEvent(int Index, ZeroAlloc.Rest.Anthropic.ContentBlock! ContentBlock) -> void
+ZeroAlloc.Rest.Anthropic.ContentBlockStartEvent.Deconstruct(out int Index, out ZeroAlloc.Rest.Anthropic.ContentBlock! ContentBlock) -> void
+ZeroAlloc.Rest.Anthropic.ContentBlockStartEvent.Equals(ZeroAlloc.Rest.Anthropic.ContentBlockStartEvent? other) -> bool
+ZeroAlloc.Rest.Anthropic.ContentBlockStartEvent.Index.get -> int
+ZeroAlloc.Rest.Anthropic.ContentBlockStartEvent.Index.init -> void
+ZeroAlloc.Rest.Anthropic.ContentBlockStopEvent
+ZeroAlloc.Rest.Anthropic.ContentBlockStopEvent.ContentBlockStopEvent(int Index) -> void
+ZeroAlloc.Rest.Anthropic.ContentBlockStopEvent.Deconstruct(out int Index) -> void
+ZeroAlloc.Rest.Anthropic.ContentBlockStopEvent.Equals(ZeroAlloc.Rest.Anthropic.ContentBlockStopEvent? other) -> bool
+ZeroAlloc.Rest.Anthropic.ContentBlockStopEvent.Index.get -> int
+ZeroAlloc.Rest.Anthropic.ContentBlockStopEvent.Index.init -> void
+ZeroAlloc.Rest.Anthropic.ContentDelta
+ZeroAlloc.Rest.Anthropic.ContentDelta.ContentDelta() -> void
+ZeroAlloc.Rest.Anthropic.ContentDelta.ContentDelta(ZeroAlloc.Rest.Anthropic.ContentDelta! original) -> void
+ZeroAlloc.Rest.Anthropic.ErrorDetail
+ZeroAlloc.Rest.Anthropic.ErrorDetail.<Clone>$() -> ZeroAlloc.Rest.Anthropic.ErrorDetail!
+ZeroAlloc.Rest.Anthropic.ErrorDetail.Deconstruct(out string! Type, out string! Message) -> void
+ZeroAlloc.Rest.Anthropic.ErrorDetail.Equals(ZeroAlloc.Rest.Anthropic.ErrorDetail? other) -> bool
+ZeroAlloc.Rest.Anthropic.ErrorDetail.ErrorDetail(string! Type, string! Message) -> void
+ZeroAlloc.Rest.Anthropic.ErrorDetail.Message.get -> string!
+ZeroAlloc.Rest.Anthropic.ErrorDetail.Message.init -> void
+ZeroAlloc.Rest.Anthropic.ErrorDetail.Type.get -> string!
+ZeroAlloc.Rest.Anthropic.ErrorDetail.Type.init -> void
+ZeroAlloc.Rest.Anthropic.ErrorEvent
+ZeroAlloc.Rest.Anthropic.ErrorEvent.Deconstruct(out ZeroAlloc.Rest.Anthropic.ErrorDetail! Error) -> void
+ZeroAlloc.Rest.Anthropic.ErrorEvent.Equals(ZeroAlloc.Rest.Anthropic.ErrorEvent? other) -> bool
+ZeroAlloc.Rest.Anthropic.ErrorEvent.Error.get -> ZeroAlloc.Rest.Anthropic.ErrorDetail!
+ZeroAlloc.Rest.Anthropic.ErrorEvent.Error.init -> void
+ZeroAlloc.Rest.Anthropic.ErrorEvent.ErrorEvent(ZeroAlloc.Rest.Anthropic.ErrorDetail! Error) -> void
+ZeroAlloc.Rest.Anthropic.InputJsonDelta
+ZeroAlloc.Rest.Anthropic.InputJsonDelta.Deconstruct(out string! PartialJson) -> void
+ZeroAlloc.Rest.Anthropic.InputJsonDelta.Equals(ZeroAlloc.Rest.Anthropic.InputJsonDelta? other) -> bool
+ZeroAlloc.Rest.Anthropic.InputJsonDelta.InputJsonDelta(string! PartialJson) -> void
+ZeroAlloc.Rest.Anthropic.InputJsonDelta.PartialJson.get -> string!
+ZeroAlloc.Rest.Anthropic.InputJsonDelta.PartialJson.init -> void
+ZeroAlloc.Rest.Anthropic.MessageDeltaBody
+ZeroAlloc.Rest.Anthropic.MessageDeltaBody.<Clone>$() -> ZeroAlloc.Rest.Anthropic.MessageDeltaBody!
+ZeroAlloc.Rest.Anthropic.MessageDeltaBody.Deconstruct(out string? StopReason, out string? StopSequence) -> void
+ZeroAlloc.Rest.Anthropic.MessageDeltaBody.Equals(ZeroAlloc.Rest.Anthropic.MessageDeltaBody? other) -> bool
+ZeroAlloc.Rest.Anthropic.MessageDeltaBody.MessageDeltaBody(string? StopReason, string? StopSequence) -> void
+ZeroAlloc.Rest.Anthropic.MessageDeltaBody.StopReason.get -> string?
+ZeroAlloc.Rest.Anthropic.MessageDeltaBody.StopReason.init -> void
+ZeroAlloc.Rest.Anthropic.MessageDeltaBody.StopSequence.get -> string?
+ZeroAlloc.Rest.Anthropic.MessageDeltaBody.StopSequence.init -> void
+ZeroAlloc.Rest.Anthropic.MessageDeltaEvent
+ZeroAlloc.Rest.Anthropic.MessageDeltaEvent.Deconstruct(out ZeroAlloc.Rest.Anthropic.MessageDeltaBody! Delta, out ZeroAlloc.Rest.Anthropic.Usage? Usage) -> void
+ZeroAlloc.Rest.Anthropic.MessageDeltaEvent.Delta.get -> ZeroAlloc.Rest.Anthropic.MessageDeltaBody!
+ZeroAlloc.Rest.Anthropic.MessageDeltaEvent.Delta.init -> void
+ZeroAlloc.Rest.Anthropic.MessageDeltaEvent.Equals(ZeroAlloc.Rest.Anthropic.MessageDeltaEvent? other) -> bool
+ZeroAlloc.Rest.Anthropic.MessageDeltaEvent.MessageDeltaEvent(ZeroAlloc.Rest.Anthropic.MessageDeltaBody! Delta, ZeroAlloc.Rest.Anthropic.Usage? Usage) -> void
+ZeroAlloc.Rest.Anthropic.MessageDeltaEvent.Usage.get -> ZeroAlloc.Rest.Anthropic.Usage?
+ZeroAlloc.Rest.Anthropic.MessageDeltaEvent.Usage.init -> void
+ZeroAlloc.Rest.Anthropic.MessageParam
+ZeroAlloc.Rest.Anthropic.MessageParam.<Clone>$() -> ZeroAlloc.Rest.Anthropic.MessageParam!
+ZeroAlloc.Rest.Anthropic.MessageParam.Content.get -> System.Collections.Generic.IReadOnlyList<ZeroAlloc.Rest.Anthropic.ContentBlockParam!>!
+ZeroAlloc.Rest.Anthropic.MessageParam.Content.init -> void
+ZeroAlloc.Rest.Anthropic.MessageParam.Deconstruct(out ZeroAlloc.Rest.Anthropic.MessageRole Role, out System.Collections.Generic.IReadOnlyList<ZeroAlloc.Rest.Anthropic.ContentBlockParam!>! Content) -> void
+ZeroAlloc.Rest.Anthropic.MessageParam.Equals(ZeroAlloc.Rest.Anthropic.MessageParam? other) -> bool
+ZeroAlloc.Rest.Anthropic.MessageParam.MessageParam(ZeroAlloc.Rest.Anthropic.MessageRole Role, System.Collections.Generic.IReadOnlyList<ZeroAlloc.Rest.Anthropic.ContentBlockParam!>! Content) -> void
+ZeroAlloc.Rest.Anthropic.MessageParam.Role.get -> ZeroAlloc.Rest.Anthropic.MessageRole
+ZeroAlloc.Rest.Anthropic.MessageParam.Role.init -> void
+ZeroAlloc.Rest.Anthropic.MessageRequest
+ZeroAlloc.Rest.Anthropic.MessageRequest.<Clone>$() -> ZeroAlloc.Rest.Anthropic.MessageRequest!
+ZeroAlloc.Rest.Anthropic.MessageRequest.Equals(ZeroAlloc.Rest.Anthropic.MessageRequest? other) -> bool
+ZeroAlloc.Rest.Anthropic.MessageRequest.MaxTokens.get -> int
+ZeroAlloc.Rest.Anthropic.MessageRequest.MaxTokens.init -> void
+ZeroAlloc.Rest.Anthropic.MessageRequest.MessageRequest() -> void
+ZeroAlloc.Rest.Anthropic.MessageRequest.Messages.get -> System.Collections.Generic.IReadOnlyList<ZeroAlloc.Rest.Anthropic.MessageParam!>!
+ZeroAlloc.Rest.Anthropic.MessageRequest.Messages.init -> void
+ZeroAlloc.Rest.Anthropic.MessageRequest.Metadata.get -> ZeroAlloc.Rest.Anthropic.RequestMetadata?
+ZeroAlloc.Rest.Anthropic.MessageRequest.Metadata.init -> void
+ZeroAlloc.Rest.Anthropic.MessageRequest.Model.get -> string!
+ZeroAlloc.Rest.Anthropic.MessageRequest.Model.init -> void
+ZeroAlloc.Rest.Anthropic.MessageRequest.StopSequences.get -> System.Collections.Generic.IReadOnlyList<string!>?
+ZeroAlloc.Rest.Anthropic.MessageRequest.StopSequences.init -> void
+ZeroAlloc.Rest.Anthropic.MessageRequest.System.get -> ZeroAlloc.Rest.Anthropic.SystemPrompt?
+ZeroAlloc.Rest.Anthropic.MessageRequest.System.init -> void
+ZeroAlloc.Rest.Anthropic.MessageRequest.Temperature.get -> double?
+ZeroAlloc.Rest.Anthropic.MessageRequest.Temperature.init -> void
+ZeroAlloc.Rest.Anthropic.MessageRequest.Tools.get -> System.Collections.Generic.IReadOnlyList<ZeroAlloc.Rest.Anthropic.ToolDefinition!>?
+ZeroAlloc.Rest.Anthropic.MessageRequest.Tools.init -> void
+ZeroAlloc.Rest.Anthropic.MessageRequest.TopP.get -> double?
+ZeroAlloc.Rest.Anthropic.MessageRequest.TopP.init -> void
+ZeroAlloc.Rest.Anthropic.MessageResponse
+ZeroAlloc.Rest.Anthropic.MessageResponse.<Clone>$() -> ZeroAlloc.Rest.Anthropic.MessageResponse!
+ZeroAlloc.Rest.Anthropic.MessageResponse.Content.get -> System.Collections.Generic.IReadOnlyList<ZeroAlloc.Rest.Anthropic.ContentBlock!>!
+ZeroAlloc.Rest.Anthropic.MessageResponse.Content.init -> void
+ZeroAlloc.Rest.Anthropic.MessageResponse.Deconstruct(out string! Id, out string! Model, out ZeroAlloc.Rest.Anthropic.MessageRole Role, out System.Collections.Generic.IReadOnlyList<ZeroAlloc.Rest.Anthropic.ContentBlock!>! Content, out string? StopReason, out string? StopSequence, out ZeroAlloc.Rest.Anthropic.Usage! Usage) -> void
+ZeroAlloc.Rest.Anthropic.MessageResponse.Equals(ZeroAlloc.Rest.Anthropic.MessageResponse? other) -> bool
+ZeroAlloc.Rest.Anthropic.MessageResponse.Id.get -> string!
+ZeroAlloc.Rest.Anthropic.MessageResponse.Id.init -> void
+ZeroAlloc.Rest.Anthropic.MessageResponse.MessageResponse(string! Id, string! Model, ZeroAlloc.Rest.Anthropic.MessageRole Role, System.Collections.Generic.IReadOnlyList<ZeroAlloc.Rest.Anthropic.ContentBlock!>! Content, string? StopReason, string? StopSequence, ZeroAlloc.Rest.Anthropic.Usage! Usage) -> void
+ZeroAlloc.Rest.Anthropic.MessageResponse.Model.get -> string!
+ZeroAlloc.Rest.Anthropic.MessageResponse.Model.init -> void
+ZeroAlloc.Rest.Anthropic.MessageResponse.Role.get -> ZeroAlloc.Rest.Anthropic.MessageRole
+ZeroAlloc.Rest.Anthropic.MessageResponse.Role.init -> void
+ZeroAlloc.Rest.Anthropic.MessageResponse.StopReason.get -> string?
+ZeroAlloc.Rest.Anthropic.MessageResponse.StopReason.init -> void
+ZeroAlloc.Rest.Anthropic.MessageResponse.StopSequence.get -> string?
+ZeroAlloc.Rest.Anthropic.MessageResponse.StopSequence.init -> void
+ZeroAlloc.Rest.Anthropic.MessageResponse.Usage.get -> ZeroAlloc.Rest.Anthropic.Usage!
+ZeroAlloc.Rest.Anthropic.MessageResponse.Usage.init -> void
+ZeroAlloc.Rest.Anthropic.MessageRole
+ZeroAlloc.Rest.Anthropic.MessageRole.Assistant = 1 -> ZeroAlloc.Rest.Anthropic.MessageRole
+ZeroAlloc.Rest.Anthropic.MessageRole.User = 0 -> ZeroAlloc.Rest.Anthropic.MessageRole
+ZeroAlloc.Rest.Anthropic.MessageStartEvent
+ZeroAlloc.Rest.Anthropic.MessageStartEvent.Deconstruct(out ZeroAlloc.Rest.Anthropic.MessageResponse! Message) -> void
+ZeroAlloc.Rest.Anthropic.MessageStartEvent.Equals(ZeroAlloc.Rest.Anthropic.MessageStartEvent? other) -> bool
+ZeroAlloc.Rest.Anthropic.MessageStartEvent.Message.get -> ZeroAlloc.Rest.Anthropic.MessageResponse!
+ZeroAlloc.Rest.Anthropic.MessageStartEvent.Message.init -> void
+ZeroAlloc.Rest.Anthropic.MessageStartEvent.MessageStartEvent(ZeroAlloc.Rest.Anthropic.MessageResponse! Message) -> void
+ZeroAlloc.Rest.Anthropic.MessageStopEvent
+ZeroAlloc.Rest.Anthropic.MessageStopEvent.Equals(ZeroAlloc.Rest.Anthropic.MessageStopEvent? other) -> bool
+ZeroAlloc.Rest.Anthropic.MessageStopEvent.MessageStopEvent() -> void
+ZeroAlloc.Rest.Anthropic.MessageStreamEvent
+ZeroAlloc.Rest.Anthropic.MessageStreamEvent.MessageStreamEvent() -> void
+ZeroAlloc.Rest.Anthropic.MessageStreamEvent.MessageStreamEvent(ZeroAlloc.Rest.Anthropic.MessageStreamEvent! original) -> void
+ZeroAlloc.Rest.Anthropic.PingEvent
+ZeroAlloc.Rest.Anthropic.PingEvent.Equals(ZeroAlloc.Rest.Anthropic.PingEvent? other) -> bool
+ZeroAlloc.Rest.Anthropic.PingEvent.PingEvent() -> void
+ZeroAlloc.Rest.Anthropic.RequestMetadata
+ZeroAlloc.Rest.Anthropic.RequestMetadata.<Clone>$() -> ZeroAlloc.Rest.Anthropic.RequestMetadata!
+ZeroAlloc.Rest.Anthropic.RequestMetadata.Deconstruct(out string? UserId) -> void
+ZeroAlloc.Rest.Anthropic.RequestMetadata.Equals(ZeroAlloc.Rest.Anthropic.RequestMetadata? other) -> bool
+ZeroAlloc.Rest.Anthropic.RequestMetadata.RequestMetadata(string? UserId) -> void
+ZeroAlloc.Rest.Anthropic.RequestMetadata.UserId.get -> string?
+ZeroAlloc.Rest.Anthropic.RequestMetadata.UserId.init -> void
+ZeroAlloc.Rest.Anthropic.StopReasons
+ZeroAlloc.Rest.Anthropic.SystemPrompt
+ZeroAlloc.Rest.Anthropic.SystemPrompt.Blocks.get -> System.Collections.Generic.IReadOnlyList<ZeroAlloc.Rest.Anthropic.TextBlockParam!>?
+ZeroAlloc.Rest.Anthropic.SystemPrompt.Equals(ZeroAlloc.Rest.Anthropic.SystemPrompt other) -> bool
+ZeroAlloc.Rest.Anthropic.SystemPrompt.SystemPrompt() -> void
+ZeroAlloc.Rest.Anthropic.SystemPrompt.Text.get -> string?
+ZeroAlloc.Rest.Anthropic.TextBlock
+ZeroAlloc.Rest.Anthropic.TextBlock.Deconstruct(out string! Text) -> void
+ZeroAlloc.Rest.Anthropic.TextBlock.Equals(ZeroAlloc.Rest.Anthropic.TextBlock? other) -> bool
+ZeroAlloc.Rest.Anthropic.TextBlock.Text.get -> string!
+ZeroAlloc.Rest.Anthropic.TextBlock.Text.init -> void
+ZeroAlloc.Rest.Anthropic.TextBlock.TextBlock(string! Text) -> void
+ZeroAlloc.Rest.Anthropic.TextBlockParam
+ZeroAlloc.Rest.Anthropic.TextBlockParam.CacheControl.get -> ZeroAlloc.Rest.Anthropic.CacheControl?
+ZeroAlloc.Rest.Anthropic.TextBlockParam.CacheControl.init -> void
+ZeroAlloc.Rest.Anthropic.TextBlockParam.Deconstruct(out string! Text, out ZeroAlloc.Rest.Anthropic.CacheControl? CacheControl) -> void
+ZeroAlloc.Rest.Anthropic.TextBlockParam.Equals(ZeroAlloc.Rest.Anthropic.TextBlockParam? other) -> bool
+ZeroAlloc.Rest.Anthropic.TextBlockParam.Text.get -> string!
+ZeroAlloc.Rest.Anthropic.TextBlockParam.Text.init -> void
+ZeroAlloc.Rest.Anthropic.TextBlockParam.TextBlockParam(string! Text, ZeroAlloc.Rest.Anthropic.CacheControl? CacheControl = null) -> void
+ZeroAlloc.Rest.Anthropic.TextDelta
+ZeroAlloc.Rest.Anthropic.TextDelta.Deconstruct(out string! Text) -> void
+ZeroAlloc.Rest.Anthropic.TextDelta.Equals(ZeroAlloc.Rest.Anthropic.TextDelta? other) -> bool
+ZeroAlloc.Rest.Anthropic.TextDelta.Text.get -> string!
+ZeroAlloc.Rest.Anthropic.TextDelta.Text.init -> void
+ZeroAlloc.Rest.Anthropic.TextDelta.TextDelta(string! Text) -> void
+ZeroAlloc.Rest.Anthropic.ToolDefinition
+ZeroAlloc.Rest.Anthropic.ToolDefinition.<Clone>$() -> ZeroAlloc.Rest.Anthropic.ToolDefinition!
+ZeroAlloc.Rest.Anthropic.ToolDefinition.CacheControl.get -> ZeroAlloc.Rest.Anthropic.CacheControl?
+ZeroAlloc.Rest.Anthropic.ToolDefinition.CacheControl.init -> void
+ZeroAlloc.Rest.Anthropic.ToolDefinition.Deconstruct(out string! Name, out string? Description, out System.Text.Json.JsonElement InputSchema, out ZeroAlloc.Rest.Anthropic.CacheControl? CacheControl) -> void
+ZeroAlloc.Rest.Anthropic.ToolDefinition.Description.get -> string?
+ZeroAlloc.Rest.Anthropic.ToolDefinition.Description.init -> void
+ZeroAlloc.Rest.Anthropic.ToolDefinition.Equals(ZeroAlloc.Rest.Anthropic.ToolDefinition? other) -> bool
+ZeroAlloc.Rest.Anthropic.ToolDefinition.InputSchema.get -> System.Text.Json.JsonElement
+ZeroAlloc.Rest.Anthropic.ToolDefinition.InputSchema.init -> void
+ZeroAlloc.Rest.Anthropic.ToolDefinition.Name.get -> string!
+ZeroAlloc.Rest.Anthropic.ToolDefinition.Name.init -> void
+ZeroAlloc.Rest.Anthropic.ToolDefinition.ToolDefinition(string! Name, string? Description, System.Text.Json.JsonElement InputSchema, ZeroAlloc.Rest.Anthropic.CacheControl? CacheControl) -> void
+ZeroAlloc.Rest.Anthropic.ToolResultBlockParam
+ZeroAlloc.Rest.Anthropic.ToolResultBlockParam.CacheControl.get -> ZeroAlloc.Rest.Anthropic.CacheControl?
+ZeroAlloc.Rest.Anthropic.ToolResultBlockParam.CacheControl.init -> void
+ZeroAlloc.Rest.Anthropic.ToolResultBlockParam.Content.get -> string?
+ZeroAlloc.Rest.Anthropic.ToolResultBlockParam.Content.init -> void
+ZeroAlloc.Rest.Anthropic.ToolResultBlockParam.Deconstruct(out string! ToolUseId, out string? Content, out bool? IsError, out ZeroAlloc.Rest.Anthropic.CacheControl? CacheControl) -> void
+ZeroAlloc.Rest.Anthropic.ToolResultBlockParam.Equals(ZeroAlloc.Rest.Anthropic.ToolResultBlockParam? other) -> bool
+ZeroAlloc.Rest.Anthropic.ToolResultBlockParam.IsError.get -> bool?
+ZeroAlloc.Rest.Anthropic.ToolResultBlockParam.IsError.init -> void
+ZeroAlloc.Rest.Anthropic.ToolResultBlockParam.ToolResultBlockParam(string! ToolUseId, string? Content, bool? IsError, ZeroAlloc.Rest.Anthropic.CacheControl? CacheControl = null) -> void
+ZeroAlloc.Rest.Anthropic.ToolResultBlockParam.ToolUseId.get -> string!
+ZeroAlloc.Rest.Anthropic.ToolResultBlockParam.ToolUseId.init -> void
+ZeroAlloc.Rest.Anthropic.ToolUseBlock
+ZeroAlloc.Rest.Anthropic.ToolUseBlock.Deconstruct(out string! Id, out string! Name, out System.Text.Json.JsonElement Input) -> void
+ZeroAlloc.Rest.Anthropic.ToolUseBlock.Equals(ZeroAlloc.Rest.Anthropic.ToolUseBlock? other) -> bool
+ZeroAlloc.Rest.Anthropic.ToolUseBlock.Id.get -> string!
+ZeroAlloc.Rest.Anthropic.ToolUseBlock.Id.init -> void
+ZeroAlloc.Rest.Anthropic.ToolUseBlock.Input.get -> System.Text.Json.JsonElement
+ZeroAlloc.Rest.Anthropic.ToolUseBlock.Input.init -> void
+ZeroAlloc.Rest.Anthropic.ToolUseBlock.Name.get -> string!
+ZeroAlloc.Rest.Anthropic.ToolUseBlock.Name.init -> void
+ZeroAlloc.Rest.Anthropic.ToolUseBlock.ToolUseBlock(string! Id, string! Name, System.Text.Json.JsonElement Input) -> void
+ZeroAlloc.Rest.Anthropic.ToolUseBlockParam
+ZeroAlloc.Rest.Anthropic.ToolUseBlockParam.CacheControl.get -> ZeroAlloc.Rest.Anthropic.CacheControl?
+ZeroAlloc.Rest.Anthropic.ToolUseBlockParam.CacheControl.init -> void
+ZeroAlloc.Rest.Anthropic.ToolUseBlockParam.Deconstruct(out string! Id, out string! Name, out System.Text.Json.JsonElement Input, out ZeroAlloc.Rest.Anthropic.CacheControl? CacheControl) -> void
+ZeroAlloc.Rest.Anthropic.ToolUseBlockParam.Equals(ZeroAlloc.Rest.Anthropic.ToolUseBlockParam? other) -> bool
+ZeroAlloc.Rest.Anthropic.ToolUseBlockParam.Id.get -> string!
+ZeroAlloc.Rest.Anthropic.ToolUseBlockParam.Id.init -> void
+ZeroAlloc.Rest.Anthropic.ToolUseBlockParam.Input.get -> System.Text.Json.JsonElement
+ZeroAlloc.Rest.Anthropic.ToolUseBlockParam.Input.init -> void
+ZeroAlloc.Rest.Anthropic.ToolUseBlockParam.Name.get -> string!
+ZeroAlloc.Rest.Anthropic.ToolUseBlockParam.Name.init -> void
+ZeroAlloc.Rest.Anthropic.ToolUseBlockParam.ToolUseBlockParam(string! Id, string! Name, System.Text.Json.JsonElement Input, ZeroAlloc.Rest.Anthropic.CacheControl? CacheControl = null) -> void
+ZeroAlloc.Rest.Anthropic.Usage
+ZeroAlloc.Rest.Anthropic.Usage.<Clone>$() -> ZeroAlloc.Rest.Anthropic.Usage!
+ZeroAlloc.Rest.Anthropic.Usage.CacheCreation.get -> ZeroAlloc.Rest.Anthropic.CacheCreation?
+ZeroAlloc.Rest.Anthropic.Usage.CacheCreation.init -> void
+ZeroAlloc.Rest.Anthropic.Usage.CacheCreationInputTokens.get -> int?
+ZeroAlloc.Rest.Anthropic.Usage.CacheCreationInputTokens.init -> void
+ZeroAlloc.Rest.Anthropic.Usage.CacheReadInputTokens.get -> int?
+ZeroAlloc.Rest.Anthropic.Usage.CacheReadInputTokens.init -> void
+ZeroAlloc.Rest.Anthropic.Usage.Deconstruct(out int InputTokens, out int OutputTokens, out int? CacheCreationInputTokens, out int? CacheReadInputTokens, out ZeroAlloc.Rest.Anthropic.CacheCreation? CacheCreation) -> void
+ZeroAlloc.Rest.Anthropic.Usage.Equals(ZeroAlloc.Rest.Anthropic.Usage? other) -> bool
+ZeroAlloc.Rest.Anthropic.Usage.InputTokens.get -> int
+ZeroAlloc.Rest.Anthropic.Usage.InputTokens.init -> void
+ZeroAlloc.Rest.Anthropic.Usage.OutputTokens.get -> int
+ZeroAlloc.Rest.Anthropic.Usage.OutputTokens.init -> void
+ZeroAlloc.Rest.Anthropic.Usage.Usage(int InputTokens, int OutputTokens, int? CacheCreationInputTokens = null, int? CacheReadInputTokens = null, ZeroAlloc.Rest.Anthropic.CacheCreation? CacheCreation = null) -> void
+abstract ZeroAlloc.Rest.Anthropic.ContentBlockParam.<Clone>$() -> ZeroAlloc.Rest.Anthropic.ContentBlockParam!
+abstract ZeroAlloc.Rest.Anthropic.MessageStreamEvent.<Clone>$() -> ZeroAlloc.Rest.Anthropic.MessageStreamEvent!
+const ZeroAlloc.Rest.Anthropic.StopReasons.EndTurn = "end_turn" -> string!
+const ZeroAlloc.Rest.Anthropic.StopReasons.MaxTokens = "max_tokens" -> string!
+const ZeroAlloc.Rest.Anthropic.StopReasons.PauseTurn = "pause_turn" -> string!
+const ZeroAlloc.Rest.Anthropic.StopReasons.Refusal = "refusal" -> string!
+const ZeroAlloc.Rest.Anthropic.StopReasons.StopSequence = "stop_sequence" -> string!
+const ZeroAlloc.Rest.Anthropic.StopReasons.ToolUse = "tool_use" -> string!
+override ZeroAlloc.Rest.Anthropic.CacheControl.Equals(object? obj) -> bool
+override ZeroAlloc.Rest.Anthropic.CacheControl.GetHashCode() -> int
+override ZeroAlloc.Rest.Anthropic.CacheControl.ToString() -> string!
+override ZeroAlloc.Rest.Anthropic.CacheCreation.Equals(object? obj) -> bool
+override ZeroAlloc.Rest.Anthropic.CacheCreation.GetHashCode() -> int
+override ZeroAlloc.Rest.Anthropic.CacheCreation.ToString() -> string!
+override ZeroAlloc.Rest.Anthropic.ContentBlock.Equals(object? obj) -> bool
+override ZeroAlloc.Rest.Anthropic.ContentBlock.GetHashCode() -> int
+override ZeroAlloc.Rest.Anthropic.ContentBlock.ToString() -> string!
+override ZeroAlloc.Rest.Anthropic.ContentBlockDeltaEvent.<Clone>$() -> ZeroAlloc.Rest.Anthropic.ContentBlockDeltaEvent!
+override ZeroAlloc.Rest.Anthropic.ContentBlockDeltaEvent.Equals(object? obj) -> bool
+override ZeroAlloc.Rest.Anthropic.ContentBlockDeltaEvent.GetHashCode() -> int
+override ZeroAlloc.Rest.Anthropic.ContentBlockDeltaEvent.ToString() -> string!
+override ZeroAlloc.Rest.Anthropic.ContentBlockParam.Equals(object? obj) -> bool
+override ZeroAlloc.Rest.Anthropic.ContentBlockParam.GetHashCode() -> int
+override ZeroAlloc.Rest.Anthropic.ContentBlockParam.ToString() -> string!
+override ZeroAlloc.Rest.Anthropic.ContentBlockStartEvent.<Clone>$() -> ZeroAlloc.Rest.Anthropic.ContentBlockStartEvent!
+override ZeroAlloc.Rest.Anthropic.ContentBlockStartEvent.Equals(object? obj) -> bool
+override ZeroAlloc.Rest.Anthropic.ContentBlockStartEvent.GetHashCode() -> int
+override ZeroAlloc.Rest.Anthropic.ContentBlockStartEvent.ToString() -> string!
+override ZeroAlloc.Rest.Anthropic.ContentBlockStopEvent.<Clone>$() -> ZeroAlloc.Rest.Anthropic.ContentBlockStopEvent!
+override ZeroAlloc.Rest.Anthropic.ContentBlockStopEvent.Equals(object? obj) -> bool
+override ZeroAlloc.Rest.Anthropic.ContentBlockStopEvent.GetHashCode() -> int
+override ZeroAlloc.Rest.Anthropic.ContentBlockStopEvent.ToString() -> string!
+override ZeroAlloc.Rest.Anthropic.ContentDelta.Equals(object? obj) -> bool
+override ZeroAlloc.Rest.Anthropic.ContentDelta.GetHashCode() -> int
+override ZeroAlloc.Rest.Anthropic.ContentDelta.ToString() -> string!
+override ZeroAlloc.Rest.Anthropic.ErrorDetail.Equals(object? obj) -> bool
+override ZeroAlloc.Rest.Anthropic.ErrorDetail.GetHashCode() -> int
+override ZeroAlloc.Rest.Anthropic.ErrorDetail.ToString() -> string!
+override ZeroAlloc.Rest.Anthropic.ErrorEvent.<Clone>$() -> ZeroAlloc.Rest.Anthropic.ErrorEvent!
+override ZeroAlloc.Rest.Anthropic.ErrorEvent.Equals(object? obj) -> bool
+override ZeroAlloc.Rest.Anthropic.ErrorEvent.GetHashCode() -> int
+override ZeroAlloc.Rest.Anthropic.ErrorEvent.ToString() -> string!
+override ZeroAlloc.Rest.Anthropic.InputJsonDelta.<Clone>$() -> ZeroAlloc.Rest.Anthropic.InputJsonDelta!
+override ZeroAlloc.Rest.Anthropic.InputJsonDelta.Equals(object? obj) -> bool
+override ZeroAlloc.Rest.Anthropic.InputJsonDelta.GetHashCode() -> int
+override ZeroAlloc.Rest.Anthropic.InputJsonDelta.ToString() -> string!
+override ZeroAlloc.Rest.Anthropic.MessageDeltaBody.Equals(object? obj) -> bool
+override ZeroAlloc.Rest.Anthropic.MessageDeltaBody.GetHashCode() -> int
+override ZeroAlloc.Rest.Anthropic.MessageDeltaBody.ToString() -> string!
+override ZeroAlloc.Rest.Anthropic.MessageDeltaEvent.<Clone>$() -> ZeroAlloc.Rest.Anthropic.MessageDeltaEvent!
+override ZeroAlloc.Rest.Anthropic.MessageDeltaEvent.Equals(object? obj) -> bool
+override ZeroAlloc.Rest.Anthropic.MessageDeltaEvent.GetHashCode() -> int
+override ZeroAlloc.Rest.Anthropic.MessageDeltaEvent.ToString() -> string!
+override ZeroAlloc.Rest.Anthropic.MessageParam.Equals(object? obj) -> bool
+override ZeroAlloc.Rest.Anthropic.MessageParam.GetHashCode() -> int
+override ZeroAlloc.Rest.Anthropic.MessageParam.ToString() -> string!
+override ZeroAlloc.Rest.Anthropic.MessageRequest.Equals(object? obj) -> bool
+override ZeroAlloc.Rest.Anthropic.MessageRequest.GetHashCode() -> int
+override ZeroAlloc.Rest.Anthropic.MessageRequest.ToString() -> string!
+override ZeroAlloc.Rest.Anthropic.MessageResponse.Equals(object? obj) -> bool
+override ZeroAlloc.Rest.Anthropic.MessageResponse.GetHashCode() -> int
+override ZeroAlloc.Rest.Anthropic.MessageResponse.ToString() -> string!
+override ZeroAlloc.Rest.Anthropic.MessageStartEvent.<Clone>$() -> ZeroAlloc.Rest.Anthropic.MessageStartEvent!
+override ZeroAlloc.Rest.Anthropic.MessageStartEvent.Equals(object? obj) -> bool
+override ZeroAlloc.Rest.Anthropic.MessageStartEvent.GetHashCode() -> int
+override ZeroAlloc.Rest.Anthropic.MessageStartEvent.ToString() -> string!
+override ZeroAlloc.Rest.Anthropic.MessageStopEvent.<Clone>$() -> ZeroAlloc.Rest.Anthropic.MessageStopEvent!
+override ZeroAlloc.Rest.Anthropic.MessageStopEvent.Equals(object? obj) -> bool
+override ZeroAlloc.Rest.Anthropic.MessageStopEvent.GetHashCode() -> int
+override ZeroAlloc.Rest.Anthropic.MessageStopEvent.ToString() -> string!
+override ZeroAlloc.Rest.Anthropic.MessageStreamEvent.Equals(object? obj) -> bool
+override ZeroAlloc.Rest.Anthropic.MessageStreamEvent.GetHashCode() -> int
+override ZeroAlloc.Rest.Anthropic.MessageStreamEvent.ToString() -> string!
+override ZeroAlloc.Rest.Anthropic.PingEvent.<Clone>$() -> ZeroAlloc.Rest.Anthropic.PingEvent!
+override ZeroAlloc.Rest.Anthropic.PingEvent.Equals(object? obj) -> bool
+override ZeroAlloc.Rest.Anthropic.PingEvent.GetHashCode() -> int
+override ZeroAlloc.Rest.Anthropic.PingEvent.ToString() -> string!
+override ZeroAlloc.Rest.Anthropic.RequestMetadata.Equals(object? obj) -> bool
+override ZeroAlloc.Rest.Anthropic.RequestMetadata.GetHashCode() -> int
+override ZeroAlloc.Rest.Anthropic.RequestMetadata.ToString() -> string!
+override ZeroAlloc.Rest.Anthropic.SystemPrompt.Equals(object? obj) -> bool
+override ZeroAlloc.Rest.Anthropic.SystemPrompt.GetHashCode() -> int
+override ZeroAlloc.Rest.Anthropic.TextBlock.<Clone>$() -> ZeroAlloc.Rest.Anthropic.TextBlock!
+override ZeroAlloc.Rest.Anthropic.TextBlock.Equals(object? obj) -> bool
+override ZeroAlloc.Rest.Anthropic.TextBlock.GetHashCode() -> int
+override ZeroAlloc.Rest.Anthropic.TextBlock.ToString() -> string!
+override ZeroAlloc.Rest.Anthropic.TextBlockParam.<Clone>$() -> ZeroAlloc.Rest.Anthropic.TextBlockParam!
+override ZeroAlloc.Rest.Anthropic.TextBlockParam.Equals(object? obj) -> bool
+override ZeroAlloc.Rest.Anthropic.TextBlockParam.GetHashCode() -> int
+override ZeroAlloc.Rest.Anthropic.TextBlockParam.ToString() -> string!
+override ZeroAlloc.Rest.Anthropic.TextDelta.<Clone>$() -> ZeroAlloc.Rest.Anthropic.TextDelta!
+override ZeroAlloc.Rest.Anthropic.TextDelta.Equals(object? obj) -> bool
+override ZeroAlloc.Rest.Anthropic.TextDelta.GetHashCode() -> int
+override ZeroAlloc.Rest.Anthropic.TextDelta.ToString() -> string!
+override ZeroAlloc.Rest.Anthropic.ToolDefinition.Equals(object? obj) -> bool
+override ZeroAlloc.Rest.Anthropic.ToolDefinition.GetHashCode() -> int
+override ZeroAlloc.Rest.Anthropic.ToolDefinition.ToString() -> string!
+override ZeroAlloc.Rest.Anthropic.ToolResultBlockParam.<Clone>$() -> ZeroAlloc.Rest.Anthropic.ToolResultBlockParam!
+override ZeroAlloc.Rest.Anthropic.ToolResultBlockParam.Equals(object? obj) -> bool
+override ZeroAlloc.Rest.Anthropic.ToolResultBlockParam.GetHashCode() -> int
+override ZeroAlloc.Rest.Anthropic.ToolResultBlockParam.ToString() -> string!
+override ZeroAlloc.Rest.Anthropic.ToolUseBlock.<Clone>$() -> ZeroAlloc.Rest.Anthropic.ToolUseBlock!
+override ZeroAlloc.Rest.Anthropic.ToolUseBlock.Equals(object? obj) -> bool
+override ZeroAlloc.Rest.Anthropic.ToolUseBlock.GetHashCode() -> int
+override ZeroAlloc.Rest.Anthropic.ToolUseBlock.ToString() -> string!
+override ZeroAlloc.Rest.Anthropic.ToolUseBlockParam.<Clone>$() -> ZeroAlloc.Rest.Anthropic.ToolUseBlockParam!
+override ZeroAlloc.Rest.Anthropic.ToolUseBlockParam.Equals(object? obj) -> bool
+override ZeroAlloc.Rest.Anthropic.ToolUseBlockParam.GetHashCode() -> int
+override ZeroAlloc.Rest.Anthropic.ToolUseBlockParam.ToString() -> string!
+override ZeroAlloc.Rest.Anthropic.Usage.Equals(object? obj) -> bool
+override ZeroAlloc.Rest.Anthropic.Usage.GetHashCode() -> int
+override ZeroAlloc.Rest.Anthropic.Usage.ToString() -> string!
+override sealed ZeroAlloc.Rest.Anthropic.ContentBlockDeltaEvent.Equals(ZeroAlloc.Rest.Anthropic.MessageStreamEvent? other) -> bool
+override sealed ZeroAlloc.Rest.Anthropic.ContentBlockStartEvent.Equals(ZeroAlloc.Rest.Anthropic.MessageStreamEvent? other) -> bool
+override sealed ZeroAlloc.Rest.Anthropic.ContentBlockStopEvent.Equals(ZeroAlloc.Rest.Anthropic.MessageStreamEvent? other) -> bool
+override sealed ZeroAlloc.Rest.Anthropic.ErrorEvent.Equals(ZeroAlloc.Rest.Anthropic.MessageStreamEvent? other) -> bool
+override sealed ZeroAlloc.Rest.Anthropic.InputJsonDelta.Equals(ZeroAlloc.Rest.Anthropic.ContentDelta? other) -> bool
+override sealed ZeroAlloc.Rest.Anthropic.MessageDeltaEvent.Equals(ZeroAlloc.Rest.Anthropic.MessageStreamEvent? other) -> bool
+override sealed ZeroAlloc.Rest.Anthropic.MessageStartEvent.Equals(ZeroAlloc.Rest.Anthropic.MessageStreamEvent? other) -> bool
+override sealed ZeroAlloc.Rest.Anthropic.MessageStopEvent.Equals(ZeroAlloc.Rest.Anthropic.MessageStreamEvent? other) -> bool
+override sealed ZeroAlloc.Rest.Anthropic.PingEvent.Equals(ZeroAlloc.Rest.Anthropic.MessageStreamEvent? other) -> bool
+override sealed ZeroAlloc.Rest.Anthropic.TextBlock.Equals(ZeroAlloc.Rest.Anthropic.ContentBlock? other) -> bool
+override sealed ZeroAlloc.Rest.Anthropic.TextBlockParam.Equals(ZeroAlloc.Rest.Anthropic.ContentBlockParam? other) -> bool
+override sealed ZeroAlloc.Rest.Anthropic.TextDelta.Equals(ZeroAlloc.Rest.Anthropic.ContentDelta? other) -> bool
+override sealed ZeroAlloc.Rest.Anthropic.ToolResultBlockParam.Equals(ZeroAlloc.Rest.Anthropic.ContentBlockParam? other) -> bool
+override sealed ZeroAlloc.Rest.Anthropic.ToolUseBlock.Equals(ZeroAlloc.Rest.Anthropic.ContentBlock? other) -> bool
+override sealed ZeroAlloc.Rest.Anthropic.ToolUseBlockParam.Equals(ZeroAlloc.Rest.Anthropic.ContentBlockParam? other) -> bool
+static ZeroAlloc.Rest.Anthropic.CacheControl.FiveMinutes.get -> ZeroAlloc.Rest.Anthropic.CacheControl!
+static ZeroAlloc.Rest.Anthropic.CacheControl.OneHour.get -> ZeroAlloc.Rest.Anthropic.CacheControl!
+static ZeroAlloc.Rest.Anthropic.CacheControl.operator !=(ZeroAlloc.Rest.Anthropic.CacheControl? left, ZeroAlloc.Rest.Anthropic.CacheControl? right) -> bool
+static ZeroAlloc.Rest.Anthropic.CacheControl.operator ==(ZeroAlloc.Rest.Anthropic.CacheControl? left, ZeroAlloc.Rest.Anthropic.CacheControl? right) -> bool
+static ZeroAlloc.Rest.Anthropic.CacheCreation.operator !=(ZeroAlloc.Rest.Anthropic.CacheCreation? left, ZeroAlloc.Rest.Anthropic.CacheCreation? right) -> bool
+static ZeroAlloc.Rest.Anthropic.CacheCreation.operator ==(ZeroAlloc.Rest.Anthropic.CacheCreation? left, ZeroAlloc.Rest.Anthropic.CacheCreation? right) -> bool
+static ZeroAlloc.Rest.Anthropic.ContentBlock.operator !=(ZeroAlloc.Rest.Anthropic.ContentBlock? left, ZeroAlloc.Rest.Anthropic.ContentBlock? right) -> bool
+static ZeroAlloc.Rest.Anthropic.ContentBlock.operator ==(ZeroAlloc.Rest.Anthropic.ContentBlock? left, ZeroAlloc.Rest.Anthropic.ContentBlock? right) -> bool
+static ZeroAlloc.Rest.Anthropic.ContentBlockDeltaEvent.operator !=(ZeroAlloc.Rest.Anthropic.ContentBlockDeltaEvent? left, ZeroAlloc.Rest.Anthropic.ContentBlockDeltaEvent? right) -> bool
+static ZeroAlloc.Rest.Anthropic.ContentBlockDeltaEvent.operator ==(ZeroAlloc.Rest.Anthropic.ContentBlockDeltaEvent? left, ZeroAlloc.Rest.Anthropic.ContentBlockDeltaEvent? right) -> bool
+static ZeroAlloc.Rest.Anthropic.ContentBlockParam.operator !=(ZeroAlloc.Rest.Anthropic.ContentBlockParam? left, ZeroAlloc.Rest.Anthropic.ContentBlockParam? right) -> bool
+static ZeroAlloc.Rest.Anthropic.ContentBlockParam.operator ==(ZeroAlloc.Rest.Anthropic.ContentBlockParam? left, ZeroAlloc.Rest.Anthropic.ContentBlockParam? right) -> bool
+static ZeroAlloc.Rest.Anthropic.ContentBlockStartEvent.operator !=(ZeroAlloc.Rest.Anthropic.ContentBlockStartEvent? left, ZeroAlloc.Rest.Anthropic.ContentBlockStartEvent? right) -> bool
+static ZeroAlloc.Rest.Anthropic.ContentBlockStartEvent.operator ==(ZeroAlloc.Rest.Anthropic.ContentBlockStartEvent? left, ZeroAlloc.Rest.Anthropic.ContentBlockStartEvent? right) -> bool
+static ZeroAlloc.Rest.Anthropic.ContentBlockStopEvent.operator !=(ZeroAlloc.Rest.Anthropic.ContentBlockStopEvent? left, ZeroAlloc.Rest.Anthropic.ContentBlockStopEvent? right) -> bool
+static ZeroAlloc.Rest.Anthropic.ContentBlockStopEvent.operator ==(ZeroAlloc.Rest.Anthropic.ContentBlockStopEvent? left, ZeroAlloc.Rest.Anthropic.ContentBlockStopEvent? right) -> bool
+static ZeroAlloc.Rest.Anthropic.ContentDelta.operator !=(ZeroAlloc.Rest.Anthropic.ContentDelta? left, ZeroAlloc.Rest.Anthropic.ContentDelta? right) -> bool
+static ZeroAlloc.Rest.Anthropic.ContentDelta.operator ==(ZeroAlloc.Rest.Anthropic.ContentDelta? left, ZeroAlloc.Rest.Anthropic.ContentDelta? right) -> bool
+static ZeroAlloc.Rest.Anthropic.ErrorDetail.operator !=(ZeroAlloc.Rest.Anthropic.ErrorDetail? left, ZeroAlloc.Rest.Anthropic.ErrorDetail? right) -> bool
+static ZeroAlloc.Rest.Anthropic.ErrorDetail.operator ==(ZeroAlloc.Rest.Anthropic.ErrorDetail? left, ZeroAlloc.Rest.Anthropic.ErrorDetail? right) -> bool
+static ZeroAlloc.Rest.Anthropic.ErrorEvent.operator !=(ZeroAlloc.Rest.Anthropic.ErrorEvent? left, ZeroAlloc.Rest.Anthropic.ErrorEvent? right) -> bool
+static ZeroAlloc.Rest.Anthropic.ErrorEvent.operator ==(ZeroAlloc.Rest.Anthropic.ErrorEvent? left, ZeroAlloc.Rest.Anthropic.ErrorEvent? right) -> bool
+static ZeroAlloc.Rest.Anthropic.InputJsonDelta.operator !=(ZeroAlloc.Rest.Anthropic.InputJsonDelta? left, ZeroAlloc.Rest.Anthropic.InputJsonDelta? right) -> bool
+static ZeroAlloc.Rest.Anthropic.InputJsonDelta.operator ==(ZeroAlloc.Rest.Anthropic.InputJsonDelta? left, ZeroAlloc.Rest.Anthropic.InputJsonDelta? right) -> bool
+static ZeroAlloc.Rest.Anthropic.MessageDeltaBody.operator !=(ZeroAlloc.Rest.Anthropic.MessageDeltaBody? left, ZeroAlloc.Rest.Anthropic.MessageDeltaBody? right) -> bool
+static ZeroAlloc.Rest.Anthropic.MessageDeltaBody.operator ==(ZeroAlloc.Rest.Anthropic.MessageDeltaBody? left, ZeroAlloc.Rest.Anthropic.MessageDeltaBody? right) -> bool
+static ZeroAlloc.Rest.Anthropic.MessageDeltaEvent.operator !=(ZeroAlloc.Rest.Anthropic.MessageDeltaEvent? left, ZeroAlloc.Rest.Anthropic.MessageDeltaEvent? right) -> bool
+static ZeroAlloc.Rest.Anthropic.MessageDeltaEvent.operator ==(ZeroAlloc.Rest.Anthropic.MessageDeltaEvent? left, ZeroAlloc.Rest.Anthropic.MessageDeltaEvent? right) -> bool
+static ZeroAlloc.Rest.Anthropic.MessageParam.operator !=(ZeroAlloc.Rest.Anthropic.MessageParam? left, ZeroAlloc.Rest.Anthropic.MessageParam? right) -> bool
+static ZeroAlloc.Rest.Anthropic.MessageParam.operator ==(ZeroAlloc.Rest.Anthropic.MessageParam? left, ZeroAlloc.Rest.Anthropic.MessageParam? right) -> bool
+static ZeroAlloc.Rest.Anthropic.MessageRequest.operator !=(ZeroAlloc.Rest.Anthropic.MessageRequest? left, ZeroAlloc.Rest.Anthropic.MessageRequest? right) -> bool
+static ZeroAlloc.Rest.Anthropic.MessageRequest.operator ==(ZeroAlloc.Rest.Anthropic.MessageRequest? left, ZeroAlloc.Rest.Anthropic.MessageRequest? right) -> bool
+static ZeroAlloc.Rest.Anthropic.MessageResponse.operator !=(ZeroAlloc.Rest.Anthropic.MessageResponse? left, ZeroAlloc.Rest.Anthropic.MessageResponse? right) -> bool
+static ZeroAlloc.Rest.Anthropic.MessageResponse.operator ==(ZeroAlloc.Rest.Anthropic.MessageResponse? left, ZeroAlloc.Rest.Anthropic.MessageResponse? right) -> bool
+static ZeroAlloc.Rest.Anthropic.MessageStartEvent.operator !=(ZeroAlloc.Rest.Anthropic.MessageStartEvent? left, ZeroAlloc.Rest.Anthropic.MessageStartEvent? right) -> bool
+static ZeroAlloc.Rest.Anthropic.MessageStartEvent.operator ==(ZeroAlloc.Rest.Anthropic.MessageStartEvent? left, ZeroAlloc.Rest.Anthropic.MessageStartEvent? right) -> bool
+static ZeroAlloc.Rest.Anthropic.MessageStopEvent.operator !=(ZeroAlloc.Rest.Anthropic.MessageStopEvent? left, ZeroAlloc.Rest.Anthropic.MessageStopEvent? right) -> bool
+static ZeroAlloc.Rest.Anthropic.MessageStopEvent.operator ==(ZeroAlloc.Rest.Anthropic.MessageStopEvent? left, ZeroAlloc.Rest.Anthropic.MessageStopEvent? right) -> bool
+static ZeroAlloc.Rest.Anthropic.MessageStreamEvent.operator !=(ZeroAlloc.Rest.Anthropic.MessageStreamEvent? left, ZeroAlloc.Rest.Anthropic.MessageStreamEvent? right) -> bool
+static ZeroAlloc.Rest.Anthropic.MessageStreamEvent.operator ==(ZeroAlloc.Rest.Anthropic.MessageStreamEvent? left, ZeroAlloc.Rest.Anthropic.MessageStreamEvent? right) -> bool
+static ZeroAlloc.Rest.Anthropic.PingEvent.operator !=(ZeroAlloc.Rest.Anthropic.PingEvent? left, ZeroAlloc.Rest.Anthropic.PingEvent? right) -> bool
+static ZeroAlloc.Rest.Anthropic.PingEvent.operator ==(ZeroAlloc.Rest.Anthropic.PingEvent? left, ZeroAlloc.Rest.Anthropic.PingEvent? right) -> bool
+static ZeroAlloc.Rest.Anthropic.RequestMetadata.operator !=(ZeroAlloc.Rest.Anthropic.RequestMetadata? left, ZeroAlloc.Rest.Anthropic.RequestMetadata? right) -> bool
+static ZeroAlloc.Rest.Anthropic.RequestMetadata.operator ==(ZeroAlloc.Rest.Anthropic.RequestMetadata? left, ZeroAlloc.Rest.Anthropic.RequestMetadata? right) -> bool
+static ZeroAlloc.Rest.Anthropic.SystemPrompt.FromBlocks(System.Collections.Generic.IReadOnlyList<ZeroAlloc.Rest.Anthropic.TextBlockParam!>! blocks) -> ZeroAlloc.Rest.Anthropic.SystemPrompt
+static ZeroAlloc.Rest.Anthropic.SystemPrompt.FromString(string! text) -> ZeroAlloc.Rest.Anthropic.SystemPrompt
+static ZeroAlloc.Rest.Anthropic.SystemPrompt.implicit operator ZeroAlloc.Rest.Anthropic.SystemPrompt(System.Collections.Generic.List<ZeroAlloc.Rest.Anthropic.TextBlockParam!>! blocks) -> ZeroAlloc.Rest.Anthropic.SystemPrompt
+static ZeroAlloc.Rest.Anthropic.SystemPrompt.implicit operator ZeroAlloc.Rest.Anthropic.SystemPrompt(ZeroAlloc.Rest.Anthropic.TextBlockParam![]! blocks) -> ZeroAlloc.Rest.Anthropic.SystemPrompt
+static ZeroAlloc.Rest.Anthropic.SystemPrompt.implicit operator ZeroAlloc.Rest.Anthropic.SystemPrompt(string! text) -> ZeroAlloc.Rest.Anthropic.SystemPrompt
+static ZeroAlloc.Rest.Anthropic.SystemPrompt.operator !=(ZeroAlloc.Rest.Anthropic.SystemPrompt left, ZeroAlloc.Rest.Anthropic.SystemPrompt right) -> bool
+static ZeroAlloc.Rest.Anthropic.SystemPrompt.operator ==(ZeroAlloc.Rest.Anthropic.SystemPrompt left, ZeroAlloc.Rest.Anthropic.SystemPrompt right) -> bool
+static ZeroAlloc.Rest.Anthropic.TextBlock.operator !=(ZeroAlloc.Rest.Anthropic.TextBlock? left, ZeroAlloc.Rest.Anthropic.TextBlock? right) -> bool
+static ZeroAlloc.Rest.Anthropic.TextBlock.operator ==(ZeroAlloc.Rest.Anthropic.TextBlock? left, ZeroAlloc.Rest.Anthropic.TextBlock? right) -> bool
+static ZeroAlloc.Rest.Anthropic.TextBlockParam.operator !=(ZeroAlloc.Rest.Anthropic.TextBlockParam? left, ZeroAlloc.Rest.Anthropic.TextBlockParam? right) -> bool
+static ZeroAlloc.Rest.Anthropic.TextBlockParam.operator ==(ZeroAlloc.Rest.Anthropic.TextBlockParam? left, ZeroAlloc.Rest.Anthropic.TextBlockParam? right) -> bool
+static ZeroAlloc.Rest.Anthropic.TextDelta.operator !=(ZeroAlloc.Rest.Anthropic.TextDelta? left, ZeroAlloc.Rest.Anthropic.TextDelta? right) -> bool
+static ZeroAlloc.Rest.Anthropic.TextDelta.operator ==(ZeroAlloc.Rest.Anthropic.TextDelta? left, ZeroAlloc.Rest.Anthropic.TextDelta? right) -> bool
+static ZeroAlloc.Rest.Anthropic.ToolDefinition.operator !=(ZeroAlloc.Rest.Anthropic.ToolDefinition? left, ZeroAlloc.Rest.Anthropic.ToolDefinition? right) -> bool
+static ZeroAlloc.Rest.Anthropic.ToolDefinition.operator ==(ZeroAlloc.Rest.Anthropic.ToolDefinition? left, ZeroAlloc.Rest.Anthropic.ToolDefinition? right) -> bool
+static ZeroAlloc.Rest.Anthropic.ToolResultBlockParam.operator !=(ZeroAlloc.Rest.Anthropic.ToolResultBlockParam? left, ZeroAlloc.Rest.Anthropic.ToolResultBlockParam? right) -> bool
+static ZeroAlloc.Rest.Anthropic.ToolResultBlockParam.operator ==(ZeroAlloc.Rest.Anthropic.ToolResultBlockParam? left, ZeroAlloc.Rest.Anthropic.ToolResultBlockParam? right) -> bool
+static ZeroAlloc.Rest.Anthropic.ToolUseBlock.operator !=(ZeroAlloc.Rest.Anthropic.ToolUseBlock? left, ZeroAlloc.Rest.Anthropic.ToolUseBlock? right) -> bool
+static ZeroAlloc.Rest.Anthropic.ToolUseBlock.operator ==(ZeroAlloc.Rest.Anthropic.ToolUseBlock? left, ZeroAlloc.Rest.Anthropic.ToolUseBlock? right) -> bool
+static ZeroAlloc.Rest.Anthropic.ToolUseBlockParam.operator !=(ZeroAlloc.Rest.Anthropic.ToolUseBlockParam? left, ZeroAlloc.Rest.Anthropic.ToolUseBlockParam? right) -> bool
+static ZeroAlloc.Rest.Anthropic.ToolUseBlockParam.operator ==(ZeroAlloc.Rest.Anthropic.ToolUseBlockParam? left, ZeroAlloc.Rest.Anthropic.ToolUseBlockParam? right) -> bool
+static ZeroAlloc.Rest.Anthropic.Usage.operator !=(ZeroAlloc.Rest.Anthropic.Usage? left, ZeroAlloc.Rest.Anthropic.Usage? right) -> bool
+static ZeroAlloc.Rest.Anthropic.Usage.operator ==(ZeroAlloc.Rest.Anthropic.Usage? left, ZeroAlloc.Rest.Anthropic.Usage? right) -> bool
+virtual ZeroAlloc.Rest.Anthropic.ContentBlock.<Clone>$() -> ZeroAlloc.Rest.Anthropic.ContentBlock!
+virtual ZeroAlloc.Rest.Anthropic.ContentBlock.EqualityContract.get -> System.Type!
+virtual ZeroAlloc.Rest.Anthropic.ContentBlock.Equals(ZeroAlloc.Rest.Anthropic.ContentBlock? other) -> bool
+virtual ZeroAlloc.Rest.Anthropic.ContentBlock.PrintMembers(System.Text.StringBuilder! builder) -> bool
+virtual ZeroAlloc.Rest.Anthropic.ContentBlockParam.EqualityContract.get -> System.Type!
+virtual ZeroAlloc.Rest.Anthropic.ContentBlockParam.Equals(ZeroAlloc.Rest.Anthropic.ContentBlockParam? other) -> bool
+virtual ZeroAlloc.Rest.Anthropic.ContentBlockParam.PrintMembers(System.Text.StringBuilder! builder) -> bool
+virtual ZeroAlloc.Rest.Anthropic.ContentDelta.<Clone>$() -> ZeroAlloc.Rest.Anthropic.ContentDelta!
+virtual ZeroAlloc.Rest.Anthropic.ContentDelta.EqualityContract.get -> System.Type!
+virtual ZeroAlloc.Rest.Anthropic.ContentDelta.Equals(ZeroAlloc.Rest.Anthropic.ContentDelta? other) -> bool
+virtual ZeroAlloc.Rest.Anthropic.ContentDelta.PrintMembers(System.Text.StringBuilder! builder) -> bool
+virtual ZeroAlloc.Rest.Anthropic.MessageStreamEvent.EqualityContract.get -> System.Type!
+virtual ZeroAlloc.Rest.Anthropic.MessageStreamEvent.Equals(ZeroAlloc.Rest.Anthropic.MessageStreamEvent? other) -> bool
+virtual ZeroAlloc.Rest.Anthropic.MessageStreamEvent.PrintMembers(System.Text.StringBuilder! builder) -> bool
