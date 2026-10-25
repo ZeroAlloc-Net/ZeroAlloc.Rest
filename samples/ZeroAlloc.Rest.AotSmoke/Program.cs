@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using ZeroAlloc.Rest;
 using ZeroAlloc.Rest.AotSmoke;
@@ -391,6 +392,51 @@ using (var refusingHttp = new System.Net.Http.HttpClient(new RefusingHandler()) 
         || !server.LastRequest.EndsWith("\r\n\r\nnote", StringComparison.Ordinal))
     {
         Console.Error.WriteLine("AOT smoke: FAIL — a Task method should send its Stream body");
+        return 1;
+    }
+}
+
+// Server-sent events over a real connection through the Resilience bridge: a 503 before the first
+// event is retried with a fresh request, then both shapes read their events, one type per event name
+// and every event with its type, from the context. Events without an event: line are "message".
+{
+    using var server = new StubServer();
+    var eventServices = new ServiceCollection();
+    eventServices.AddEventApiResiliencePolicies();
+    eventServices.AddRestResilience<IEventApi, EventApiClient, IEventApiResilienceProxy>(
+        (inner, sp) => new IEventApiResilienceProxy(inner, sp.GetRequiredService<EventApiResiliencePolicies>()),
+        o =>
+        {
+            o.BaseAddress = server.BaseAddress;
+            o.UseSerializer(new ZeroAlloc.Rest.SystemTextJson.SystemTextJsonSerializer(EventJsonContext.Default));
+        });
+    using var eventProvider = eventServices.BuildServiceProvider();
+    var events = eventProvider.GetRequiredService<IEventApi>();
+    using var timeout = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(30));
+
+    var serving = Task.Run(async () =>
+    {
+        await server.ServeAsync(503, "busy", timeout.Token).ConfigureAwait(false);
+        await server.ServeAsync(200, "data: {\"n\":1}\n\nevent: tick\ndata: {\"n\":2}\n\n", timeout.Token).ConfigureAwait(false);
+    }, timeout.Token);
+    var ticks = new System.Collections.Generic.List<string>();
+    await foreach (var tick in events.FollowAsync(timeout.Token).ConfigureAwait(false))
+        ticks.Add($"{tick.Event}:{tick.Data.N}");
+    await serving.ConfigureAwait(false);
+    if (!string.Join(",", ticks).Equals("message:1,tick:2", StringComparison.Ordinal))
+    {
+        Console.Error.WriteLine($"AOT smoke: FAIL — a 503 before the first event should be retried and every event read, got {string.Join(",", ticks)}");
+        return 1;
+    }
+
+    serving = server.ServeAsync(200, "event: start\ndata: {\"n\":1}\n\nevent: skipped\ndata: {}\n\nevent: tick\ndata: {\"n\":2}\n\n", timeout.Token);
+    var feed = new System.Collections.Generic.List<FeedEvent>();
+    await foreach (var item in events.FeedAsync(timeout.Token).ConfigureAwait(false))
+        feed.Add(item);
+    await serving.ConfigureAwait(false);
+    if (feed.Count != 2 || feed[0] is not FeedStart { N: 1 } || feed[1] is not FeedTick { N: 2 })
+    {
+        Console.Error.WriteLine("AOT smoke: FAIL — one type per event name should read the named events and skip the others");
         return 1;
     }
 }
