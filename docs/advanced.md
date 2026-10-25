@@ -230,8 +230,8 @@ internal interface IJevApi
 ## Diagnostics
 
 The generator reports these diagnostics. Each points at the method, parameter or attribute at
-fault. ZRA001 to ZRA004 are errors, which `#pragma warning disable` does not suppress; fix the
-declaration. ZRA005 and ZRA006 are warnings.
+fault. ZRA001 to ZRA004, ZRA007 and ZRA008 are errors, which `#pragma warning disable` does not
+suppress; fix the declaration. ZRA005 and ZRA006 are warnings.
 
 ### ZRA001: Conflicting body attributes
 
@@ -246,7 +246,7 @@ Task<TokenResponse> GetTokenAsync([Body] TokenRequest body, [FormBody] Dictionar
 
 Message: `Method 'GetTokenAsync' has both [Body] and [FormBody] parameters; only one is allowed`
 
-### ZRA002: No error mapper for a Result error type
+### ZRA002: No error mapper for an error type
 
 Severity: Error.
 
@@ -262,6 +262,9 @@ internal interface IJevApi
 ```
 
 Message (the error type is fully qualified in the real message): `Method 'AskAsync' returns a Result with error type 'JevError', but no [ErrorMapper] on the interface implements IHttpErrorMapper<JevError>`
+
+The same applies to the `ErrorType` of a [server-sent events](#server-sent-events) method,
+`[EventStream(ErrorType = typeof(JevError))]`, with the message `Method 'StreamAsync' declares [EventStream(ErrorType = typeof(JevError))], but no [ErrorMapper] on the interface implements IHttpErrorMapper<JevError>`.
 
 ### ZRA003: Invalid error mapper type
 
@@ -396,6 +399,49 @@ public class Outer<T>
 ```
 
 Message: `No REST client is generated for 'MyApp.Outer<T>.IApi', because it is declared inside the generic type 'MyApp.Outer<T>'`
+
+### ZRA007: IAsyncEnumerable<T> and [EventStream] must go together
+
+Severity: Error.
+
+A method that returns `IAsyncEnumerable<T>` reads a [server-sent events](#server-sent-events)
+stream, and needs `[EventStream]` to say so. The error also covers the reverse: `[EventStream]` or
+`[EventType]` on a method that does not return `IAsyncEnumerable<T>`, where it would be ignored.
+A method without `[EventStream]` is generated as a method that throws `NotSupportedException`, so
+this error is the only one you see.
+
+```csharp
+[Get("/feed")]
+IAsyncEnumerable<FeedItem> FollowAsync(CancellationToken ct = default);
+```
+
+Message (the type is fully qualified in the real message): `Method 'FollowAsync' returns 'IAsyncEnumerable<FeedItem>' but has no [EventStream]; add [EventStream] to read the response as text/event-stream, one event at a time`
+
+### ZRA008: Invalid [EventType] mapping
+
+Severity: Error.
+
+An `[EventStream]` method's `[EventType]` attributes cannot work as declared:
+
+- **A type that does not convert to the element type.** The method yields `TBase`, so each mapped
+  type must convert to it. The error points at the attribute.
+- **An event name mapped twice.** Declare one `[EventType]` per name. The error points at the second.
+- **`[EventType]` on an `IAsyncEnumerable<ServerSentEvent<T>>` method**, which reads every event's
+  data as `T` and so never uses it. Remove the attribute, or return the mapped types' base type.
+- **An `IAsyncEnumerable<TBase>` method with no `[EventType]`**, which would skip every event. Map
+  the event names, or return `IAsyncEnumerable<ServerSentEvent<T>>` to read every event as `T`.
+
+The method is generated as one that throws `NotSupportedException`, so this error is the only one.
+
+```csharp
+[Post("v1/messages")]
+[EventStream]
+[EventType("message_start", typeof(MessageStart))]
+[EventType("ping", typeof(Ping))]   // Ping does not derive from ChatEvent
+IAsyncEnumerable<ChatEvent> StreamAsync([Body] ChatRequest request, CancellationToken ct = default);
+```
+
+Message (the types are fully qualified in the real message): `[EventType("ping", typeof(Ping))] on method 'StreamAsync' names a type that does not convert to 'ChatEvent', the type the method yields`
 
 ### OpenAPI code generation: ZRT diagnostics
 
@@ -552,6 +598,78 @@ Through the [Resilience bridge](resilience.md), `[Timeout]` cancels the method's
 bound the body read. A `RetryWhen` predicate that retries `HttpErrorKind.Transport` does not see a
 connection lost mid-body as `Transport` when streaming; to retry that too, also match
 `Kind is HttpErrorKind.Deserialization && Exception is IOException`.
+
+## Server-sent events
+
+A method that returns `IAsyncEnumerable<T>` and carries `[EventStream]` reads a `text/event-stream`
+response one event at a time. Each event's `data:` is deserialized by the client's serializer, so it
+works under Native AOT with a source-generated serializer. There are two shapes.
+
+**Every event as one type.** Return `IAsyncEnumerable<ServerSentEvent<T>>`. Every event is yielded,
+its data read as `T`, with its type and the stream's last `id:` beside it. The type is the event's
+`event:` name, or `"message"` for an event without one, as the WHATWG rules and
+`System.Net.ServerSentEvents` define it.
+
+```csharp
+[ZeroAllocRestClient]
+public interface IFeedApi
+{
+    [Get("/feed")]
+    [EventStream]
+    IAsyncEnumerable<ServerSentEvent<FeedItem>> FollowAsync(CancellationToken ct = default);
+}
+
+await foreach (var item in feed.FollowAsync(ct))
+    Console.WriteLine($"{item.Event} {item.Id}: {item.Data.Title}");
+```
+
+**One type per event name.** Return `IAsyncEnumerable<TBase>` and map each event name to a type
+that converts to `TBase` with `[EventType]`. An event with another name is skipped. Names are
+compared as UTF-8 bytes, exactly. An event without an `event:` line has the type `message`, so
+`[EventType("message", ...)]` maps it.
+
+```csharp
+[ZeroAllocRestClient]
+[ErrorMapper(typeof(ChatErrorMapper))]
+public interface IChatApi
+{
+    [Post("v1/messages")]
+    [EventStream(ErrorType = typeof(ChatError))]
+    [EventType("message_start", typeof(MessageStart))]
+    [EventType("content_delta", typeof(ContentDelta))]
+    [EventType("message_stop", typeof(MessageStop))]
+    IAsyncEnumerable<ChatEvent> StreamAsync([Body] ChatRequest request, CancellationToken ct = default);
+}
+```
+
+How a call behaves:
+
+- **Nothing is sent until enumeration starts.** Calling the method only captures its arguments. Each
+  enumeration sends its own request, so enumerating twice sends two, and a retry that enumerates
+  again gets a fresh response.
+- **The request** sends `Accept: text/event-stream` and reads the response with
+  `HttpCompletionOption.ResponseHeadersRead`, so events arrive as the server writes them.
+- **A non-success status** throws before the first event. The error body is read up to
+  `MaxErrorBodyBytes`, as for a [`Result` method](#the-error-body), and the call throws
+  `HttpErrorException`, an `HttpRequestException` whose `Error` is the `HttpError` and whose
+  `StatusCode` is set. With `[EventStream(ErrorType = typeof(E))]`, the interface's
+  [`[ErrorMapper]`](#your-own-error-type-errormapper) for `E` maps the `HttpError`, and the call
+  throws `HttpErrorException<E>` with the result as `MappedError`.
+- **Cancellation.** The method's token and the one `WithCancellation` passes both stop the read.
+- **Disposal.** The response is disposed when the enumeration ends, however it ends: at the end of
+  the stream, on a `break`, on a failure, and on cancellation.
+- **A failure mid-stream**, such as data that does not deserialize or a lost connection, is thrown
+  from the enumeration as it is.
+- **Telemetry.** The span covers the whole enumeration: it starts when enumeration starts and stops
+  when it ends. `rest.requests_total` and `rest.request_duration_ms` are recorded once, when the
+  headers arrive, as with [`StreamResponses`](#streaming-responses). A cancellation the caller asked
+  for leaves the span's status unset and tags it `rest.cancelled`; any other failure marks it Error.
+- **Retries.** Through the [Resilience bridge](resilience.md#event-streams), `[Retry]` calls the method
+  again while the failure comes before the first event, and not after.
+
+A method returning `IAsyncEnumerable<T>` without `[EventStream]` is
+[ZRA007](#zra007-iasyncenumerablet-and-eventstream-must-go-together); an `[EventType]` that cannot
+apply is [ZRA008](#zra008-invalid-eventtype-mapping).
 
 ## Raw Stream bodies
 

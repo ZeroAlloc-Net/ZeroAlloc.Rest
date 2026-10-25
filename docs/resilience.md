@@ -9,7 +9,7 @@ dotnet add package ZeroAlloc.Rest.Resilience
 dotnet add package ZeroAlloc.Resilience
 ```
 
-The Resilience source generator ships inside the `ZeroAlloc.Resilience` package; there is no separate generator package to add. `ZeroAlloc.Rest.Resilience` depends on `ZeroAlloc.Rest.DependencyInjection`, so `AddRestResilience` and `IHttpClientFactory` integration are available without adding that package yourself. This page describes ZeroAlloc.Resilience 2.0 and later; retrying a failed `Result` needs 3.2.0 or later.
+The Resilience source generator ships inside the `ZeroAlloc.Resilience` package; there is no separate generator package to add. `ZeroAlloc.Rest.Resilience` depends on `ZeroAlloc.Rest.DependencyInjection`, so `AddRestResilience` and `IHttpClientFactory` integration are available without adding that package yourself. This page describes ZeroAlloc.Resilience 2.0 and later; retrying a failed `Result` needs 3.2.0 or later, and retrying a [server-sent events](advanced.md#server-sent-events) method needs 3.4.0 or later.
 
 ## Quick Start
 
@@ -118,6 +118,44 @@ builder.Services
         PooledConnectionLifetime = TimeSpan.FromMinutes(2)
     });
 ```
+
+## Event streams
+
+A [server-sent events](advanced.md#server-sent-events) method returns `IAsyncEnumerable<T>`. Since
+ZeroAlloc.Resilience 3.4.0, `[Retry]` on such a method calls it again while the failure comes before
+its first item, and the bridge needs nothing more. Each enumeration sends a fresh request, so a retry
+gets a fresh response. A failure after the first item is thrown to the caller and not retried, because
+the caller has already seen items and a second stream would repeat or skip them.
+
+A non-success status throws `HttpErrorException`, or `HttpErrorException<TError>` with an
+`[EventStream(ErrorType = ...)]`; both are an `HttpRequestException` with `StatusCode` set. A stream has
+no returned `Result`, so select the failures to retry with `RetryOnException`, a static predicate over
+the exception, not with `RetryWhen`:
+
+```csharp
+[ZeroAllocRestClient]
+[Retry(MaxAttempts = 3, BackoffMs = 500, RetryOnException = nameof(IsTransient))]
+public interface IFeedApi
+{
+    [Get("/feed")]
+    [EventStream]
+    IAsyncEnumerable<ServerSentEvent<FeedItem>> FollowAsync(CancellationToken ct = default);
+
+    static bool IsTransient(Exception e) =>
+        e is HttpRequestException { StatusCode: HttpStatusCode.ServiceUnavailable or HttpStatusCode.TooManyRequests };
+}
+```
+
+`DelayHint` over the exception works too. When every attempt fails before the first item, the call
+throws `ResilienceException` rather than the last `HttpErrorException`. A caller that cancels during a
+back-off gets the cancellation. These do not work on a stream method:
+
+- `[Timeout]`, `[CircuitBreaker]`, `[RateLimit]`, a fallback and `PerAttemptTimeoutMs` on the method are
+  error ZR0014. Applied from the interface they are warning ZR0015, and the inherited policy is not
+  applied to the stream. A runtime `RetryPolicy` with `perAttemptTimeoutMs` set is ignored for a stream.
+- `RetryWhen` is ZR0010.
+
+To bound a stream, pass a `CancellationToken` that you cancel yourself.
 
 ## Result Returns and Error Handling
 

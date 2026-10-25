@@ -43,6 +43,6 @@
     <PackageVersion Include="ZeroAlloc.Collections" Version="1.2.4" />
     <PackageVersion Include="ZeroAlloc.Analyzers" Version="1.11.3" />
     <PackageVersion Include="ZeroAlloc.ValueObjects" Version="2.2.5" />
-    <PackageVersion Include="ZeroAlloc.Resilience" Version="3.3.6" />
+    <PackageVersion Include="ZeroAlloc.Resilience" Version="3.4.0" />
   </ItemGroup>
 </Project>

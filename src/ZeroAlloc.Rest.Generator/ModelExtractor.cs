@@ -20,6 +20,10 @@ internal static class ModelExtractor
     private const string QueryAttr  = "ZeroAlloc.Rest.Attributes.QueryAttribute";
     private const string HeaderAttr = "ZeroAlloc.Rest.Attributes.HeaderAttribute";
     private const string SerializerAttr = "ZeroAlloc.Rest.Attributes.SerializerAttribute";
+    private const string EventStreamAttr = "ZeroAlloc.Rest.Attributes.EventStreamAttribute";
+    private const string EventTypeAttr = "ZeroAlloc.Rest.Attributes.EventTypeAttribute";
+    private const string AsyncEnumerableOpenType = "System.Collections.Generic.IAsyncEnumerable<T>";
+    private const string ServerSentEventOpenType = "ZeroAlloc.Rest.ServerSentEvent<T>";
     private const string ErrorMapperAttr = "ZeroAlloc.Rest.Attributes.ErrorMapperAttribute";
     private const string ErrorMapperOpenType = "ZeroAlloc.Rest.IHttpErrorMapper<TError>";
     private const string NotConstructibleReason = "it must be a closed, non-abstract class with a public constructor";
@@ -468,6 +472,30 @@ internal static class ModelExtractor
         var returnType = method.ReturnType as INamedTypeSymbol;
         if (returnType is null) return null;
 
+        AttributeData? eventStreamAttr = null;
+        var eventTypeAttrs = new List<AttributeData>();
+        foreach (var attr in method.GetAttributes())
+        {
+            var name = attr.AttributeClass?.ToDisplayString();
+            if (name == EventStreamAttr)
+                eventStreamAttr = attr;
+            else if (name == EventTypeAttr)
+                eventTypeAttrs.Add(attr);
+        }
+
+        if (returnType.TypeArguments.Length == 1 && returnType.OriginalDefinition.ToDisplayString() == AsyncEnumerableOpenType)
+        {
+            return ExtractEventStreamMethod(method, returnType, httpMethod, route, staticHeaders,
+                eventStreamAttr, eventTypeAttrs, mappers, diagnostics, clientHasQueryParameter, compilation, ct);
+        }
+
+        // [EventStream] on a Task method would be silently ignored; it is emitted as before.
+        if (eventStreamAttr is not null || eventTypeAttrs.Count > 0)
+        {
+            diagnostics.Add(new DiagnosticInfo(DiagnosticDescriptors.EventStreamWithoutAsyncEnumerable,
+                LocationInfo.From(method.Locations[0]), Args(method.Name, returnType.ToDisplayString())));
+        }
+
         bool returnsVoid = false;
         bool returnsResult = false;
         var returnsUnitResult = false;
@@ -506,27 +534,12 @@ internal static class ModelExtractor
 
             if (errorType is not null)
             {
-                errorTypeName = ErrorTypeKey(errorType);
-                declaredErrorTypeName = AnnotatedErrorTypeName(errorType);
-
-                // An unresolved error type already has its own compiler error.
-                if (errorTypeName != MethodModel.HttpErrorTypeName && errorType.TypeKind != TypeKind.Error)
-                {
-                    if (mappers.MapperByError.TryGetValue(errorTypeName, out var mapper))
-                    {
-                        errorMapperTypeName = mapper.MapperTypeName;
-                        mapperErrorTypeName = AnnotatedErrorTypeName(mapper.ErrorType);
-                        // A mapper declared over JevError? may return null, which a method returning
-                        // Result<T, JevError> must not pass on as its error. An oblivious E counts as
-                        // not nullable: the generated code is compiled with nullable enabled.
-                        mappedErrorNeedsNullCheck = !mapper.ErrorType.IsValueType
-                            && mapper.ErrorType.NullableAnnotation == NullableAnnotation.Annotated
-                            && errorType.NullableAnnotation != NullableAnnotation.Annotated;
-                    }
-                    else if (!mappers.HasUnresolvedMapper && !mappers.ClaimedByInvalidMapper.Contains(errorTypeName))
-                        diagnostics.Add(new DiagnosticInfo(DiagnosticDescriptors.MissingErrorMapper, location,
-                            Args(method.Name, errorType.ToDisplayString())));
-                }
+                var resolved = ResolveErrorType(errorType, mappers, diagnostics, DiagnosticDescriptors.MissingErrorMapper, method, location);
+                errorTypeName = resolved.ErrorTypeName;
+                declaredErrorTypeName = resolved.DeclaredErrorTypeName;
+                errorMapperTypeName = resolved.ErrorMapperTypeName;
+                mapperErrorTypeName = resolved.MapperErrorTypeName;
+                mappedErrorNeedsNullCheck = resolved.MappedErrorNeedsNullCheck;
             }
         }
         else
@@ -550,6 +563,176 @@ internal static class ModelExtractor
             StreamResponsesOf(httpAttr) ?? clientStreamsResponses,
             innerType is not null && IsStreamType(innerType));
     }
+
+    private readonly record struct ErrorTypeResolution(
+        string ErrorTypeName,
+        string DeclaredErrorTypeName,
+        string? ErrorMapperTypeName,
+        string? MapperErrorTypeName,
+        bool MappedErrorNeedsNullCheck);
+
+    // The mapper for an error type E: a Result's E, or an [EventStream] ErrorType. HttpError needs no
+    // mapper. A missing one is reported with `missing`, unless an unresolved or invalid mapper
+    // already has its own diagnostic.
+    private static ErrorTypeResolution ResolveErrorType(
+        ITypeSymbol errorType, ErrorMapperResolution mappers, List<DiagnosticInfo> diagnostics,
+        DiagnosticDescriptor missing, IMethodSymbol method, LocationInfo? location)
+    {
+        var errorTypeName = ErrorTypeKey(errorType);
+        var declaredErrorTypeName = AnnotatedErrorTypeName(errorType);
+        string? errorMapperTypeName = null;
+        string? mapperErrorTypeName = null;
+        var mappedErrorNeedsNullCheck = false;
+
+        // An unresolved error type already has its own compiler error.
+        if (errorTypeName != MethodModel.HttpErrorTypeName && errorType.TypeKind != TypeKind.Error)
+        {
+            if (mappers.MapperByError.TryGetValue(errorTypeName, out var mapper))
+            {
+                errorMapperTypeName = mapper.MapperTypeName;
+                mapperErrorTypeName = AnnotatedErrorTypeName(mapper.ErrorType);
+                // A mapper declared over JevError? may return null, which a method returning
+                // Result<T, JevError> must not pass on as its error. An oblivious E counts as
+                // not nullable: the generated code is compiled with nullable enabled.
+                mappedErrorNeedsNullCheck = !mapper.ErrorType.IsValueType
+                    && mapper.ErrorType.NullableAnnotation == NullableAnnotation.Annotated
+                    && errorType.NullableAnnotation != NullableAnnotation.Annotated;
+            }
+            else if (!mappers.HasUnresolvedMapper && !mappers.ClaimedByInvalidMapper.Contains(errorTypeName))
+                diagnostics.Add(new DiagnosticInfo(missing, location,
+                    Args(method.Name, errorType.ToDisplayString())));
+        }
+
+        return new ErrorTypeResolution(errorTypeName, declaredErrorTypeName, errorMapperTypeName,
+            mapperErrorTypeName, mappedErrorNeedsNullCheck);
+    }
+
+    // A method returning IAsyncEnumerable<T>. Without [EventStream] it is ZRA007; with one, its shape
+    // is checked for ZRA008 and its ErrorType resolved to a mapper as a Result's E is.
+    private static MethodModel ExtractEventStreamMethod(
+        IMethodSymbol method, INamedTypeSymbol returnType, string httpMethod, string route,
+        List<(string, string)> staticHeaders, AttributeData? eventStreamAttr, List<AttributeData> eventTypeAttrs,
+        ErrorMapperResolution mappers, List<DiagnosticInfo> diagnostics, bool clientHasQueryParameter,
+        Compilation compilation, CancellationToken ct)
+    {
+        var location = LocationInfo.From(method.Locations[0]);
+        var elementType = returnType.TypeArguments[0];
+        var returnTypeName = returnType.ToDisplayString();
+        var valid = elementType.TypeKind != TypeKind.Error;
+
+        string? dataTypeName = null;
+        var dataNeedsNullCheck = false;
+        var eventTypes = new List<EventTypeModel>();
+        ErrorTypeResolution? error = null;
+
+        if (eventStreamAttr is null)
+        {
+            diagnostics.Add(new DiagnosticInfo(DiagnosticDescriptors.AsyncEnumerableWithoutEventStream, location,
+                Args(method.Name, returnTypeName)));
+            valid = false;
+        }
+        else
+        {
+            if (elementType is INamedTypeSymbol { TypeArguments.Length: 1 } named
+                && named.OriginalDefinition.ToDisplayString() == ServerSentEventOpenType)
+            {
+                var dataType = named.TypeArguments[0];
+                dataTypeName = dataType.ToDisplayString(AnnotatedErrorTypeFormat);
+                dataNeedsNullCheck = !dataType.IsValueType && !IsNullable(dataType);
+                valid &= dataType.TypeKind != TypeKind.Error;
+                if (eventTypeAttrs.Count > 0)
+                {
+                    diagnostics.Add(new DiagnosticInfo(DiagnosticDescriptors.EventTypeOnServerSentEventMethod,
+                        AttributeLocation(eventTypeAttrs[0], method, ct), Args(method.Name, returnTypeName)));
+                    valid = false;
+                }
+            }
+            else
+            {
+                valid &= ExtractEventTypes(method, elementType, returnTypeName, eventTypeAttrs, compilation,
+                    eventTypes, diagnostics, location, ct);
+            }
+
+            foreach (var namedArg in eventStreamAttr.NamedArguments)
+            {
+                if (namedArg.Key != "ErrorType")
+                    continue;
+                // typeof(Missing) already has its own compiler error, and a null ErrorType maps nothing.
+                if (namedArg.Value.Kind == TypedConstantKind.Error || namedArg.Value.Value is not ITypeSymbol errorType)
+                    continue;
+                error = ResolveErrorType(errorType, mappers, diagnostics,
+                    DiagnosticDescriptors.MissingEventStreamErrorMapper, method, location);
+            }
+        }
+
+        var model = new EventStreamModel(
+            elementType.ToDisplayString(AnnotatedErrorTypeFormat), dataTypeName, dataNeedsNullCheck, ToEquatable(eventTypes), valid);
+
+        return new MethodModel(
+            method.Name, httpMethod, route, returnTypeName,
+            InnerTypeName: elementType.ToDisplayString(), ReturnsResult: false, ReturnsVoid: false,
+            ExtractParameters(method), GetSerializerType(method), ToEquatable(staticHeaders),
+            location, error?.ErrorTypeName, error?.ErrorMapperTypeName,
+            error?.DeclaredErrorTypeName, error?.MapperErrorTypeName, error?.MappedErrorNeedsNullCheck ?? false,
+            EvaluatedRouteTokens(method, route, clientHasQueryParameter, compilation, ct),
+            ReturnsUnitResult: false, InnerTypeIsValueType: elementType.IsValueType,
+            InnerTypeIsNullable: IsNullable(elementType), StreamResponses: false, ReturnsStream: false,
+            EventStream: model);
+    }
+
+    // Shape two's [EventType]s, each checked: a name maps once, and its type converts to the element
+    // type. Returns false when any is invalid or does not resolve.
+    private static bool ExtractEventTypes(
+        IMethodSymbol method, ITypeSymbol elementType, string returnTypeName, List<AttributeData> eventTypeAttrs,
+        Compilation compilation, List<EventTypeModel> eventTypes, List<DiagnosticInfo> diagnostics,
+        LocationInfo? location, CancellationToken ct)
+    {
+        if (eventTypeAttrs.Count == 0)
+        {
+            diagnostics.Add(new DiagnosticInfo(DiagnosticDescriptors.NoEventTypes, location,
+                Args(method.Name, returnTypeName)));
+            return false;
+        }
+
+        var valid = true;
+        var names = new HashSet<string>(System.StringComparer.Ordinal);
+        foreach (var attr in eventTypeAttrs)
+        {
+            // A missing or unresolved argument already has its own compiler error.
+            if (attr.ConstructorArguments.Length != 2
+                || attr.ConstructorArguments[0].Value is not string name
+                || attr.ConstructorArguments[1].Kind == TypedConstantKind.Error
+                || attr.ConstructorArguments[1].Value is not ITypeSymbol { TypeKind: not TypeKind.Error } type)
+            {
+                valid = false;
+                continue;
+            }
+
+            if (!names.Add(name))
+            {
+                diagnostics.Add(new DiagnosticInfo(DiagnosticDescriptors.DuplicateEventName,
+                    AttributeLocation(attr, method, ct), Args(method.Name, name)));
+                valid = false;
+                continue;
+            }
+
+            if (!compilation.HasImplicitConversion(type, elementType))
+            {
+                diagnostics.Add(new DiagnosticInfo(DiagnosticDescriptors.EventTypeNotAssignable,
+                    AttributeLocation(attr, method, ct),
+                    Args(name, type.ToDisplayString(), method.Name, elementType.ToDisplayString())));
+                valid = false;
+                continue;
+            }
+
+            eventTypes.Add(new EventTypeModel(name, type.ToDisplayString(AnnotatedErrorTypeFormat),
+                NeedsNullCheck: !type.IsValueType && !IsNullable(type)));
+        }
+        return valid;
+    }
+
+    private static LocationInfo? AttributeLocation(AttributeData attr, IMethodSymbol method, CancellationToken ct)
+        => LocationInfo.From(attr.ApplicationSyntaxReference?.GetSyntax(ct).GetLocation() ?? method.Locations[0]);
 
     // System.IO.Stream itself, the type a raw response body is returned as.
     private static bool IsStreamType(ITypeSymbol type)

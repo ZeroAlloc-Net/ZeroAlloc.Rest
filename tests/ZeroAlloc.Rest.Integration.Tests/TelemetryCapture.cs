@@ -73,14 +73,33 @@ internal sealed class TelemetryCapture : IDisposable
         AssertOneDuration(expectResponseTags);
     }
 
-    public void AssertError(string? description = null)
+    public void AssertError(string? description = null, bool expectResponseTags = false)
     {
         var span = SingleSpan();
         Assert.Equal(ActivityStatusCode.Error, span.Status);
         if (description is not null)
             Assert.Equal(description, span.StatusDescription);
         Assert.Null(span.GetTagItem("rest.cancelled"));
-        AssertOneDuration(expectResponseTags: false);
+        AssertOneDuration(expectResponseTags);
+    }
+
+    // A call that ended normally: status Unset, not cancelled, one duration with the response's tags.
+    public void AssertCompleted()
+    {
+        var span = SingleSpan();
+        Assert.Equal(ActivityStatusCode.Unset, span.Status);
+        Assert.Null(span.GetTagItem("rest.cancelled"));
+        AssertOneDuration(expectResponseTags: true);
+    }
+
+    // How many of this test's spans have stopped so far.
+    public int StoppedSpanCount
+    {
+        get
+        {
+            lock (_stopped)
+                return _stopped.Count(a => a.TraceId == _traceId);
+        }
     }
 
     private Activity SingleSpan()

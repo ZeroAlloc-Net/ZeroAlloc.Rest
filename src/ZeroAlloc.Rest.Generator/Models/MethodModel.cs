@@ -22,8 +22,12 @@ internal record MethodModel(
     bool InnerTypeIsValueType,
     bool InnerTypeIsNullable,
     bool StreamResponses,
-    bool ReturnsStream)
+    bool ReturnsStream,
+    EventStreamModel? EventStream = null)
 {
+    // EventStream is set for a method returning IAsyncEnumerable<T>: it is emitted as an iterator
+    // over a text/event-stream response, never by the Task paths. Its ErrorTypeName, when set, is
+    // [EventStream(ErrorType = ...)], resolved to a mapper exactly as a Result's E is.
     // ReturnsStream is set when T, the success type, is System.IO.Stream: the call always sends with
     // ResponseHeadersRead, and the success body is handed to the caller as a stream that owns the
     // response, never deserialized.
@@ -44,7 +48,8 @@ internal record MethodModel(
     // An oblivious reference type counts as not nullable: the generated code enables nullable.
     internal const string HttpErrorTypeName = "global::ZeroAlloc.Rest.HttpError";
 
-    // Result<T, E> with E other than HttpError: every failure goes through an IHttpErrorMapper<E>.
-    // ErrorMapperTypeName is null when no usable [ErrorMapper] maps E.
-    internal bool MapsError => ReturnsResult && ErrorTypeName is not null && ErrorTypeName != HttpErrorTypeName;
+    // Result<T, E>, or an [EventStream] ErrorType, with E other than HttpError: every failure goes
+    // through an IHttpErrorMapper<E>. ErrorMapperTypeName is null when no usable [ErrorMapper] maps E.
+    internal bool MapsError => (ReturnsResult || EventStream is not null)
+        && ErrorTypeName is not null && ErrorTypeName != HttpErrorTypeName;
 }
