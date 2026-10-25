@@ -22,7 +22,7 @@
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.SourceGenerators.Testing.XUnit" Version="1.1.2" />
     <PackageVersion Include="WireMock.Net" Version="2.19.0" />
     <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.13" />
-    <PackageVersion Include="Basic.Reference.Assemblies.Net100" Version="1.8.12" />
+    <PackageVersion Include="Basic.Reference.Assemblies.Net100" Version="1.8.13" />
     <!--
       MSBuild task references must not be newer than the MSBuild that loads the task.
       The .NET 10 SDK ships MSBuild 18.9; 18.10 and later target net11.0 only.
