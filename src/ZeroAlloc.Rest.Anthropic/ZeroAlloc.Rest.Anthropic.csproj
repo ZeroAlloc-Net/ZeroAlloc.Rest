@@ -4,6 +4,11 @@
     <Description>A typed, AOT-compatible Anthropic Messages API client for .NET, built on ZeroAlloc.Rest: messages create and stream, tools, prompt caching and usage.</Description>
     <PackageTags>$(PackageTags);anthropic;claude;llm</PackageTags>
     <IsAotCompatible>true</IsAotCompatible>
+    <!--
+      The Resilience generator's policies class and DI extensions stay internal: AnthropicClientOptions.MaxRetries
+      and AddAnthropicClient are the public way to configure retries.
+    -->
+    <ZeroAllocGeneratedAccessibility>Internal</ZeroAllocGeneratedAccessibility>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../ZeroAlloc.Rest/ZeroAlloc.Rest.csproj" />
@@ -11,6 +16,14 @@
     <ProjectReference Include="../ZeroAlloc.Rest.DependencyInjection/ZeroAlloc.Rest.DependencyInjection.csproj" />
     <ProjectReference Include="../ZeroAlloc.Rest.Resilience/ZeroAlloc.Rest.Resilience.csproj" />
     <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" PrivateAssets="all" />
+    <!--
+      The Rest source generator emits the typed client for IAnthropicMessagesApi. ZeroAlloc.Rest bundles it
+      into its package with PrivateAssets="all", so a project reference does not flow it here.
+    -->
+    <ProjectReference Include="../ZeroAlloc.Rest.Generator/ZeroAlloc.Rest.Generator.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false"
+                      PrivateAssets="all" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="ZeroAlloc.Rest.Anthropic.Tests" />
