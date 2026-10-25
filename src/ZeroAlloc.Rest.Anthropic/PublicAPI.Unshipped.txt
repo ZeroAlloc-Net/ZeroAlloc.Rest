@@ -392,11 +392,11 @@ override sealed ZeroAlloc.Rest.Anthropic.TextDelta.Equals(ZeroAlloc.Rest.Anthrop
 override sealed ZeroAlloc.Rest.Anthropic.ToolResultBlockParam.Equals(ZeroAlloc.Rest.Anthropic.ContentBlockParam? other) -> bool
 override sealed ZeroAlloc.Rest.Anthropic.ToolUseBlock.Equals(ZeroAlloc.Rest.Anthropic.ContentBlock? other) -> bool
 override sealed ZeroAlloc.Rest.Anthropic.ToolUseBlockParam.Equals(ZeroAlloc.Rest.Anthropic.ContentBlockParam? other) -> bool
+static ZeroAlloc.Rest.Anthropic.AnthropicJson.Context.get -> System.Text.Json.Serialization.JsonSerializerContext!
 static ZeroAlloc.Rest.Anthropic.AnthropicJson.MessageRequest.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<ZeroAlloc.Rest.Anthropic.MessageRequest!>!
 static ZeroAlloc.Rest.Anthropic.AnthropicJson.MessageResponse.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<ZeroAlloc.Rest.Anthropic.MessageResponse!>!
 static ZeroAlloc.Rest.Anthropic.AnthropicJson.MessageStreamEvent.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<ZeroAlloc.Rest.Anthropic.MessageStreamEvent!>!
 static ZeroAlloc.Rest.Anthropic.AnthropicJson.Options.get -> System.Text.Json.JsonSerializerOptions!
-static ZeroAlloc.Rest.Anthropic.AnthropicJson.Resolver.get -> System.Text.Json.Serialization.Metadata.IJsonTypeInfoResolver!
 static ZeroAlloc.Rest.Anthropic.CacheControl.FiveMinutes.get -> ZeroAlloc.Rest.Anthropic.CacheControl!
 static ZeroAlloc.Rest.Anthropic.CacheControl.OneHour.get -> ZeroAlloc.Rest.Anthropic.CacheControl!
 static ZeroAlloc.Rest.Anthropic.CacheControl.operator !=(ZeroAlloc.Rest.Anthropic.CacheControl? left, ZeroAlloc.Rest.Anthropic.CacheControl? right) -> bool

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Xunit;
+using ZeroAlloc.Rest.SystemTextJson;
 using ZeroAlloc.Rest.Anthropic;
 
 namespace ZeroAlloc.Rest.Anthropic.Tests;
@@ -35,12 +36,27 @@ public sealed class WireFormatTests
 
         // Red: make AnthropicJson.MessageRequest return new AnthropicJsonContext(new JsonSerializerOptions()).MessageRequest.
         Assert.Equal(Expected, JsonSerializer.Serialize(request, AnthropicJson.MessageRequest));
-        // SystemTextJsonSerializer takes a resolver and options, and copies the options with the resolver replaced.
         // Red: make AnthropicJson.Options return new JsonSerializerOptions, "system":null is then written.
-        var options = new JsonSerializerOptions(AnthropicJson.Options) { TypeInfoResolver = AnthropicJson.Resolver };
-        Assert.Equal(Expected, JsonSerializer.Serialize(request, options));
-        // Red: make AnthropicJson.Options return new JsonSerializerOptions, the out of order discriminator then throws.
-        var block = JsonSerializer.Deserialize<ContentBlock>("""{"text":"a","type":"text"}""", options);
+        Assert.Equal(Expected, JsonSerializer.Serialize(request, new JsonSerializerOptions(AnthropicJson.Options) { TypeInfoResolver = AnthropicJson.Context }));
+    }
+
+    [Fact]
+    public async Task A_serializer_built_from_the_public_context_writes_and_reads_the_wire_format()
+    {
+        var serializer = new SystemTextJsonSerializer(AnthropicJson.Context);
+        await using var output = new MemoryStream();
+
+        await serializer.SerializeAsync(output, Request(UserText("hi")));
+
+        // Red: make AnthropicJson.Context return a context built with new JsonSerializerOptions, "system":null is then written.
+        Assert.Equal(
+            """{"model":"m","max_tokens":16,"messages":[{"role":"user","content":[{"type":"text","text":"hi"}]}]}""",
+            System.Text.Encoding.UTF8.GetString(output.ToArray()));
+
+        await using var input = new MemoryStream("""{"text":"a","type":"text"}"""u8.ToArray());
+        var block = await serializer.DeserializeAsync<ContentBlock>(input);
+
+        // Red: make AnthropicJson.Context return a context built with new JsonSerializerOptions, the out of order discriminator then throws.
         Assert.Equal("a", Assert.IsType<TextBlock>(block).Text);
     }
 

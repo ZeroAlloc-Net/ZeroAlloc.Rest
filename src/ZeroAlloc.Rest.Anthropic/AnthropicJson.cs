@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
 
 namespace ZeroAlloc.Rest.Anthropic;
@@ -10,14 +11,15 @@ namespace ZeroAlloc.Rest.Anthropic;
 public static class AnthropicJson
 {
     /// <summary>
-    /// A resolver that covers every type of this package. A resolver alone carries no serializer options, so pass
-    /// <see cref="Options"/> with it: <c>new SystemTextJsonSerializer(AnthropicJson.Resolver, AnthropicJson.Options)</c>.
+    /// The source-generated context for every type of this package, with the options the wire format needs.
+    /// Build the serializer from it: <c>new SystemTextJsonSerializer(AnthropicJson.Context)</c>. That constructor
+    /// is free of trim and AOT annotations and takes the context's options along with its metadata.
     /// </summary>
-    public static IJsonTypeInfoResolver Resolver => AnthropicJsonContext.Default;
+    public static JsonSerializerContext Context => AnthropicJsonContext.Default;
 
     /// <summary>
     /// The options the wire format needs: null members are omitted, and a type discriminator may come in any
-    /// position. Copy them for a serializer that takes a resolver; do not rely on the resolver for these.
+    /// position. They are the options of <see cref="Context"/>.
     /// </summary>
     public static JsonSerializerOptions Options => AnthropicJsonContext.Default.Options;
 
