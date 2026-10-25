@@ -146,11 +146,13 @@ public interface IFeedApi
 }
 ```
 
-`DelayHint` over the exception works too. These are rejected on a stream method:
+`DelayHint` over the exception works too. When every attempt fails before the first item, the call
+throws `ResilienceException` rather than the last `HttpErrorException`. A caller that cancels during a
+back-off gets the cancellation. These do not work on a stream method:
 
-- `[Timeout]`, `[CircuitBreaker]`, `[RateLimit]`, a fallback and `PerAttemptTimeoutMs` are error ZR0014
-  on the method, and warning ZR0015 when the interface-level attribute applies to the stream. A runtime
-  `RetryPolicy` with `perAttemptTimeoutMs` set is ignored for a stream.
+- `[Timeout]`, `[CircuitBreaker]`, `[RateLimit]`, a fallback and `PerAttemptTimeoutMs` on the method are
+  error ZR0014. Applied from the interface they are warning ZR0015, and the inherited policy is not
+  applied to the stream. A runtime `RetryPolicy` with `perAttemptTimeoutMs` set is ignored for a stream.
 - `RetryWhen` is ZR0010.
 
 To bound a stream, pass a `CancellationToken` that you cancel yourself.

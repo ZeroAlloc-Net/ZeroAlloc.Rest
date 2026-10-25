@@ -66,12 +66,15 @@ public sealed class RestResilienceEventStreamTests : IDisposable
         var api = _provider.GetRequiredService<IStreamingApi>();
 
         var seen = new List<int>();
+        // Red: set MaxAttempts = 1 on IStreamingApi, as dropping [Retry] leaves no proxy to compile.
+        // The first 503 then escapes this enumeration, so the test fails on this line and
+        // the assertions below are not reached.
         await foreach (var item in api.FollowAsync(CancellationToken.None).ConfigureAwait(false))
             seen.Add(item.Data.N);
 
-        // Red: set MaxAttempts = 1 on IStreamingApi [dropping [Retry] fails to compile, no proxy]; one request.
+        // Red: serve the stream on the second request, with ++calls < 2; the count is then 2.
         Assert.Equal(3, _handler.Requests.Count);
-        // Red: MaxAttempts = 1 as above; the enumeration throws before any event is yielded.
+        // Red: yield only event 1 from the final response; seen is then { 1 }.
         Assert.Equal(new[] { 1, 2 }, seen);
     }
 
@@ -85,17 +88,18 @@ public sealed class RestResilienceEventStreamTests : IDisposable
         var api = _provider.GetRequiredService<IStreamingApi>();
 
         var seen = new List<int>();
+        // Red: new DroppingContent(""), so the stream fails before its first event. The IOException is
+        // retried, and this line fails with a ResilienceException once the attempts run out.
         await Assert.ThrowsAsync<IOException>(async () =>
         {
             await foreach (var item in api.FollowAsync(CancellationToken.None).ConfigureAwait(false))
                 seen.Add(item.Data.N);
         });
 
-        // Red: make DroppingContent fail before its first event, with new DroppingContent(""); the
-        // IOException is then retried and the count is 3, not 1. Dropping [Retry] does not turn
-        // this red: without a retry the count is 1 as well.
+        // Guards against a library regression that retries after an item: the count would be 3. It
+        // cannot be made red from this repo, since the Resilience library owns the rule.
         Assert.Single(_handler.Requests);
-        // Red: new DroppingContent(""), as above; seen is then empty.
+        // Red: DroppingContent("data: {\"N\":2}\n\n") as the first chunk; seen is then { 2 }.
         Assert.Equal(new[] { 1 }, seen);
     }
 
@@ -145,5 +149,117 @@ public sealed class RestResilienceEventStreamTests : IDisposable
         public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
         public override void SetLength(long value) => throw new NotSupportedException();
         public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
+}
+
+public sealed record StreamError(int Status, string Body);
+
+public sealed class StreamErrorMapper : IHttpErrorMapper<StreamError>
+{
+    public StreamError Map(HttpError error) => new((int)error.StatusCode, Encoding.UTF8.GetString(error.Body.Span));
+}
+
+[ZeroAllocRestClient]
+[ErrorMapper(typeof(StreamErrorMapper))]
+[Retry(MaxAttempts = 2, BackoffMs = 1, Jitter = false, RetryOnException = nameof(IsTransient))]
+public interface IMappedStreamingApi
+{
+    [Get("/ticks")]
+    [EventStream(ErrorType = typeof(StreamError))]
+    IAsyncEnumerable<ServerSentEvent<StreamTick>> FollowAsync(CancellationToken ct = default);
+
+    static bool IsTransient(Exception e) => e is HttpRequestException { StatusCode: HttpStatusCode.ServiceUnavailable };
+}
+
+// A back-off long enough that only cancellation can end it within the test.
+[ZeroAllocRestClient]
+[Retry(MaxAttempts = 3, BackoffMs = 600_000, Jitter = false, RetryOnException = nameof(IsTransient))]
+public interface ISlowStreamingApi
+{
+    [Get("/ticks")]
+    [EventStream]
+    IAsyncEnumerable<ServerSentEvent<StreamTick>> FollowAsync(CancellationToken ct = default);
+
+    static bool IsTransient(Exception e) => e is HttpRequestException;
+}
+
+public sealed class RestResilienceEventStreamFailureTests
+{
+    private readonly FakeMessageHandler _handler = new();
+
+    [Fact]
+    public async Task A_mapped_event_stream_whose_retries_run_out_surfaces_the_mapped_error()
+    {
+        _handler.SetDynamicResponse(_ => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
+        {
+            Content = new StringContent("busy", Encoding.UTF8, "text/plain"),
+        });
+        using var provider = Build<IMappedStreamingApi, MappedStreamingApiClient, IMappedStreamingApiResilienceProxy>(
+            services => services.AddMappedStreamingApiResiliencePolicies(),
+            (inner, sp) => new IMappedStreamingApiResilienceProxy(inner, sp.GetRequiredService<MappedStreamingApiResiliencePolicies>()));
+        var api = provider.GetRequiredService<IMappedStreamingApi>();
+
+        var failure = await Assert.ThrowsAsync<ResilienceException>(async () =>
+        {
+            await foreach (var item in api.FollowAsync(CancellationToken.None).ConfigureAwait(false))
+                Assert.Fail("No event was expected.");
+        });
+
+        // Red: set MaxAttempts = 1 on IMappedStreamingApi; the count is then 1.
+        Assert.Equal(2, _handler.Requests.Count);
+        // Red: drop ErrorType from [EventStream]; the inner exception is then an HttpErrorException,
+        // not the generic one, and this type check fails.
+        var inner = Assert.IsType<HttpErrorException<StreamError>>(failure.InnerException);
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, inner.StatusCode);
+        // Red: expect new StreamError(503, "x"); the mapper carries the response body, "busy".
+        Assert.Equal(new StreamError(503, "busy"), inner.MappedError);
+    }
+
+    [Fact]
+    public async Task Cancelling_during_the_back_off_of_an_event_stream_stops_the_retries()
+    {
+        using var cts = new CancellationTokenSource();
+        _handler.SetDynamicResponse(_ =>
+        {
+            cts.CancelAfter(TimeSpan.FromMilliseconds(50));
+            return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
+        });
+        using var provider = Build<ISlowStreamingApi, SlowStreamingApiClient, ISlowStreamingApiResilienceProxy>(
+            services => services.AddSlowStreamingApiResiliencePolicies(),
+            (inner, sp) => new ISlowStreamingApiResilienceProxy(inner, sp.GetRequiredService<SlowStreamingApiResiliencePolicies>()));
+        var api = provider.GetRequiredService<ISlowStreamingApi>();
+
+        // Red: pass CancellationToken.None to FollowAsync; the 10 minute back-off is then never
+        // cancelled and the test hangs. With BackoffMs = 1 this line fails instead, with a
+        // ResilienceException once the attempts run out.
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+        {
+            await foreach (var item in api.FollowAsync(cts.Token).ConfigureAwait(false))
+                Assert.Fail("No event was expected.");
+        });
+
+        // Guards against a library regression that keeps retrying after the cancellation, which
+        // would show as more than one request. It cannot be made red from this repo.
+        Assert.Single(_handler.Requests);
+    }
+
+    private ServiceProvider Build<TInterface, TClient, TProxy>(
+        Action<IServiceCollection> policies,
+        Func<TClient, IServiceProvider, TProxy> factory)
+        where TInterface : class
+        where TClient : class, TInterface, IGeneratedRestClient<TClient>
+        where TProxy : class, TInterface
+    {
+        var services = new ServiceCollection();
+        policies(services);
+        services.AddRestResilience<TInterface, TClient, TProxy>(
+            factory,
+            options =>
+            {
+                options.BaseAddress = new Uri("http://fake.local/");
+                options.UseSerializer<SystemTextJsonSerializer>();
+            })
+            .ConfigurePrimaryHttpMessageHandler(() => _handler);
+        return services.BuildServiceProvider();
     }
 }

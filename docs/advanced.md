@@ -664,7 +664,6 @@ How a call behaves:
   when it ends. `rest.requests_total` and `rest.request_duration_ms` are recorded once, when the
   headers arrive, as with [`StreamResponses`](#streaming-responses). A cancellation the caller asked
   for leaves the span's status unset and tags it `rest.cancelled`; any other failure marks it Error.
-
 - **Retries.** Through the [Resilience bridge](resilience.md#event-streams), `[Retry]` calls the method
   again while the failure comes before the first event, and not after.
 

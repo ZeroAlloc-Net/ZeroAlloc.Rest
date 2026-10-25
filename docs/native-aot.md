@@ -85,7 +85,7 @@ A [server-sent events](advanced.md#server-sent-events) method reads each event's
 client's serializer, so it is AOT-safe with a source-generated one: list the event data types, and for
 `[EventType]` every mapped type, in the `JsonSerializerContext`. The generated reader uses no
 reflection. `samples/ZeroAlloc.Rest.AotSmoke` publishes both event shapes, retried through the
-Resilience bridge, with zero IL warnings.
+Resilience bridge; the CI `aot-smoke` job publishes it and fails on any IL warning.
 
 ## AOT checklist
 

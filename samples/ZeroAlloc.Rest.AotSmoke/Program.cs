@@ -414,11 +414,13 @@ using (var refusingHttp = new System.Net.Http.HttpClient(new RefusingHandler()) 
     var events = eventProvider.GetRequiredService<IEventApi>();
     using var timeout = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(30));
 
-    var serving = Task.Run(async () =>
+    async Task ServeRetriedAsync()
     {
         await server.ServeAsync(503, "busy", timeout.Token).ConfigureAwait(false);
         await server.ServeAsync(200, "data: {\"n\":1}\n\nevent: tick\ndata: {\"n\":2}\n\n", timeout.Token).ConfigureAwait(false);
-    }, timeout.Token);
+    }
+
+    var serving = ServeRetriedAsync();
     var ticks = new System.Collections.Generic.List<string>();
     await foreach (var tick in events.FollowAsync(timeout.Token).ConfigureAwait(false))
         ticks.Add($"{tick.Event}:{tick.Data.N}");
