@@ -665,6 +665,9 @@ How a call behaves:
   headers arrive, as with [`StreamResponses`](#streaming-responses). A cancellation the caller asked
   for leaves the span's status unset and tags it `rest.cancelled`; any other failure marks it Error.
 
+- **Retries.** Through the [Resilience bridge](resilience.md#event-streams), `[Retry]` calls the method
+  again while the failure comes before the first event, and not after.
+
 A method returning `IAsyncEnumerable<T>` without `[EventStream]` is
 [ZRA007](#zra007-iasyncenumerablet-and-eventstream-must-go-together); an `[EventType]` that cannot
 apply is [ZRA008](#zra008-invalid-eventtype-mapping).

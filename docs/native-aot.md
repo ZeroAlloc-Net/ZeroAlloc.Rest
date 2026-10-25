@@ -79,6 +79,14 @@ workload must be installed, and ILC also needs the directory of `vswhere.exe` on
 `C:\Program Files (x86)\Microsoft Visual Studio\Installer`. Otherwise publish under WSL with
 `-r linux-x64`.
 
+## Server-sent events and AOT
+
+A [server-sent events](advanced.md#server-sent-events) method reads each event's `data:` through the
+client's serializer, so it is AOT-safe with a source-generated one: list the event data types, and for
+`[EventType]` every mapped type, in the `JsonSerializerContext`. The generated reader uses no
+reflection. `samples/ZeroAlloc.Rest.AotSmoke` publishes both event shapes, retried through the
+Resilience bridge, with zero IL warnings.
+
 ## AOT checklist
 
 - [ ] Use a source-generated `JsonSerializerContext`, such as the one generated from your OpenAPI spec, MemoryPack with registered types, or MessagePack with a source-generated resolver
