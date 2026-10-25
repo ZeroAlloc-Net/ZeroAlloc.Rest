@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.4.0](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v3.3.5...v3.4.0) (2026-10-25)
+
+
+### Features
+
+* server-sent events as IAsyncEnumerable&lt;T&gt; client methods ([#492](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/492)) ([b151a24](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/b151a24f142bb59938f9a8a6ffcb468dbbfbb5be))
+
 ## [3.3.5](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v3.3.4...v3.3.5) (2026-10-21)
 
 
