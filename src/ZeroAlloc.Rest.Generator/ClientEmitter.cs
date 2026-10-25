@@ -135,8 +135,9 @@ internal static class ClientEmitter
             EmitGeneratedClientMembers(sb, model, overrideSerializers, errorMappings, declaredHttpClientName);
 
         var anyCallerCancellation = false;
+        var eventStreams = 0;
         foreach (var method in model.Methods)
-            anyCallerCancellation |= EmitMethod(ctx, sb, model.InterfaceDisplayName, method, serializerFieldMap, errorMapperFieldMap, model.MaxErrorBodyBytes);
+            anyCallerCancellation |= EmitMethod(ctx, sb, model.InterfaceDisplayName, method, serializerFieldMap, errorMapperFieldMap, model.MaxErrorBodyBytes, ref eventStreams);
 
         EmitFormatHelpers(sb, model);
         EmitUrlValueHelpers(sb, model, errorMapperFieldMap);
@@ -148,7 +149,7 @@ internal static class ClientEmitter
 
         var anyReturnsResult = false;
         foreach (var m in model.Methods)
-            if (m.ReturnsResult) { anyReturnsResult = true; break; }
+            if (m.ReturnsResult || m.EventStream is { IsValid: true }) { anyReturnsResult = true; break; }
         if (anyReturnsResult)
             EmitCreateHttpError(sb);
         if (errorMappings.Count > 0)
@@ -258,8 +259,9 @@ internal static class ClientEmitter
     }
 
     // Returns true when the method has a CancellationToken parameter, so its body calls
-    // __RecordCancellation.
-    private static bool EmitMethod(SourceProductionContext ctx, StringBuilder sb, string interfaceName, MethodModel method, IReadOnlyDictionary<string, string> serializerFieldMap, IReadOnlyDictionary<string, string> errorMapperFieldMap, int maxErrorBodyBytes)
+    // __RecordCancellation. An event stream always has one: its enumerator's token.
+    // eventStreams counts the event stream methods emitted so far, which names their iterators.
+    private static bool EmitMethod(SourceProductionContext ctx, StringBuilder sb, string interfaceName, MethodModel method, IReadOnlyDictionary<string, string> serializerFieldMap, IReadOnlyDictionary<string, string> errorMapperFieldMap, int maxErrorBodyBytes, ref int eventStreams)
     {
         var ctParam = FindCancellationToken(method.Parameters);
         var ctArg = ctParam != null ? Identifier(ctParam) : "default";
@@ -294,16 +296,24 @@ internal static class ClientEmitter
             errorMapperField = errorMapperFieldMap[errorTypeName];
         }
 
+        if (method.EventStream is { } eventStream)
+        {
+            if (!eventStream.IsValid)
+            {
+                EmitInvalidEventStreamStub(sb, method);
+                return false;
+            }
+            var iterator = $"__{method.Name}EventStream{eventStreams.ToString(CultureInfo.InvariantCulture)}";
+            eventStreams++;
+            EmitEventStreamMethod(sb, interfaceName, method, eventStream, iterator, ctParam, bodyParam, formBodyParam,
+                pathParams, queryParams, headerParams, serializerExpr, maxErrorBodyBytes, errorMapperField);
+            return true;
+        }
+
         sb.AppendLine($"    public async {method.ReturnTypeName} {method.Name}({BuildParamList(method.Parameters)})");
         sb.AppendLine("    {");
 
-        var spanName = $"{interfaceName}.{method.Name}";
-        sb.AppendLine($"        using var __activity = _activitySource.StartActivity(\"{spanName}\");");
-        sb.AppendLine($"        const string __RestMethodTag = \"{spanName}\";");
-        sb.AppendLine($"        const string __httpMethod = \"{method.HttpMethod.ToUpper()}\";");
-        sb.AppendLine($"        __activity?.SetTag(\"http.method\", __httpMethod);");
-        sb.AppendLine($"        __activity?.SetTag(\"rest.method\", __RestMethodTag);");
-        sb.AppendLine($"        var __sw = global::System.Diagnostics.Stopwatch.GetTimestamp();");
+        EmitActivityStart(sb, interfaceName, method);
 
         // Every local the generated method declares starts with "__", and every parameter is emitted
         // through Identifier, so a parameter named url, request, response or @class still compiles.
@@ -585,7 +595,10 @@ internal static class ClientEmitter
         // The raw string is stored as is: the typed Accept collection would allocate a parsed
         // MediaTypeWithQualityHeaderValue and the collection itself on every call, and caching one
         // value would share a mutable object across requests. The bytes on the wire are the same.
-        if (!method.ReturnsStream)
+        // An event stream accepts text/event-stream, whatever its events' data is serialized as.
+        if (method.EventStream is not null)
+            sb.AppendLine("        __request.Headers.TryAddWithoutValidation(\"Accept\", \"text/event-stream\");");
+        else if (!method.ReturnsStream)
             sb.AppendLine($"        __request.Headers.TryAddWithoutValidation(\"Accept\", {serializerExpr}.ContentType);");
 
         // Static headers declared with [Header("Name", Value = "...")] are added additively.
@@ -675,27 +688,7 @@ internal static class ClientEmitter
         // disabled, so neither the server address nor the elapsed time is read. With a listener, the
         // four tags go in one TagList, which holds them inline, so the status code is boxed once and
         // no params array is built. Counter and Histogram take at most three tags without an array.
-        sb.AppendLine("            var __statusCode = (int)__response.StatusCode;");
-        sb.AppendLine("            var __metricsEnabled = _requestsTotal.Enabled || _requestDurationMs.Enabled;");
-        sb.AppendLine("            if (__activity is not null || __metricsEnabled)");
-        sb.AppendLine("            {");
-        sb.AppendLine("                var __serverAddress = __request.RequestUri?.Host ?? string.Empty;");
-        sb.AppendLine("                __activity?.SetTag(\"http.status_code\", __statusCode);");
-        sb.AppendLine("                __activity?.SetTag(\"server.address\", __serverAddress);");
-        sb.AppendLine("                if (__metricsEnabled)");
-        sb.AppendLine("                {");
-        sb.AppendLine("                    var __tags = new global::System.Diagnostics.TagList");
-        sb.AppendLine("                    {");
-        sb.AppendLine("                        { \"http.method\", __httpMethod },");
-        sb.AppendLine("                        { \"http.status_code\", __statusCode },");
-        sb.AppendLine("                        { \"server.address\", __serverAddress },");
-        sb.AppendLine("                        { \"rest.method\", __RestMethodTag },");
-        sb.AppendLine("                    };");
-        sb.AppendLine("                    _requestsTotal.Add(1, in __tags);");
-        sb.AppendLine("                    _requestDurationMs.Record(global::System.Diagnostics.Stopwatch.GetElapsedTime(__sw).TotalMilliseconds, in __tags);");
-        sb.AppendLine("                }");
-        sb.AppendLine("            }");
-        sb.AppendLine("            __durationRecorded = true;");
+        EmitResponseTelemetry(sb, "            ");
         EmitResponseHandling(sb, method, ctArg, serializerExpr, maxErrorBodyBytes, indent: "            ");
         sb.AppendLine("        }");
         // Cancellation the caller asked for is not an error: the span keeps status Unset and is
@@ -729,6 +722,230 @@ internal static class ClientEmitter
         }
         if (errorMapperField != null)
             EmitMapping(sb, method, errorMapperField);
+    }
+
+    // The response's count and duration, and its tags on the span, recorded once the headers arrive.
+    private static void EmitResponseTelemetry(StringBuilder sb, string indent)
+    {
+        var i1 = indent + "    ";
+        var i2 = i1 + "    ";
+        var i3 = i2 + "    ";
+        sb.AppendLine($"{indent}var __statusCode = (int)__response.StatusCode;");
+        sb.AppendLine($"{indent}var __metricsEnabled = _requestsTotal.Enabled || _requestDurationMs.Enabled;");
+        sb.AppendLine($"{indent}if (__activity is not null || __metricsEnabled)");
+        sb.AppendLine($"{indent}{{");
+        sb.AppendLine($"{i1}var __serverAddress = __request.RequestUri?.Host ?? string.Empty;");
+        sb.AppendLine($"{i1}__activity?.SetTag(\"http.status_code\", __statusCode);");
+        sb.AppendLine($"{i1}__activity?.SetTag(\"server.address\", __serverAddress);");
+        sb.AppendLine($"{i1}if (__metricsEnabled)");
+        sb.AppendLine($"{i1}{{");
+        sb.AppendLine($"{i2}var __tags = new global::System.Diagnostics.TagList");
+        sb.AppendLine($"{i2}{{");
+        sb.AppendLine($"{i3}{{ \"http.method\", __httpMethod }},");
+        sb.AppendLine($"{i3}{{ \"http.status_code\", __statusCode }},");
+        sb.AppendLine($"{i3}{{ \"server.address\", __serverAddress }},");
+        sb.AppendLine($"{i3}{{ \"rest.method\", __RestMethodTag }},");
+        sb.AppendLine($"{i2}}};");
+        sb.AppendLine($"{i2}_requestsTotal.Add(1, in __tags);");
+        sb.AppendLine($"{i2}_requestDurationMs.Record(global::System.Diagnostics.Stopwatch.GetElapsedTime(__sw).TotalMilliseconds, in __tags);");
+        sb.AppendLine($"{i1}}}");
+        sb.AppendLine($"{indent}}}");
+        sb.AppendLine($"{indent}__durationRecorded = true;");
+    }
+
+    // The span's opening lines, shared by every method that sends a request.
+    private static void EmitActivityStart(StringBuilder sb, string interfaceName, MethodModel method)
+    {
+        var spanName = $"{interfaceName}.{method.Name}";
+        sb.AppendLine($"        using var __activity = _activitySource.StartActivity(\"{spanName}\");");
+        sb.AppendLine($"        const string __RestMethodTag = \"{spanName}\";");
+        sb.AppendLine($"        const string __httpMethod = \"{method.HttpMethod.ToUpper()}\";");
+        sb.AppendLine($"        __activity?.SetTag(\"http.method\", __httpMethod);");
+        sb.AppendLine($"        __activity?.SetTag(\"rest.method\", __RestMethodTag);");
+        sb.AppendLine($"        var __sw = global::System.Diagnostics.Stopwatch.GetTimestamp();");
+    }
+
+    // An [EventStream] method. The public method only captures its arguments and returns the
+    // iterator, so nothing is sent until enumeration starts, and each enumeration sends its own
+    // request: a retry that enumerates again gets a fresh response. The iterator's token is marked
+    // [EnumeratorCancellation], so the compiler links the method's token with the one given to
+    // GetAsyncEnumerator, as WithCancellation passes it.
+    // The span lives in the iterator: it starts when enumeration starts and stops when the
+    // enumeration ends, is disposed or fails. As for StreamResponses, the count and duration are
+    // recorded when the headers arrive. The finally disposes the reader and the response on every
+    // path: the end of the stream, a break, a failure, and cancellation.
+    // C# allows no yield inside a try with a catch, so each step that can fail runs in its own
+    // try-catch, and the yield sits between them, inside the try-finally.
+    private static void EmitEventStreamMethod(StringBuilder sb, string interfaceName, MethodModel method,
+        EventStreamModel eventStream, string iterator, ParameterModel? ctParam, ParameterModel? bodyParam,
+        ParameterModel? formBodyParam, List<ParameterModel> pathParams, List<ParameterModel> queryParams,
+        List<ParameterModel> headerParams, string serializerExpr, int maxErrorBodyBytes, string? errorMapperField)
+    {
+        const string EnumeratorCancellation = "[global::System.Runtime.CompilerServices.EnumeratorCancellation] global::System.Threading.CancellationToken ";
+        var token = ctParam is null ? "__cancellationToken" : Identifier(ctParam);
+
+        // The method's first CancellationToken, the one its body uses, becomes the iterator's
+        // [EnumeratorCancellation] token. Without one, the iterator declares its own.
+        var arguments = new StringBuilder();
+        var iteratorParameters = new StringBuilder();
+        var decorated = false;
+        for (var i = 0; i < method.Parameters.Count; i++)
+        {
+            var parameter = method.Parameters[i];
+            if (i > 0)
+            {
+                arguments.Append(", ");
+                iteratorParameters.Append(", ");
+            }
+            arguments.Append(Identifier(parameter));
+            if (parameter.Kind == ParameterKind.CancellationToken && !decorated)
+            {
+                decorated = true;
+                iteratorParameters.Append(EnumeratorCancellation).Append(Identifier(parameter));
+            }
+            else
+                iteratorParameters.Append(parameter.TypeName).Append(' ').Append(Identifier(parameter));
+        }
+        if (ctParam is null)
+        {
+            if (iteratorParameters.Length > 0)
+                iteratorParameters.Append(", ");
+            iteratorParameters.Append(EnumeratorCancellation).Append(token).Append(" = default");
+        }
+
+        sb.AppendLine($"    public {method.ReturnTypeName} {method.Name}({BuildParamList(method.Parameters)})");
+        sb.AppendLine($"        => {iterator}({arguments});");
+        sb.AppendLine();
+
+        sb.AppendLine($"    private async global::System.Collections.Generic.IAsyncEnumerable<{eventStream.ElementTypeName}> {iterator}({iteratorParameters})");
+        sb.AppendLine("    {");
+        EmitActivityStart(sb, interfaceName, method);
+        EmitUrlBuilding(sb, method.Route, pathParams, queryParams, method.EvaluatedRouteTokens);
+        EmitRequestCreation(sb, method, headerParams, formBodyParam, serializerExpr);
+        sb.AppendLine("        var __durationRecorded = false;");
+        sb.AppendLine("        global::System.Net.Http.HttpResponseMessage? __response = null;");
+        sb.AppendLine("        global::ZeroAlloc.Rest.ServerSentEventReader? __reader = null;");
+        sb.AppendLine("        try");
+        sb.AppendLine("        {");
+        sb.AppendLine("            try");
+        sb.AppendLine("            {");
+        if (bodyParam is not null)
+            sb.AppendLine($"                {BodyStatement(bodyParam, serializerExpr, token)}");
+        sb.AppendLine($"                __response = await _httpClient.SendAsync(__request, global::System.Net.Http.HttpCompletionOption.ResponseHeadersRead, {token}).ConfigureAwait(false);");
+        EmitResponseTelemetry(sb, "                ");
+        // A non-success status is the existing error path, thrown before the first event: the
+        // capped body is read, and the mapper for the method's ErrorType, if any, maps it.
+        sb.AppendLine("                if (!__response.IsSuccessStatusCode)");
+        sb.AppendLine("                {");
+        string createCall;
+        if (maxErrorBodyBytes > 0)
+        {
+            var cap = maxErrorBodyBytes.ToString(CultureInfo.InvariantCulture);
+            sb.AppendLine($"                    var __errorBody = await global::ZeroAlloc.Rest.GeneratedRestClient.ReadErrorBodyAsync(__response.Content, {cap}, {token}).ConfigureAwait(false);");
+            createCall = "__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Status, __response, null, __errorBody.Body, __errorBody.Truncated)";
+        }
+        else
+        {
+            createCall = "__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Status, __response, null)";
+        }
+        sb.AppendLine($"                    var __httpError = {createCall};");
+        if (errorMapperField is not null)
+            sb.AppendLine($"                    throw new global::ZeroAlloc.Rest.HttpErrorException<{method.DeclaredErrorTypeName}>(__httpError, {MappedError(method, errorMapperField)});");
+        else
+            sb.AppendLine("                    throw new global::ZeroAlloc.Rest.HttpErrorException(__httpError);");
+        sb.AppendLine("                }");
+        sb.AppendLine($"                __reader = new global::ZeroAlloc.Rest.ServerSentEventReader(await __response.Content.ReadAsStreamAsync({token}).ConfigureAwait(false));");
+        sb.AppendLine("            }");
+        EmitEventStreamCatches(sb, token);
+        sb.AppendLine();
+        sb.AppendLine("            while (true)");
+        sb.AppendLine("            {");
+        sb.AppendLine($"                {eventStream.ElementTypeName} __item;");
+        sb.AppendLine("                try");
+        sb.AppendLine("                {");
+        sb.AppendLine($"                    if (!await __reader.ReadAsync({token}).ConfigureAwait(false))");
+        sb.AppendLine("                        break;");
+        if (eventStream.DataTypeName is { } dataType)
+        {
+            // Shape one: every event, with its name and the last event id.
+            sb.AppendLine($"                    __item = new global::ZeroAlloc.Rest.ServerSentEvent<{dataType}>(__reader.EventName, __reader.LastEventId, {ReadEventData(method, dataType, eventStream.DataNeedsNullCheck, serializerExpr, token)});");
+        }
+        else
+        {
+            // Shape two: an event named by an [EventType] is read as its type; any other is skipped.
+            // An [EventType("")] matches an event with no event: line.
+            for (var i = 0; i < eventStream.EventTypes.Count; i++)
+            {
+                var eventType = eventStream.EventTypes[i];
+                sb.AppendLine($"                    {(i == 0 ? "if" : "else if")} (__reader.EventNameEquals({Literal(eventType.Name)}u8))");
+                sb.AppendLine($"                        __item = {ReadEventData(method, eventType.TypeName, eventType.NeedsNullCheck, serializerExpr, token)};");
+            }
+            sb.AppendLine("                    else");
+            sb.AppendLine("                        continue;");
+        }
+        sb.AppendLine("                }");
+        EmitEventStreamCatches(sb, token, "                ");
+        sb.AppendLine("                yield return __item;");
+        sb.AppendLine("            }");
+        sb.AppendLine("        }");
+        sb.AppendLine("        finally");
+        sb.AppendLine("        {");
+        sb.AppendLine("            if (__reader is not null)");
+        sb.AppendLine("                await __reader.DisposeAsync().ConfigureAwait(false);");
+        sb.AppendLine("            __response?.Dispose();");
+        sb.AppendLine("        }");
+        sb.AppendLine("    }");
+        sb.AppendLine();
+    }
+
+    // Cancellation the caller asked for, by the method's token or the enumerator's, is not an error;
+    // anything else marks the span failed. Both rethrow.
+    private static void EmitEventStreamCatches(StringBuilder sb, string token, string indent = "            ")
+    {
+        sb.AppendLine($"{indent}catch (global::System.OperationCanceledException) when ({token}.IsCancellationRequested)");
+        sb.AppendLine($"{indent}{{");
+        sb.AppendLine($"{indent}    __RecordCancellation(__activity, __sw, __httpMethod, __RestMethodTag, __durationRecorded);");
+        sb.AppendLine($"{indent}    throw;");
+        sb.AppendLine($"{indent}}}");
+        sb.AppendLine($"{indent}catch (global::System.Exception __ex)");
+        sb.AppendLine($"{indent}{{");
+        sb.AppendLine($"{indent}    __RecordFailure(__activity, __ex, __sw, __httpMethod, __RestMethodTag, __durationRecorded);");
+        sb.AppendLine($"{indent}    throw;");
+        sb.AppendLine($"{indent}}}");
+    }
+
+    // One event's data through the client's serializer. Data that reads as null fails when its type
+    // does not accept null, as a success body does.
+    private static string ReadEventData(MethodModel method, string typeName, bool needsNullCheck, string serializerExpr, string token)
+    {
+        var read = $"await global::ZeroAlloc.Rest.GeneratedRestClient.DeserializeEventDataAsync<{typeName}>({serializerExpr}, __reader, {token}).ConfigureAwait(false)";
+        if (!needsNullCheck)
+            return read;
+        var message = Literal($"{method.Name} received an event whose data is null, but its type {StripGlobal(typeName)} does not accept null.");
+        return $"({read}) ?? throw new global::System.InvalidOperationException({message})";
+    }
+
+    // The mapper's error for __httpError, checked for null when the mapper may return one but the
+    // method's error type does not accept it.
+    private static string MappedError(MethodModel method, string errorMapperField)
+    {
+        var mapped = $"{errorMapperField}.Map(__httpError)";
+        if (!method.MappedErrorNeedsNullCheck)
+            return mapped;
+        var mapperError = StripGlobal(method.MapperErrorTypeName
+            ?? throw new global::System.InvalidOperationException("MappedErrorNeedsNullCheck requires MapperErrorTypeName."));
+        var methodError = StripGlobal(method.DeclaredErrorTypeName
+            ?? throw new global::System.InvalidOperationException("MappedErrorNeedsNullCheck requires DeclaredErrorTypeName."));
+        return mapped + $" ?? throw new global::System.InvalidOperationException(\"The IHttpErrorMapper<{mapperError}> returned null, but {method.Name} declares the error type {methodError}, which is not nullable.\")";
+    }
+
+    // ZRA007 or ZRA008 is already reported for this method, or one of its types does not resolve.
+    // A throwing body keeps the rest of the client compiling, so the diagnostic is the only error.
+    private static void EmitInvalidEventStreamStub(StringBuilder sb, MethodModel method)
+    {
+        sb.AppendLine($"    public {method.ReturnTypeName} {method.Name}({BuildParamList(method.Parameters)})");
+        sb.AppendLine("        => throw new global::System.NotSupportedException(\"This method is not a valid event stream; see the ZeroAlloc.Rest diagnostic reported for it.\");");
+        sb.AppendLine();
     }
 
     // A Result method returns a request body the serializer could not write as a Deserialization

@@ -22,6 +22,15 @@ internal static class DiagnosticDescriptors
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
+    // The same rule for [EventStream(ErrorType = ...)], whose E is not a Result's.
+    internal static readonly DiagnosticDescriptor MissingEventStreamErrorMapper = new(
+        id: "ZRA002",
+        title: "No error mapper for a Result error type",
+        messageFormat: "Method '{0}' declares [EventStream(ErrorType = typeof({1}))], but no [ErrorMapper] on the interface implements IHttpErrorMapper<{1}>",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
     internal static readonly DiagnosticDescriptor InvalidErrorMapper = new(
         id: "ZRA003",
         title: "Invalid error mapper type",
@@ -83,4 +92,60 @@ internal static class DiagnosticDescriptors
             + "It cannot implement a generic interface or one declared inside a generic type, and cannot "
             + "reach an interface that it, or a containing type, declares private or protected. Declare "
             + "the interface non-generic, outside generic types, and public or internal.");
+
+    // ZRA007 and ZRA008 are Errors: before them an IAsyncEnumerable<T> method got a client that did
+    // not compile, and [EventStream] and [EventType] are new, so nothing that built stops building.
+    // The method is emitted as a throwing stub, so the diagnostic is the only error.
+    private const string EventStreamMismatchTitle = "IAsyncEnumerable<T> and [EventStream] must go together";
+
+    internal static readonly DiagnosticDescriptor AsyncEnumerableWithoutEventStream = new(
+        id: "ZRA007",
+        title: EventStreamMismatchTitle,
+        messageFormat: "Method '{0}' returns '{1}' but has no [EventStream]; add [EventStream] to read the response as text/event-stream, one event at a time",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    internal static readonly DiagnosticDescriptor EventStreamWithoutAsyncEnumerable = new(
+        id: "ZRA007",
+        title: EventStreamMismatchTitle,
+        messageFormat: "Method '{0}' has [EventStream] or [EventType], but returns '{1}'; only a method that returns IAsyncEnumerable<T> reads an event stream",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    // ZRA008 has one message per case, under one ID, title and severity.
+    private const string InvalidEventTypeTitle = "Invalid [EventType] mapping";
+
+    internal static readonly DiagnosticDescriptor EventTypeNotAssignable = new(
+        id: "ZRA008",
+        title: InvalidEventTypeTitle,
+        messageFormat: "[EventType(\"{0}\", typeof({1}))] on method '{2}' names a type that does not convert to '{3}', the type the method yields",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    internal static readonly DiagnosticDescriptor DuplicateEventName = new(
+        id: "ZRA008",
+        title: InvalidEventTypeTitle,
+        messageFormat: "Method '{0}' maps the event name \"{1}\" more than once; declare one [EventType] per event name",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    internal static readonly DiagnosticDescriptor EventTypeOnServerSentEventMethod = new(
+        id: "ZRA008",
+        title: InvalidEventTypeTitle,
+        messageFormat: "Method '{0}' returns '{1}', which reads every event's data as one type, so its [EventType] would never apply; remove the [EventType], or return IAsyncEnumerable of the mapped types' base type",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    internal static readonly DiagnosticDescriptor NoEventTypes = new(
+        id: "ZRA008",
+        title: InvalidEventTypeTitle,
+        messageFormat: "Method '{0}' returns '{1}' but has no [EventType], so it would skip every event; add an [EventType] per event name, or return IAsyncEnumerable<ServerSentEvent<T>> to read every event as T",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
 }

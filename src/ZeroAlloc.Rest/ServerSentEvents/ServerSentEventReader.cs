@@ -54,6 +54,8 @@ public sealed class ServerSentEventReader : IAsyncDisposable
     private int _idLen;
     private bool _idSet;
 
+    private EventDataStream? _dataStream;
+
     /// <summary>Creates a reader over <paramref name="stream"/>, which the reader disposes with itself.</summary>
     /// <param name="stream">The response body.</param>
     public ServerSentEventReader(Stream stream)
@@ -88,6 +90,16 @@ public sealed class ServerSentEventReader : IAsyncDisposable
     /// <returns><see langword="true"/> when the current event has exactly that name.</returns>
     public bool EventNameEquals(ReadOnlySpan<byte> utf8) =>
         _name.AsSpan(0, _nameLen).SequenceEqual(utf8);
+
+    // A stream over Data for a serializer, valid until the next ReadAsync. One stream serves every
+    // event: it is pointed at the current data on each call.
+    internal Stream OpenDataStream()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        _dataStream ??= new EventDataStream();
+        _dataStream.Reset(Data);
+        return _dataStream;
+    }
 
     /// <summary>Reads the next event.</summary>
     /// <param name="ct">Cancels the read; the stream read throws <see cref="OperationCanceledException"/>.</param>

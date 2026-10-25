@@ -34,6 +34,7 @@ ZeroAlloc.Rest.ServerSentEventReader.ReadAsync(System.Threading.CancellationToke
 ZeroAlloc.Rest.ServerSentEventReader.RetryMilliseconds.get -> int?
 ZeroAlloc.Rest.ServerSentEventReader.ServerSentEventReader(System.IO.Stream! stream) -> void
 override ZeroAlloc.Rest.ServerSentEvent<T>.GetHashCode() -> int
+static ZeroAlloc.Rest.GeneratedRestClient.DeserializeEventDataAsync<T>(ZeroAlloc.Rest.IRestSerializer! serializer, ZeroAlloc.Rest.ServerSentEventReader! reader, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<T?>
 static ZeroAlloc.Rest.ServerSentEvent<T>.operator !=(ZeroAlloc.Rest.ServerSentEvent<T> left, ZeroAlloc.Rest.ServerSentEvent<T> right) -> bool
 static ZeroAlloc.Rest.ServerSentEvent<T>.operator ==(ZeroAlloc.Rest.ServerSentEvent<T> left, ZeroAlloc.Rest.ServerSentEvent<T> right) -> bool
 ~override ZeroAlloc.Rest.ServerSentEvent<T>.Equals(object obj) -> bool
