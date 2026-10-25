@@ -14,9 +14,9 @@ public sealed class ServerSentEventReaderTests
     private static ServerSentEventReader ReaderOver(byte[] bytes, int chunk) =>
         new(new ChunkedStream(bytes, chunk));
 
-    private static async Task<List<(string? Name, string Data)>> ReadAllAsync(ServerSentEventReader reader)
+    private static async Task<List<(string Name, string Data)>> ReadAllAsync(ServerSentEventReader reader)
     {
-        var events = new List<(string?, string)>();
+        var events = new List<(string, string)>();
         while (await reader.ReadAsync(CancellationToken.None).ConfigureAwait(false))
         {
             events.Add((reader.EventName, Encoding.UTF8.GetString(reader.Data.Span)));
@@ -59,7 +59,7 @@ public sealed class ServerSentEventReaderTests
         var events = await ReadAllAsync(reader);
 
         // Red: join the lines with nothing, or with a space, instead of a newline.
-        Assert.Equal([(null, "l1\nl2")], events);
+        Assert.Equal([("message", "l1\nl2")], events);
     }
 
     [Theory]
@@ -71,7 +71,7 @@ public sealed class ServerSentEventReaderTests
         var events = await ReadAllAsync(reader);
 
         // Red: treat a line that starts with a colon as a data line.
-        Assert.Equal([(null, "1")], events);
+        Assert.Equal([("message", "1")], events);
     }
 
     [Theory]
@@ -100,7 +100,7 @@ public sealed class ServerSentEventReaderTests
         var events = await ReadAllAsync(reader);
 
         // Red: return false at the end of the stream without dispatching the pending event, or drop the partial last line.
-        Assert.Equal([(null, "a"), (null, "b")], events);
+        Assert.Equal([("message", "a"), ("message", "b")], events);
     }
 
     [Theory]
@@ -114,9 +114,9 @@ public sealed class ServerSentEventReaderTests
         var viaCr = await ReadAllAsync(cr);
 
         // Red: stop skipping the LF after a CR, so CRLF reads as two lines and splits the event after its first data line.
-        Assert.Equal([("a", "1\n2"), (null, "3")], viaCrlf);
+        Assert.Equal([("a", "1\n2"), ("message", "3")], viaCrlf);
         // Red: treat a lone CR as ordinary data instead of a line end.
-        Assert.Equal([("a", "1\n2"), (null, "3")], viaCr);
+        Assert.Equal([("a", "1\n2"), ("message", "3")], viaCr);
     }
 
     [Fact]
@@ -128,7 +128,7 @@ public sealed class ServerSentEventReaderTests
         var events = await ReadAllAsync(reader);
 
         // Red: decide the CR is a complete line end and read the LF as an empty line, which dispatches "1" alone.
-        Assert.Equal([(null, "1\n2")], events);
+        Assert.Equal([("message", "1\n2")], events);
     }
 
     [Theory]
@@ -152,7 +152,7 @@ public sealed class ServerSentEventReaderTests
         var events = await ReadAllAsync(reader);
 
         // Red: skip one byte after the colon unconditionally, which loses the x.
-        Assert.Equal([(null, "x")], events);
+        Assert.Equal([("message", "x")], events);
     }
 
     [Theory]
@@ -164,7 +164,7 @@ public sealed class ServerSentEventReaderTests
         var events = await ReadAllAsync(reader);
 
         // Red: trim all leading whitespace from the value.
-        Assert.Equal([(null, " two")], events);
+        Assert.Equal([("message", " two")], events);
     }
 
     [Theory]
@@ -176,7 +176,7 @@ public sealed class ServerSentEventReaderTests
         var events = await ReadAllAsync(reader);
 
         // Red: stop dispatching a pending event at the end of the stream.
-        Assert.Equal([(null, "b")], events);
+        Assert.Equal([("message", "b")], events);
     }
 
     [Theory]
@@ -270,7 +270,7 @@ public sealed class ServerSentEventReaderTests
         var events = await ReadAllAsync(reader);
 
         // Red: remove the BOM handling; the first line is then "﻿data: a", an unknown field, and no event arrives.
-        Assert.Equal([(null, "a")], events);
+        Assert.Equal([("message", "a")], events);
     }
 
     [Theory]
@@ -296,7 +296,7 @@ public sealed class ServerSentEventReaderTests
 
         // Red: dispatch on every blank line; a nameless-data "ping" event then appears first.
         // Also red: skip the name reset on a dropped event, then "ping" leaks into the next event.
-        Assert.Equal([(null, "a")], events);
+        Assert.Equal([("message", "a")], events);
     }
 
     [Theory]
@@ -308,7 +308,7 @@ public sealed class ServerSentEventReaderTests
         var events = await ReadAllAsync(reader);
 
         // Red: count dispatchable events by data length instead of data lines.
-        Assert.Equal([(null, "")], events);
+        Assert.Equal([("message", "")], events);
     }
 
     [Theory]
@@ -349,20 +349,35 @@ public sealed class ServerSentEventReaderTests
         var events = await ReadAllAsync(reader);
 
         // Red: treat an unknown field as data; the bare "data" line is a data field with an empty value per spec, so it adds a leading newline.
-        Assert.Equal([(null, "\na")], events);
+        Assert.Equal([("message", "\na")], events);
     }
 
     [Fact]
-    public async Task EventName_is_null_without_an_event_field_and_EventNameEquals_is_false_for_a_name()
+    public async Task An_event_without_an_event_field_has_the_type_message()
     {
         await using var reader = ReaderOver("data: a\n\n", 4096);
 
         Assert.True(await reader.ReadAsync(CancellationToken.None));
 
-        // Red: return an empty string instead of null when there is no event field.
-        Assert.Null(reader.EventName);
+        // Red: return null, as before the WHATWG default, when there is no event field.
+        Assert.Equal("message", reader.EventName);
+        // Red: compare the empty name buffer with the argument, so the default type is not matched.
+        Assert.True(reader.EventNameEquals("message"u8));
         // Red: make EventNameEquals ignore the length check, so an absent name equals anything.
         Assert.False(reader.EventNameEquals("a"u8));
+        // Red: match the empty name to "" as well as "message", so "" stays special.
+        Assert.False(reader.EventNameEquals(""u8));
+    }
+
+    [Fact]
+    public async Task An_empty_event_field_has_the_type_message()
+    {
+        await using var reader = ReaderOver("event:\ndata: a\n\n", 4096);
+
+        Assert.True(await reader.ReadAsync(CancellationToken.None));
+
+        // Red: return null instead of the default type when the name is empty.
+        Assert.Equal("message", reader.EventName);
     }
 
     [Fact]

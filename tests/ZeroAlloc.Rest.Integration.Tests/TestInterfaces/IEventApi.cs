@@ -33,6 +33,19 @@ public interface IEventApi
     [EventStream]
     IAsyncEnumerable<ServerSentEvent<Delta>> StreamDeltasAsync(CancellationToken ct = default);
 
+    // Shape one without a CancellationToken: the iterator declares its own, which only
+    // WithCancellation can set.
+    [Get("/events")]
+    [EventStream]
+    IAsyncEnumerable<ServerSentEvent<Delta>> StreamDeltasWithoutTokenAsync();
+
+    // Shape two with "message", the type of an event that has no event: line.
+    [Get("/events")]
+    [EventStream]
+    [EventType("message", typeof(DeltaEvent))]
+    [EventType("start", typeof(StartEvent))]
+    IAsyncEnumerable<StreamEvent> StreamMessagesAsync(CancellationToken ct = default);
+
     // Shape two: one type per event name; other names are skipped.
     [Post("v1/x")]
     [EventStream]

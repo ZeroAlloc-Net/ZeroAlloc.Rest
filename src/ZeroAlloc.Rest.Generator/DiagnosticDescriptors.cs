@@ -16,7 +16,7 @@ internal static class DiagnosticDescriptors
 
     internal static readonly DiagnosticDescriptor MissingErrorMapper = new(
         id: "ZRA002",
-        title: "No error mapper for a Result error type",
+        title: "No error mapper for an error type",
         messageFormat: "Method '{0}' returns a Result with error type '{1}', but no [ErrorMapper] on the interface implements IHttpErrorMapper<{1}>",
         category: Category,
         defaultSeverity: DiagnosticSeverity.Error,
@@ -25,7 +25,7 @@ internal static class DiagnosticDescriptors
     // The same rule for [EventStream(ErrorType = ...)], whose E is not a Result's.
     internal static readonly DiagnosticDescriptor MissingEventStreamErrorMapper = new(
         id: "ZRA002",
-        title: "No error mapper for a Result error type",
+        title: "No error mapper for an error type",
         messageFormat: "Method '{0}' declares [EventStream(ErrorType = typeof({1}))], but no [ErrorMapper] on the interface implements IHttpErrorMapper<{1}>",
         category: Category,
         defaultSeverity: DiagnosticSeverity.Error,

@@ -246,7 +246,7 @@ Task<TokenResponse> GetTokenAsync([Body] TokenRequest body, [FormBody] Dictionar
 
 Message: `Method 'GetTokenAsync' has both [Body] and [FormBody] parameters; only one is allowed`
 
-### ZRA002: No error mapper for a Result error type
+### ZRA002: No error mapper for an error type
 
 Severity: Error.
 
@@ -606,7 +606,9 @@ response one event at a time. Each event's `data:` is deserialized by the client
 works under Native AOT with a source-generated serializer. There are two shapes.
 
 **Every event as one type.** Return `IAsyncEnumerable<ServerSentEvent<T>>`. Every event is yielded,
-its data read as `T`, with its `event:` name and the stream's last `id:` beside it.
+its data read as `T`, with its type and the stream's last `id:` beside it. The type is the event's
+`event:` name, or `"message"` for an event without one, as the WHATWG rules and
+`System.Net.ServerSentEvents` define it.
 
 ```csharp
 [ZeroAllocRestClient]
@@ -622,8 +624,9 @@ await foreach (var item in feed.FollowAsync(ct))
 ```
 
 **One type per event name.** Return `IAsyncEnumerable<TBase>` and map each event name to a type
-that converts to `TBase` with `[EventType]`. An event with another name, or none, is skipped. Names
-are compared as UTF-8 bytes, exactly; `[EventType("", ...)]` matches an event with no `event:` line.
+that converts to `TBase` with `[EventType]`. An event with another name is skipped. Names are
+compared as UTF-8 bytes, exactly. An event without an `event:` line has the type `message`, so
+`[EventType("message", ...)]` maps it.
 
 ```csharp
 [ZeroAllocRestClient]

@@ -37,9 +37,10 @@ public sealed class EventStreamTests
 
         var events = await ToListAsync(api.StreamDeltasAsync());
 
-        // Red: swap EventName and LastEventId in the emitted ServerSentEvent constructor call.
+        // Red: swap EventName and LastEventId in the emitted ServerSentEvent constructor call; or
+        // make the reader's EventName null for an event with no event: line.
         Assert.Equal(
-            new[] { new ServerSentEvent<Delta>("a", "1", new Delta("hi")), new ServerSentEvent<Delta>(null, "1", new Delta("yo")) },
+            new[] { new ServerSentEvent<Delta>("a", "1", new Delta("hi")), new ServerSentEvent<Delta>("message", "1", new Delta("yo")) },
             events);
         // Red: send the serializer's Accept instead of text/event-stream.
         Assert.Equal("text/event-stream", Assert.Single(sent!.Headers.GetValues("Accept")));
@@ -85,6 +86,73 @@ public sealed class EventStreamTests
 
         // Red: end the stream at an unknown event, `else break;` for `else continue;`.
         Assert.Equal(new StreamEvent[] { new StartEvent("m1"), new DeltaEvent("Hel") }, events);
+    }
+
+    [Fact]
+    public async Task An_unnamed_event_maps_through_EventType_message()
+    {
+        const string body =
+            "data: {\"text\":\"a\"}\n\n"
+            + "event: start\ndata: {\"id\":\"m1\"}\n\n"
+            + "event: message\ndata: {\"text\":\"b\"}\n\n"
+            + "event:\ndata: {\"text\":\"c\"}\n\n";
+        var api = Client((_, _) => Ok(new SseContent(body)));
+
+        var events = await ToListAsync(api.StreamMessagesAsync());
+
+        // Red: compare the reader's empty name buffer with the argument, so an unnamed event does not
+        // match "message" and is skipped.
+        Assert.Equal(
+            new StreamEvent[] { new DeltaEvent("a"), new StartEvent("m1"), new DeltaEvent("b"), new DeltaEvent("c") },
+            events);
+    }
+
+    [Fact]
+    public async Task A_method_without_a_token_is_cancelled_through_WithCancellation()
+    {
+        var content = new SseContent(FirstEventOnly.Replace("event: start", "event: a", StringComparison.Ordinal), blockAtEnd: true);
+        var api = Client((_, _) => Ok(content));
+        using var cts = new CancellationTokenSource();
+
+        var read = Task.Run(async () =>
+        {
+            await foreach (var _ in api.StreamDeltasWithoutTokenAsync().WithCancellation(cts.Token).ConfigureAwait(false))
+            {
+            }
+        });
+        await content.Stream.Blocked.WaitAsync(Hang);
+        await cts.CancelAsync();
+
+        // Red: read with CancellationToken.None in a method without a token, instead of the
+        // iterator's own [EnumeratorCancellation] token; the read then never ends.
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => read.WaitAsync(Hang));
+        // Red: drop the response's Dispose from the iterator's finally.
+        Assert.True(content.Disposed);
+    }
+
+    [Fact]
+    public async Task A_failure_to_dispose_the_reader_still_disposes_the_response()
+    {
+        var content = new SseContent(TypedBody, throwOnStreamDispose: true);
+        var api = Client((_, _) => Ok(content));
+
+        // Red: drop the failure to dispose the reader even when the enumeration succeeded.
+        await Assert.ThrowsAsync<IOException>(() => ToListAsync(api.StreamAsync(new EventRequest("hi"))));
+        // Red: dispose the response after the reader in the same block, so the reader's failure skips it.
+        Assert.True(content.Disposed);
+    }
+
+    [Fact]
+    public async Task A_failure_to_dispose_the_reader_does_not_hide_the_enumeration_failure()
+    {
+        const string body = "event: start\ndata: {\"id\":\"m1\"}\n\nevent: delta\ndata: not json\n\n";
+        var content = new SseContent(body, throwOnStreamDispose: true);
+        var api = Client((_, _) => Ok(content));
+
+        // Red: let the reader's dispose failure propagate after a failure, so it replaces the JsonException.
+        await Assert.ThrowsAsync<JsonException>(() => ToListAsync(api.StreamAsync(new EventRequest("hi"))));
+        // Red: dispose the response after the reader in the same block, so the reader's failure skips it.
+        Assert.True(content.Disposed);
     }
 
     [Fact]
@@ -244,12 +312,15 @@ public sealed class EventStreamTests
     // until the read is cancelled, as an open connection does.
     internal sealed class SseContent : HttpContent
     {
-        public SseContent(string body, bool blockAtEnd = false)
+        private readonly bool _throwOnStreamDispose;
+
+        public SseContent(string body, bool blockAtEnd = false, bool throwOnStreamDispose = false)
         {
             var bytes = Encoding.UTF8.GetBytes(body);
             Stream = new StreamResponsesTests.TrackingStream(bytes);
             if (blockAtEnd)
                 Stream.BlockAfter = bytes.Length;
+            _throwOnStreamDispose = throwOnStreamDispose;
             Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/event-stream");
         }
 
@@ -265,7 +336,8 @@ public sealed class EventStreamTests
             await Stream.CopyToAsync(stream).ConfigureAwait(false);
         }
 
-        protected override Task<Stream> CreateContentReadStreamAsync() => Task.FromResult<Stream>(Stream);
+        protected override Task<Stream> CreateContentReadStreamAsync()
+            => Task.FromResult<Stream>(_throwOnStreamDispose ? new ThrowOnDisposeStream(Stream) : Stream);
 
         protected override bool TryComputeLength(out long length)
         {
@@ -283,6 +355,59 @@ public sealed class EventStreamTests
     }
 }
 
+
+// Reads from `inner` and throws when first disposed, as a stream whose connection fails on close does.
+internal sealed class ThrowOnDisposeStream(Stream inner) : Stream
+{
+    public override bool CanRead => true;
+    public override bool CanSeek => false;
+    public override bool CanWrite => false;
+    public override long Length => throw new NotSupportedException();
+
+    public override long Position
+    {
+        get => throw new NotSupportedException();
+        set => throw new NotSupportedException();
+    }
+
+    public override int Read(byte[] buffer, int offset, int count) => inner.Read(buffer, offset, count);
+
+    public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        => inner.ReadAsync(buffer, cancellationToken);
+
+    public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+        => inner.ReadAsync(buffer, offset, count, cancellationToken);
+
+    public override void Flush()
+    {
+    }
+
+    public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+    public override void SetLength(long value) => throw new NotSupportedException();
+
+    public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+    private bool _thrown;
+
+    // Only the first dispose throws: the reader's. HttpContent disposes the stream again with the
+    // response, which must then succeed for the test to see whether the response was disposed.
+    public override ValueTask DisposeAsync()
+    {
+        Dispose(disposing: true);
+        return ValueTask.CompletedTask;
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing && !_thrown)
+        {
+            _thrown = true;
+            throw new IOException("The connection failed on close.");
+        }
+        base.Dispose(disposing);
+    }
+}
 
 // The span of an event stream covers the whole enumeration: it starts when enumeration starts and
 // stops when the enumeration ends, is disposed, or fails. The duration is recorded once, when the

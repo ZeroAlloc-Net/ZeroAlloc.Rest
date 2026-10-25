@@ -825,6 +825,7 @@ internal static class ClientEmitter
         sb.AppendLine("        var __durationRecorded = false;");
         sb.AppendLine("        global::System.Net.Http.HttpResponseMessage? __response = null;");
         sb.AppendLine("        global::ZeroAlloc.Rest.ServerSentEventReader? __reader = null;");
+        sb.AppendLine("        var __faulted = false;");
         sb.AppendLine("        try");
         sb.AppendLine("        {");
         sb.AppendLine("            try");
@@ -867,13 +868,14 @@ internal static class ClientEmitter
         sb.AppendLine("                        break;");
         if (eventStream.DataTypeName is { } dataType)
         {
-            // Shape one: every event, with its name and the last event id.
+            // Shape one: every event, with its type, "message" when it has no name, and the last
+            // event id.
             sb.AppendLine($"                    __item = new global::ZeroAlloc.Rest.ServerSentEvent<{dataType}>(__reader.EventName, __reader.LastEventId, {ReadEventData(method, dataType, eventStream.DataNeedsNullCheck, serializerExpr, token)});");
         }
         else
         {
             // Shape two: an event named by an [EventType] is read as its type; any other is skipped.
-            // An [EventType("")] matches an event with no event: line.
+            // An event with no event: line has the type "message", which the reader's compare matches.
             for (var i = 0; i < eventStream.EventTypes.Count; i++)
             {
                 var eventType = eventStream.EventTypes[i];
@@ -888,11 +890,23 @@ internal static class ClientEmitter
         sb.AppendLine("                yield return __item;");
         sb.AppendLine("            }");
         sb.AppendLine("        }");
+        // The response is disposed even when disposing the reader throws. When the enumeration has
+        // already failed, a failure to dispose the reader is dropped, so it never hides the failure
+        // the caller should see.
         sb.AppendLine("        finally");
         sb.AppendLine("        {");
-        sb.AppendLine("            if (__reader is not null)");
-        sb.AppendLine("                await __reader.DisposeAsync().ConfigureAwait(false);");
-        sb.AppendLine("            __response?.Dispose();");
+        sb.AppendLine("            try");
+        sb.AppendLine("            {");
+        sb.AppendLine("                if (__reader is not null)");
+        sb.AppendLine("                    await __reader.DisposeAsync().ConfigureAwait(false);");
+        sb.AppendLine("            }");
+        sb.AppendLine("            catch (global::System.Exception) when (__faulted)");
+        sb.AppendLine("            {");
+        sb.AppendLine("            }");
+        sb.AppendLine("            finally");
+        sb.AppendLine("            {");
+        sb.AppendLine("                __response?.Dispose();");
+        sb.AppendLine("            }");
         sb.AppendLine("        }");
         sb.AppendLine("    }");
         sb.AppendLine();
@@ -904,11 +918,13 @@ internal static class ClientEmitter
     {
         sb.AppendLine($"{indent}catch (global::System.OperationCanceledException) when ({token}.IsCancellationRequested)");
         sb.AppendLine($"{indent}{{");
+        sb.AppendLine($"{indent}    __faulted = true;");
         sb.AppendLine($"{indent}    __RecordCancellation(__activity, __sw, __httpMethod, __RestMethodTag, __durationRecorded);");
         sb.AppendLine($"{indent}    throw;");
         sb.AppendLine($"{indent}}}");
         sb.AppendLine($"{indent}catch (global::System.Exception __ex)");
         sb.AppendLine($"{indent}{{");
+        sb.AppendLine($"{indent}    __faulted = true;");
         sb.AppendLine($"{indent}    __RecordFailure(__activity, __ex, __sw, __httpMethod, __RestMethodTag, __durationRecorded);");
         sb.AppendLine($"{indent}    throw;");
         sb.AppendLine($"{indent}}}");

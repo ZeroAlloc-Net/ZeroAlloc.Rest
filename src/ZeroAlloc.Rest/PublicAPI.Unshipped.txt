@@ -27,7 +27,7 @@ ZeroAlloc.Rest.ServerSentEvent<T>.ServerSentEvent(string? Event, string? Id, T D
 ZeroAlloc.Rest.ServerSentEventReader
 ZeroAlloc.Rest.ServerSentEventReader.Data.get -> System.ReadOnlyMemory<byte>
 ZeroAlloc.Rest.ServerSentEventReader.DisposeAsync() -> System.Threading.Tasks.ValueTask
-ZeroAlloc.Rest.ServerSentEventReader.EventName.get -> string?
+ZeroAlloc.Rest.ServerSentEventReader.EventName.get -> string!
 ZeroAlloc.Rest.ServerSentEventReader.EventNameEquals(System.ReadOnlySpan<byte> utf8) -> bool
 ZeroAlloc.Rest.ServerSentEventReader.LastEventId.get -> string?
 ZeroAlloc.Rest.ServerSentEventReader.ReadAsync(System.Threading.CancellationToken ct) -> System.Threading.Tasks.ValueTask<bool>

@@ -19,6 +19,11 @@ namespace ZeroAlloc.Rest;
 /// that event is worse.
 /// </para>
 /// <para>
+/// An event with no <c>event:</c> field, or an empty one, has the type <c>message</c>, as in the
+/// WHATWG rules and <c>System.Net.ServerSentEvents</c>: <see cref="EventName"/> is <c>"message"</c>,
+/// and <see cref="EventNameEquals"/> matches <c>"message"u8</c>.
+/// </para>
+/// <para>
 /// Line and event size are unbounded, as with the BCL <c>SseParser</c>: a server can make the pooled
 /// buffers grow as large as it sends. Read only from servers you trust to bound their events.
 /// </para>
@@ -30,6 +35,9 @@ namespace ZeroAlloc.Rest;
 public sealed class ServerSentEventReader : IAsyncDisposable
 {
     private const int InitialBufferSize = 4096;
+
+    // The type of an event with no name, as WHATWG and System.Net.ServerSentEvents define it.
+    private const string DefaultEventType = "message";
     private static readonly byte[] s_bom = [0xEF, 0xBB, 0xBF];
 
     private readonly Stream _stream;
@@ -73,8 +81,11 @@ public sealed class ServerSentEventReader : IAsyncDisposable
     /// </summary>
     public ReadOnlyMemory<byte> Data => _data.AsMemory(0, Math.Max(_dataLen - 1, 0));
 
-    /// <summary>The name of the current event. It is decoded on each read; <see langword="null"/> when there is none.</summary>
-    public string? EventName => _nameLen == 0 ? null : Encoding.UTF8.GetString(_name, 0, _nameLen);
+    /// <summary>
+    /// The type of the current event: its <c>event:</c> name, decoded on each read, or
+    /// <c>"message"</c> when the event has no name.
+    /// </summary>
+    public string EventName => _nameLen == 0 ? DefaultEventType : Encoding.UTF8.GetString(_name, 0, _nameLen);
 
     /// <summary>
     /// The last <c>id:</c> the stream set. Like the browser's last event id it persists across
@@ -85,11 +96,16 @@ public sealed class ServerSentEventReader : IAsyncDisposable
     /// <summary>The last valid <c>retry:</c> the stream set, in milliseconds; <see langword="null"/> before any.</summary>
     public int? RetryMilliseconds { get; private set; }
 
-    /// <summary>Compares the current event name with <paramref name="utf8"/> without allocating.</summary>
+    /// <summary>Compares the current event's type, as <see cref="EventName"/> gives it, with <paramref name="utf8"/> without allocating.</summary>
     /// <param name="utf8">The UTF-8 bytes of the name to test for.</param>
-    /// <returns><see langword="true"/> when the current event has exactly that name.</returns>
+    /// <returns>
+    /// <see langword="true"/> when the current event has exactly that name, or has no name and
+    /// <paramref name="utf8"/> is <c>message</c>.
+    /// </returns>
     public bool EventNameEquals(ReadOnlySpan<byte> utf8) =>
-        _name.AsSpan(0, _nameLen).SequenceEqual(utf8);
+        _nameLen == 0
+            ? utf8.SequenceEqual("message"u8)
+            : _name.AsSpan(0, _nameLen).SequenceEqual(utf8);
 
     // A stream over Data for a serializer, valid until the next ReadAsync. One stream serves every
     // event: it is pointed at the current data on each call.
