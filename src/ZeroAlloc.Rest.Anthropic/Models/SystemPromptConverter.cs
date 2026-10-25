@@ -17,8 +17,8 @@ internal sealed class SystemPromptConverter : JsonConverter<SystemPrompt>
         var blocks = new List<TextBlockParam>();
         while (reader.Read() && reader.TokenType != JsonTokenType.EndArray)
         {
-            if (JsonSerializer.Deserialize(ref reader, typeInfo) is TextBlockParam text)
-                blocks.Add(text);
+            blocks.Add(JsonSerializer.Deserialize(ref reader, typeInfo) as TextBlockParam
+                ?? throw new JsonException("A system prompt array holds text blocks only."));
         }
 
         return SystemPrompt.FromBlocks(blocks);
@@ -28,6 +28,10 @@ internal sealed class SystemPromptConverter : JsonConverter<SystemPrompt>
     {
         if (value.Blocks is null)
         {
+            // default of SystemPrompt holds neither; it must not be written as null, optional members are omitted.
+            if (value.Text is null)
+                throw new JsonException("A default SystemPrompt has no value. Leave MessageRequest.System null instead.");
+
             writer.WriteStringValue(value.Text);
             return;
         }

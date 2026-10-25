@@ -1,4 +1,5 @@
 #nullable enable
+ZeroAlloc.Rest.Anthropic.AnthropicJson
 ZeroAlloc.Rest.Anthropic.CacheControl
 ZeroAlloc.Rest.Anthropic.CacheControl.<Clone>$() -> ZeroAlloc.Rest.Anthropic.CacheControl!
 ZeroAlloc.Rest.Anthropic.CacheControl.CacheControl(string? ttl) -> void
@@ -77,13 +78,28 @@ ZeroAlloc.Rest.Anthropic.MessageDeltaBody.StopReason.init -> void
 ZeroAlloc.Rest.Anthropic.MessageDeltaBody.StopSequence.get -> string?
 ZeroAlloc.Rest.Anthropic.MessageDeltaBody.StopSequence.init -> void
 ZeroAlloc.Rest.Anthropic.MessageDeltaEvent
-ZeroAlloc.Rest.Anthropic.MessageDeltaEvent.Deconstruct(out ZeroAlloc.Rest.Anthropic.MessageDeltaBody! Delta, out ZeroAlloc.Rest.Anthropic.Usage? Usage) -> void
+ZeroAlloc.Rest.Anthropic.MessageDeltaEvent.Deconstruct(out ZeroAlloc.Rest.Anthropic.MessageDeltaBody! Delta, out ZeroAlloc.Rest.Anthropic.MessageDeltaUsage? Usage) -> void
 ZeroAlloc.Rest.Anthropic.MessageDeltaEvent.Delta.get -> ZeroAlloc.Rest.Anthropic.MessageDeltaBody!
 ZeroAlloc.Rest.Anthropic.MessageDeltaEvent.Delta.init -> void
 ZeroAlloc.Rest.Anthropic.MessageDeltaEvent.Equals(ZeroAlloc.Rest.Anthropic.MessageDeltaEvent? other) -> bool
-ZeroAlloc.Rest.Anthropic.MessageDeltaEvent.MessageDeltaEvent(ZeroAlloc.Rest.Anthropic.MessageDeltaBody! Delta, ZeroAlloc.Rest.Anthropic.Usage? Usage) -> void
-ZeroAlloc.Rest.Anthropic.MessageDeltaEvent.Usage.get -> ZeroAlloc.Rest.Anthropic.Usage?
+ZeroAlloc.Rest.Anthropic.MessageDeltaEvent.MessageDeltaEvent(ZeroAlloc.Rest.Anthropic.MessageDeltaBody! Delta, ZeroAlloc.Rest.Anthropic.MessageDeltaUsage? Usage) -> void
+ZeroAlloc.Rest.Anthropic.MessageDeltaEvent.Usage.get -> ZeroAlloc.Rest.Anthropic.MessageDeltaUsage?
 ZeroAlloc.Rest.Anthropic.MessageDeltaEvent.Usage.init -> void
+ZeroAlloc.Rest.Anthropic.MessageDeltaUsage
+ZeroAlloc.Rest.Anthropic.MessageDeltaUsage.<Clone>$() -> ZeroAlloc.Rest.Anthropic.MessageDeltaUsage!
+ZeroAlloc.Rest.Anthropic.MessageDeltaUsage.CacheCreation.get -> ZeroAlloc.Rest.Anthropic.CacheCreation?
+ZeroAlloc.Rest.Anthropic.MessageDeltaUsage.CacheCreation.init -> void
+ZeroAlloc.Rest.Anthropic.MessageDeltaUsage.CacheCreationInputTokens.get -> int?
+ZeroAlloc.Rest.Anthropic.MessageDeltaUsage.CacheCreationInputTokens.init -> void
+ZeroAlloc.Rest.Anthropic.MessageDeltaUsage.CacheReadInputTokens.get -> int?
+ZeroAlloc.Rest.Anthropic.MessageDeltaUsage.CacheReadInputTokens.init -> void
+ZeroAlloc.Rest.Anthropic.MessageDeltaUsage.Deconstruct(out int? InputTokens, out int? OutputTokens, out int? CacheCreationInputTokens, out int? CacheReadInputTokens, out ZeroAlloc.Rest.Anthropic.CacheCreation? CacheCreation) -> void
+ZeroAlloc.Rest.Anthropic.MessageDeltaUsage.Equals(ZeroAlloc.Rest.Anthropic.MessageDeltaUsage? other) -> bool
+ZeroAlloc.Rest.Anthropic.MessageDeltaUsage.InputTokens.get -> int?
+ZeroAlloc.Rest.Anthropic.MessageDeltaUsage.InputTokens.init -> void
+ZeroAlloc.Rest.Anthropic.MessageDeltaUsage.MessageDeltaUsage(int? InputTokens, int? OutputTokens, int? CacheCreationInputTokens = null, int? CacheReadInputTokens = null, ZeroAlloc.Rest.Anthropic.CacheCreation? CacheCreation = null) -> void
+ZeroAlloc.Rest.Anthropic.MessageDeltaUsage.OutputTokens.get -> int?
+ZeroAlloc.Rest.Anthropic.MessageDeltaUsage.OutputTokens.init -> void
 ZeroAlloc.Rest.Anthropic.MessageParam
 ZeroAlloc.Rest.Anthropic.MessageParam.<Clone>$() -> ZeroAlloc.Rest.Anthropic.MessageParam!
 ZeroAlloc.Rest.Anthropic.MessageParam.Content.get -> System.Collections.Generic.IReadOnlyList<ZeroAlloc.Rest.Anthropic.ContentBlockParam!>!
@@ -119,11 +135,11 @@ ZeroAlloc.Rest.Anthropic.MessageResponse
 ZeroAlloc.Rest.Anthropic.MessageResponse.<Clone>$() -> ZeroAlloc.Rest.Anthropic.MessageResponse!
 ZeroAlloc.Rest.Anthropic.MessageResponse.Content.get -> System.Collections.Generic.IReadOnlyList<ZeroAlloc.Rest.Anthropic.ContentBlock!>!
 ZeroAlloc.Rest.Anthropic.MessageResponse.Content.init -> void
-ZeroAlloc.Rest.Anthropic.MessageResponse.Deconstruct(out string! Id, out string! Model, out ZeroAlloc.Rest.Anthropic.MessageRole Role, out System.Collections.Generic.IReadOnlyList<ZeroAlloc.Rest.Anthropic.ContentBlock!>! Content, out string? StopReason, out string? StopSequence, out ZeroAlloc.Rest.Anthropic.Usage! Usage) -> void
+ZeroAlloc.Rest.Anthropic.MessageResponse.Deconstruct(out string! Id, out string! Model, out ZeroAlloc.Rest.Anthropic.MessageRole Role, out System.Collections.Generic.IReadOnlyList<ZeroAlloc.Rest.Anthropic.ContentBlock!>! Content, out string? StopReason, out string? StopSequence, out ZeroAlloc.Rest.Anthropic.Usage? Usage) -> void
 ZeroAlloc.Rest.Anthropic.MessageResponse.Equals(ZeroAlloc.Rest.Anthropic.MessageResponse? other) -> bool
 ZeroAlloc.Rest.Anthropic.MessageResponse.Id.get -> string!
 ZeroAlloc.Rest.Anthropic.MessageResponse.Id.init -> void
-ZeroAlloc.Rest.Anthropic.MessageResponse.MessageResponse(string! Id, string! Model, ZeroAlloc.Rest.Anthropic.MessageRole Role, System.Collections.Generic.IReadOnlyList<ZeroAlloc.Rest.Anthropic.ContentBlock!>! Content, string? StopReason, string? StopSequence, ZeroAlloc.Rest.Anthropic.Usage! Usage) -> void
+ZeroAlloc.Rest.Anthropic.MessageResponse.MessageResponse(string! Id, string! Model, ZeroAlloc.Rest.Anthropic.MessageRole Role, System.Collections.Generic.IReadOnlyList<ZeroAlloc.Rest.Anthropic.ContentBlock!>! Content, string? StopReason, string? StopSequence, ZeroAlloc.Rest.Anthropic.Usage? Usage) -> void
 ZeroAlloc.Rest.Anthropic.MessageResponse.Model.get -> string!
 ZeroAlloc.Rest.Anthropic.MessageResponse.Model.init -> void
 ZeroAlloc.Rest.Anthropic.MessageResponse.Role.get -> ZeroAlloc.Rest.Anthropic.MessageRole
@@ -132,7 +148,7 @@ ZeroAlloc.Rest.Anthropic.MessageResponse.StopReason.get -> string?
 ZeroAlloc.Rest.Anthropic.MessageResponse.StopReason.init -> void
 ZeroAlloc.Rest.Anthropic.MessageResponse.StopSequence.get -> string?
 ZeroAlloc.Rest.Anthropic.MessageResponse.StopSequence.init -> void
-ZeroAlloc.Rest.Anthropic.MessageResponse.Usage.get -> ZeroAlloc.Rest.Anthropic.Usage!
+ZeroAlloc.Rest.Anthropic.MessageResponse.Usage.get -> ZeroAlloc.Rest.Anthropic.Usage?
 ZeroAlloc.Rest.Anthropic.MessageResponse.Usage.init -> void
 ZeroAlloc.Rest.Anthropic.MessageRole
 ZeroAlloc.Rest.Anthropic.MessageRole.Assistant = 1 -> ZeroAlloc.Rest.Anthropic.MessageRole
@@ -248,7 +264,6 @@ ZeroAlloc.Rest.Anthropic.Usage.OutputTokens.get -> int
 ZeroAlloc.Rest.Anthropic.Usage.OutputTokens.init -> void
 ZeroAlloc.Rest.Anthropic.Usage.Usage(int InputTokens, int OutputTokens, int? CacheCreationInputTokens = null, int? CacheReadInputTokens = null, ZeroAlloc.Rest.Anthropic.CacheCreation? CacheCreation = null) -> void
 abstract ZeroAlloc.Rest.Anthropic.ContentBlockParam.<Clone>$() -> ZeroAlloc.Rest.Anthropic.ContentBlockParam!
-abstract ZeroAlloc.Rest.Anthropic.MessageStreamEvent.<Clone>$() -> ZeroAlloc.Rest.Anthropic.MessageStreamEvent!
 const ZeroAlloc.Rest.Anthropic.StopReasons.EndTurn = "end_turn" -> string!
 const ZeroAlloc.Rest.Anthropic.StopReasons.MaxTokens = "max_tokens" -> string!
 const ZeroAlloc.Rest.Anthropic.StopReasons.PauseTurn = "pause_turn" -> string!
@@ -300,6 +315,9 @@ override ZeroAlloc.Rest.Anthropic.MessageDeltaEvent.<Clone>$() -> ZeroAlloc.Rest
 override ZeroAlloc.Rest.Anthropic.MessageDeltaEvent.Equals(object? obj) -> bool
 override ZeroAlloc.Rest.Anthropic.MessageDeltaEvent.GetHashCode() -> int
 override ZeroAlloc.Rest.Anthropic.MessageDeltaEvent.ToString() -> string!
+override ZeroAlloc.Rest.Anthropic.MessageDeltaUsage.Equals(object? obj) -> bool
+override ZeroAlloc.Rest.Anthropic.MessageDeltaUsage.GetHashCode() -> int
+override ZeroAlloc.Rest.Anthropic.MessageDeltaUsage.ToString() -> string!
 override ZeroAlloc.Rest.Anthropic.MessageParam.Equals(object? obj) -> bool
 override ZeroAlloc.Rest.Anthropic.MessageParam.GetHashCode() -> int
 override ZeroAlloc.Rest.Anthropic.MessageParam.ToString() -> string!
@@ -374,6 +392,11 @@ override sealed ZeroAlloc.Rest.Anthropic.TextDelta.Equals(ZeroAlloc.Rest.Anthrop
 override sealed ZeroAlloc.Rest.Anthropic.ToolResultBlockParam.Equals(ZeroAlloc.Rest.Anthropic.ContentBlockParam? other) -> bool
 override sealed ZeroAlloc.Rest.Anthropic.ToolUseBlock.Equals(ZeroAlloc.Rest.Anthropic.ContentBlock? other) -> bool
 override sealed ZeroAlloc.Rest.Anthropic.ToolUseBlockParam.Equals(ZeroAlloc.Rest.Anthropic.ContentBlockParam? other) -> bool
+static ZeroAlloc.Rest.Anthropic.AnthropicJson.MessageRequest.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<ZeroAlloc.Rest.Anthropic.MessageRequest!>!
+static ZeroAlloc.Rest.Anthropic.AnthropicJson.MessageResponse.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<ZeroAlloc.Rest.Anthropic.MessageResponse!>!
+static ZeroAlloc.Rest.Anthropic.AnthropicJson.MessageStreamEvent.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<ZeroAlloc.Rest.Anthropic.MessageStreamEvent!>!
+static ZeroAlloc.Rest.Anthropic.AnthropicJson.Options.get -> System.Text.Json.JsonSerializerOptions!
+static ZeroAlloc.Rest.Anthropic.AnthropicJson.Resolver.get -> System.Text.Json.Serialization.Metadata.IJsonTypeInfoResolver!
 static ZeroAlloc.Rest.Anthropic.CacheControl.FiveMinutes.get -> ZeroAlloc.Rest.Anthropic.CacheControl!
 static ZeroAlloc.Rest.Anthropic.CacheControl.OneHour.get -> ZeroAlloc.Rest.Anthropic.CacheControl!
 static ZeroAlloc.Rest.Anthropic.CacheControl.operator !=(ZeroAlloc.Rest.Anthropic.CacheControl? left, ZeroAlloc.Rest.Anthropic.CacheControl? right) -> bool
@@ -402,6 +425,8 @@ static ZeroAlloc.Rest.Anthropic.MessageDeltaBody.operator !=(ZeroAlloc.Rest.Anth
 static ZeroAlloc.Rest.Anthropic.MessageDeltaBody.operator ==(ZeroAlloc.Rest.Anthropic.MessageDeltaBody? left, ZeroAlloc.Rest.Anthropic.MessageDeltaBody? right) -> bool
 static ZeroAlloc.Rest.Anthropic.MessageDeltaEvent.operator !=(ZeroAlloc.Rest.Anthropic.MessageDeltaEvent? left, ZeroAlloc.Rest.Anthropic.MessageDeltaEvent? right) -> bool
 static ZeroAlloc.Rest.Anthropic.MessageDeltaEvent.operator ==(ZeroAlloc.Rest.Anthropic.MessageDeltaEvent? left, ZeroAlloc.Rest.Anthropic.MessageDeltaEvent? right) -> bool
+static ZeroAlloc.Rest.Anthropic.MessageDeltaUsage.operator !=(ZeroAlloc.Rest.Anthropic.MessageDeltaUsage? left, ZeroAlloc.Rest.Anthropic.MessageDeltaUsage? right) -> bool
+static ZeroAlloc.Rest.Anthropic.MessageDeltaUsage.operator ==(ZeroAlloc.Rest.Anthropic.MessageDeltaUsage? left, ZeroAlloc.Rest.Anthropic.MessageDeltaUsage? right) -> bool
 static ZeroAlloc.Rest.Anthropic.MessageParam.operator !=(ZeroAlloc.Rest.Anthropic.MessageParam? left, ZeroAlloc.Rest.Anthropic.MessageParam? right) -> bool
 static ZeroAlloc.Rest.Anthropic.MessageParam.operator ==(ZeroAlloc.Rest.Anthropic.MessageParam? left, ZeroAlloc.Rest.Anthropic.MessageParam? right) -> bool
 static ZeroAlloc.Rest.Anthropic.MessageRequest.operator !=(ZeroAlloc.Rest.Anthropic.MessageRequest? left, ZeroAlloc.Rest.Anthropic.MessageRequest? right) -> bool
@@ -452,6 +477,7 @@ virtual ZeroAlloc.Rest.Anthropic.ContentDelta.<Clone>$() -> ZeroAlloc.Rest.Anthr
 virtual ZeroAlloc.Rest.Anthropic.ContentDelta.EqualityContract.get -> System.Type!
 virtual ZeroAlloc.Rest.Anthropic.ContentDelta.Equals(ZeroAlloc.Rest.Anthropic.ContentDelta? other) -> bool
 virtual ZeroAlloc.Rest.Anthropic.ContentDelta.PrintMembers(System.Text.StringBuilder! builder) -> bool
+virtual ZeroAlloc.Rest.Anthropic.MessageStreamEvent.<Clone>$() -> ZeroAlloc.Rest.Anthropic.MessageStreamEvent!
 virtual ZeroAlloc.Rest.Anthropic.MessageStreamEvent.EqualityContract.get -> System.Type!
 virtual ZeroAlloc.Rest.Anthropic.MessageStreamEvent.Equals(ZeroAlloc.Rest.Anthropic.MessageStreamEvent? other) -> bool
 virtual ZeroAlloc.Rest.Anthropic.MessageStreamEvent.PrintMembers(System.Text.StringBuilder! builder) -> bool

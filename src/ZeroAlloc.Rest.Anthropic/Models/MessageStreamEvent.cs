@@ -2,7 +2,10 @@ using System.Text.Json.Serialization;
 
 namespace ZeroAlloc.Rest.Anthropic;
 
-/// <summary>One server-sent event of a streamed message. The <c>type</c> member selects the derived type.</summary>
+/// <summary>
+/// One server-sent event of a streamed message. The <c>type</c> member selects the derived type; an event of a
+/// type this package does not model reads as a plain <see cref="MessageStreamEvent"/>, so a caller can skip it.
+/// </summary>
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "type", IgnoreUnrecognizedTypeDiscriminators = true)]
 [JsonDerivedType(typeof(MessageStartEvent), "message_start")]
 [JsonDerivedType(typeof(ContentBlockStartEvent), "content_block_start")]
@@ -12,4 +15,4 @@ namespace ZeroAlloc.Rest.Anthropic;
 [JsonDerivedType(typeof(MessageStopEvent), "message_stop")]
 [JsonDerivedType(typeof(PingEvent), "ping")]
 [JsonDerivedType(typeof(ErrorEvent), "error")]
-public abstract record MessageStreamEvent;
+public record MessageStreamEvent;

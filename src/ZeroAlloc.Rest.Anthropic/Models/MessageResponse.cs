@@ -9,7 +9,7 @@ namespace ZeroAlloc.Rest.Anthropic;
 /// <param name="Content">The content blocks.</param>
 /// <param name="StopReason">Why generation stopped, see <see cref="StopReasons"/>; null while streaming.</param>
 /// <param name="StopSequence">The stop sequence that matched, if any.</param>
-/// <param name="Usage">Token usage.</param>
+/// <param name="Usage">Token usage; null when the payload carries none.</param>
 public sealed record MessageResponse(
     [property: JsonPropertyName("id")] string Id,
     [property: JsonPropertyName("model")] string Model,
@@ -17,4 +17,4 @@ public sealed record MessageResponse(
     [property: JsonPropertyName("content")] IReadOnlyList<ContentBlock> Content,
     [property: JsonPropertyName("stop_reason")] string? StopReason,
     [property: JsonPropertyName("stop_sequence")] string? StopSequence,
-    [property: JsonPropertyName("usage")] Usage Usage);
+    [property: JsonPropertyName("usage")] Usage? Usage);

@@ -27,6 +27,36 @@ public sealed class WireFormatTests
     }
 
     [Fact]
+    public void The_public_entry_serializes_the_minimal_request_to_the_same_bytes()
+    {
+        var request = Request(UserText("hi"));
+        const string Expected =
+            """{"model":"m","max_tokens":16,"messages":[{"role":"user","content":[{"type":"text","text":"hi"}]}]}""";
+
+        // Red: make AnthropicJson.MessageRequest return new AnthropicJsonContext(new JsonSerializerOptions()).MessageRequest.
+        Assert.Equal(Expected, JsonSerializer.Serialize(request, AnthropicJson.MessageRequest));
+        // SystemTextJsonSerializer takes a resolver and options, and copies the options with the resolver replaced.
+        // Red: make AnthropicJson.Options return new JsonSerializerOptions, "system":null is then written.
+        var options = new JsonSerializerOptions(AnthropicJson.Options) { TypeInfoResolver = AnthropicJson.Resolver };
+        Assert.Equal(Expected, JsonSerializer.Serialize(request, options));
+        // Red: make AnthropicJson.Options return new JsonSerializerOptions, the out of order discriminator then throws.
+        var block = JsonSerializer.Deserialize<ContentBlock>("""{"text":"a","type":"text"}""", options);
+        Assert.Equal("a", Assert.IsType<TextBlock>(block).Text);
+    }
+
+    [Fact]
+    public void The_public_entry_reads_a_response_and_an_event()
+    {
+        var response = JsonSerializer.Deserialize(Example("responses", "basic.json"), AnthropicJson.MessageResponse);
+        var stop = JsonSerializer.Deserialize(Example("events", "message_stop.json"), AnthropicJson.MessageStreamEvent);
+
+        // Red: make AnthropicJson.MessageResponse return null!.
+        Assert.Equal("msg_01XFDUDYJgAACzvnptvVoYEL", response!.Id);
+        // Red: make AnthropicJson.MessageStreamEvent return null!.
+        Assert.IsType<MessageStopEvent>(stop);
+    }
+
+    [Fact]
     public void Every_optional_request_field_writes_in_the_listed_order()
     {
         var request = new MessageRequest
@@ -87,6 +117,41 @@ public sealed class WireFormatTests
         Assert.Equal("s", text.System!.Value.Text);
         // Red: make SystemPromptConverter.Read skip every array element.
         Assert.Equal("b", Assert.Single(blocks.System!.Value.Blocks!).Text);
+    }
+
+    [Fact]
+    public void A_default_system_prompt_is_never_written_as_null()
+    {
+        var request = new MessageRequest { Model = "m", MaxTokens = 1, System = default(SystemPrompt), Messages = [] };
+
+        // Red: remove the Text is null guard in SystemPromptConverter.Write, "system":null is then written.
+        var error = Assert.Throws<JsonException>(() => Write(request));
+        Assert.Contains("default SystemPrompt", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_system_prompt_array_with_a_non_text_block_is_refused_on_read()
+    {
+        const string Json = """{"model":"m","max_tokens":1,"system":[{"type":"tool_use","id":"t","name":"n","input":{}}],"messages":[]}""";
+
+        // Red: restore the silent skip of non-text blocks in SystemPromptConverter.Read, no exception is then thrown.
+        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize(Json, AnthropicJsonContext.Default.MessageRequest));
+    }
+
+    [Fact]
+    public void An_array_and_a_list_of_text_blocks_convert_implicitly_to_a_system_prompt()
+    {
+        SystemPrompt fromArray = new[] { new TextBlockParam("a") };
+        SystemPrompt fromList = new List<TextBlockParam> { new("l", CacheControl.FiveMinutes) };
+
+        // Red: make the TextBlockParam[] conversion return new SystemPrompt(null, null), the write then throws.
+        Assert.Equal(
+            """{"model":"m","max_tokens":1,"system":[{"type":"text","text":"a"}],"messages":[]}""",
+            Write(new MessageRequest { Model = "m", MaxTokens = 1, System = fromArray, Messages = [] }));
+        // Red: make the List conversion store blocks.Select(b => b with { CacheControl = null }).ToList().
+        Assert.Equal(
+            """{"model":"m","max_tokens":1,"system":[{"type":"text","text":"l","cache_control":{"type":"ephemeral","ttl":"5m"}}],"messages":[]}""",
+            Write(new MessageRequest { Model = "m", MaxTokens = 1, System = fromList, Messages = [] }));
     }
 
     [Fact]
@@ -208,9 +273,9 @@ public sealed class WireFormatTests
         // Red: rename the JsonPropertyName of Text on TextBlock to "value".
         Assert.Equal(text, Assert.IsType<TextBlock>(Assert.Single(response.Content)).Text);
         // Red: rename the JsonPropertyName of InputTokens to "input".
-        Assert.Equal(inputTokens, response.Usage.InputTokens);
+        Assert.Equal(inputTokens, response.Usage!.InputTokens);
         // Red: rename the JsonPropertyName of OutputTokens to "output".
-        Assert.Equal(outputTokens, response.Usage.OutputTokens);
+        Assert.Equal(outputTokens, response.Usage!.OutputTokens);
         // Red: rename the JsonPropertyName of Role to "who".
         Assert.Equal(MessageRole.Assistant, response.Role);
     }
@@ -307,13 +372,13 @@ public sealed class WireFormatTests
         // Red: change the documented file's stop_reason to "end_turn".
         Assert.Null(start.Message.StopReason);
         // Red: rename the JsonPropertyName of InputTokens to "input".
-        Assert.Equal(25, start.Message.Usage.InputTokens);
+        Assert.Equal(25, start.Message.Usage!.InputTokens);
     }
 
     [Fact]
     public void The_documented_cache_usage_on_message_start_reads_zero_creation_and_read()
     {
-        var usage = Event<MessageStartEvent>("message_start-cache-usage.json").Message.Usage;
+        var usage = Event<MessageStartEvent>("message_start-cache-usage.json").Message.Usage!;
 
         // Red: rename the JsonPropertyName of InputTokens to "input".
         Assert.Equal(2679, usage.InputTokens);
@@ -330,7 +395,7 @@ public sealed class WireFormatTests
     {
         var start = Event<MessageStartEvent>("message_start-without-usage.json");
 
-        // Red: mark Usage as required on MessageResponse, the read then throws.
+        // Red: add JsonRequired to Usage on MessageResponse, the read then throws.
         Assert.Null(start.Message.Usage);
     }
 
@@ -381,12 +446,26 @@ public sealed class WireFormatTests
         Assert.Equal(StopReasons.ToolUse, tool.Delta.StopReason);
         // Red: rename the JsonPropertyName of Usage on MessageDeltaEvent to "tokens".
         Assert.Equal(89, tool.Usage!.OutputTokens);
+        // Red: change MessageDeltaUsage.InputTokens from int? to int, the omitted field then reads 0.
+        Assert.Equal((int?)null, end.Usage!.InputTokens);
+        // Red: change MessageDeltaUsage.CacheReadInputTokens from int? to int, the omitted field then reads 0.
+        Assert.Equal((int?)null, end.Usage.CacheReadInputTokens);
         // An unmodelled usage field such as server_tool_use must not break the read.
         // Red: set UnmappedMemberHandling to Disallow on Usage, the unmodelled server_tool_use then throws.
         // Red: rename the JsonPropertyName of InputTokens to "input".
         Assert.Equal(10682, server.Usage!.InputTokens);
         // Red: rename the JsonPropertyName of OutputTokens to "output".
         Assert.Equal(510, server.Usage.OutputTokens);
+    }
+
+    [Fact]
+    public void A_future_event_type_reads_as_a_plain_MessageStreamEvent()
+    {
+        var future = JsonSerializer.Deserialize("""{"type":"future_event","x":1}""", AnthropicJsonContext.Default.MessageStreamEvent);
+
+        // Red: set IgnoreUnrecognizedTypeDiscriminators = false on MessageStreamEvent, the read then throws.
+        // Red: make MessageStreamEvent abstract again, the read then throws.
+        Assert.Equal(typeof(MessageStreamEvent), future!.GetType());
     }
 
     [Fact]

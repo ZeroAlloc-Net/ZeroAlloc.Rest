@@ -22,6 +22,7 @@ namespace ZeroAlloc.Rest.Anthropic;
 [JsonSerializable(typeof(ToolUseBlock))]
 [JsonSerializable(typeof(Usage))]
 [JsonSerializable(typeof(CacheCreation))]
+[JsonSerializable(typeof(MessageDeltaUsage))]
 [JsonSerializable(typeof(MessageStreamEvent))]
 [JsonSerializable(typeof(MessageStartEvent))]
 [JsonSerializable(typeof(ContentBlockStartEvent))]
