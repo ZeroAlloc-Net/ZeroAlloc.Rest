@@ -27,7 +27,8 @@ public static class AnthropicServiceCollectionExtensions
         configure(options);
         var policies = AnthropicClient.Policies(options);
 
-        services.TryAddSingleton(policies);
+        // Replace, not TryAdd: a second call must not keep the first call's retry count under its own headers.
+        services.Replace(ServiceDescriptor.Singleton(policies));
         var builder = services.AddRestResilience<IAnthropicMessagesApi, AnthropicMessagesApiClient, IAnthropicMessagesApiResilienceProxy>(
             (inner, sp) => new IAnthropicMessagesApiResilienceProxy(inner, sp.GetRequiredService<AnthropicMessagesApiResiliencePolicies>()),
             o =>

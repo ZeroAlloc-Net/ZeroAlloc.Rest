@@ -1,7 +1,9 @@
 namespace ZeroAlloc.Rest.Anthropic;
 
 /// <summary>
-/// Settings for <see cref="AnthropicClient"/>. The defaults are those of the Anthropic C# SDK 13.1.0.
+/// Settings for <see cref="AnthropicClient"/>. The timeout, retry count, base address and version default to those
+/// of the Anthropic C# SDK 13.1.0. The retry rules are this client's own: which statuses are retried, the backoff
+/// and its cap.
 /// </summary>
 public sealed class AnthropicClientOptions
 {

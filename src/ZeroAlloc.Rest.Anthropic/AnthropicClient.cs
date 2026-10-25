@@ -95,8 +95,13 @@ public sealed class AnthropicClient
                 }
 
                 var current = enumerator.Current;
-                if (current is ErrorEvent { Error: { } detail })
-                    throw new AnthropicApiException(new AnthropicApiError(detail.Type, detail.Message, 0, null, null));
+                if (current is ErrorEvent errorEvent)
+                {
+                    // An error event without its error object still ends the stream as an error.
+                    throw new AnthropicApiException(errorEvent.Error is { } detail
+                        ? new AnthropicApiError(detail.Type, detail.Message, 0, null, null)
+                        : Failure("error", "The stream sent an error event without details."));
+                }
 
                 stopped |= current is MessageStopEvent;
                 yield return current;

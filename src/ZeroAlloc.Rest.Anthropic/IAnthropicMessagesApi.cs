@@ -5,8 +5,9 @@ using ZeroAlloc.Results;
 namespace ZeroAlloc.Rest.Anthropic;
 
 /// <summary>
-/// The typed Messages API. Use it through <see cref="AnthropicClient"/>, which sets the headers, the timeout and
-/// the retry count, and turns a failed stream into an <see cref="AnthropicApiException"/>.
+/// The typed Messages API. It is internal so that <see cref="AnthropicClient"/> is the only way in: the facade sets
+/// the headers, the timeout and the retry count, and turns a failed stream into an <see cref="AnthropicApiException"/>.
+/// The generated client and its registration are internal with it.
 /// </summary>
 /// <remarks>
 /// A 429, a 529 and every other 5xx is retried, after the <c>retry-after</c> wait when the API sends one. Any other
@@ -14,7 +15,7 @@ namespace ZeroAlloc.Rest.Anthropic;
 /// </remarks>
 [ZeroAllocRestClient]
 [ErrorMapper(typeof(AnthropicErrorMapper))]
-public interface IAnthropicMessagesApi
+internal interface IAnthropicMessagesApi
 {
     /// <summary>Creates a message.</summary>
     /// <param name="request">The request.</param>

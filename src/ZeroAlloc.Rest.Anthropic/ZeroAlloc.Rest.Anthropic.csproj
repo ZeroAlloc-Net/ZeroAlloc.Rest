@@ -4,11 +4,6 @@
     <Description>A typed, AOT-compatible Anthropic Messages API client for .NET, built on ZeroAlloc.Rest: messages create and stream, tools, prompt caching and usage.</Description>
     <PackageTags>$(PackageTags);anthropic;claude;llm</PackageTags>
     <IsAotCompatible>true</IsAotCompatible>
-    <!--
-      The Resilience generator's policies class and DI extensions stay internal: AnthropicClientOptions.MaxRetries
-      and AddAnthropicClient are the public way to configure retries.
-    -->
-    <ZeroAllocGeneratedAccessibility>Internal</ZeroAllocGeneratedAccessibility>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../ZeroAlloc.Rest/ZeroAlloc.Rest.csproj" />

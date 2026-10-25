@@ -155,36 +155,103 @@ public sealed class ClientTests : IDisposable
         Assert.Equal(3, seen.Count);
     }
 
+    // Anthropic's real 401 body. Its message names the header, which is not a secret; a header's value is.
+    private const string Real401Body =
+        """{"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"},"request_id":"req_401"}""";
+
+    private const string FakeBearerToken = "sk-ant-oat-fake-456";
+
     [Fact]
     public async Task No_exception_text_contains_the_api_key()
     {
-        _handler.Always(() => Responses.Json(
-            HttpStatusCode.Unauthorized,
-            Responses.ErrorBody("authentication_error", "invalid authentication credentials", "req_401")));
-        var client = TestClients.Create(_http);
+        var texts = await FailureTextsAsync(TestClients.Create(_http));
 
-        var result = await client.CreateMessageAsync(TestClients.Request(), CancellationToken.None).WaitAsync(Bound);
-        var failure = await Assert.ThrowsAsync<AnthropicApiException>(() => TestClients.CollectAsync(client).WaitAsync(Bound));
+        foreach (var text in texts)
+        {
+            // Red: in Translate, pass new InvalidOperationException("x-api-key: sk-ant-test-123") as the inner
+            // exception, as a dump of the request headers would; failure.ToString() then holds the key.
+            Assert.DoesNotContain(TestClients.FakeKey, text, StringComparison.Ordinal);
+            // Red: the same mutation; the dump fragment "x-api-key: <value>" then appears.
+            Assert.DoesNotMatch(@"(?i)x-api-key\s*:\s*\S", text);
+        }
+    }
+
+    [Fact]
+    public async Task No_exception_text_contains_a_bearer_token()
+    {
+        _http.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", FakeBearerToken);
+        var texts = await FailureTextsAsync(TestClients.Create(_http, o => o.ApiKey = null));
+
+        foreach (var text in texts)
+        {
+            // Red: in Translate, pass new InvalidOperationException("Authorization: Bearer sk-ant-oat-fake-456")
+            // as the inner exception; failure.ToString() then holds the token.
+            Assert.DoesNotContain(FakeBearerToken, text, StringComparison.Ordinal);
+            // Red: the same mutation; the dump fragment "Authorization: <value>" then appears.
+            Assert.DoesNotMatch(@"(?i)authorization\s*:\s*\S", text);
+        }
+    }
+
+    // A 401 through both methods, and every text a caller could log from the failures.
+    private async Task<string[]> FailureTextsAsync(AnthropicClient client)
+    {
+        _handler.Always(() => Responses.Json(HttpStatusCode.Unauthorized, Real401Body));
+
+        var result = await client.CreateMessageAsync(TestClients.Request(), CancellationToken.None)
+            .WaitAsync(Bound).ConfigureAwait(false);
+        var failure = await Assert.ThrowsAsync<AnthropicApiException>(() => TestClients.CollectAsync(client).WaitAsync(Bound))
+            .ConfigureAwait(false);
 
         // Red: return a success for a 401; IsFailure is then false.
         Assert.True(result.IsFailure);
         // Red: map a 401 to Type "http_401", ignoring the body; this then differs.
         Assert.Equal("authentication_error", failure.Error.Type);
-        var texts = new[]
-        {
+        // Red: drop the message from the body read; the server's message is then empty.
+        Assert.Equal("invalid x-api-key", failure.Error.Message);
+        return
+        [
             result.Error.ToString(),
             new AnthropicApiException(result.Error).ToString(),
             failure.ToString(),
             failure.Error.ToString(),
-        };
-        foreach (var text in texts)
+        ];
+    }
+
+    [Fact]
+    public async Task A_caller_that_breaks_early_gets_no_stream_incomplete()
+    {
+        _handler.Then(() => Responses.Stream(Responses.FullStream()));
+        var client = TestClients.Create(_http);
+        MessageStreamEvent? first = null;
+
+        // Red: move the !stopped check into a finally around the loop; disposing after the break then throws here.
+        await foreach (var e in client.StreamMessageAsync(TestClients.Request(), CancellationToken.None).ConfigureAwait(false))
         {
-            // Red: in StreamMessageAsync, pass new InvalidOperationException(the HttpClient's
-            // DefaultRequestHeaders.ToString()) as the inner exception; failure.ToString() then holds the key.
-            Assert.DoesNotContain(TestClients.FakeKey, text, StringComparison.Ordinal);
-            // Red: the same mutation; the header dump then holds the header name.
-            Assert.DoesNotContain("x-api-key", text, StringComparison.OrdinalIgnoreCase);
+            first = e;
+            break;
         }
+
+        // Red: skip the first event in the facade; first is then a ContentBlockStartEvent.
+        Assert.IsType<MessageStartEvent>(first);
+    }
+
+    [Fact]
+    public async Task An_error_event_without_its_error_object_still_throws()
+    {
+        _handler.Then(() => Responses.Stream(
+            ("message_start", Responses.MessageStart),
+            ("error", """{"type":"error"}""")));
+        var client = TestClients.Create(_http);
+
+        // Red: match only ErrorEvent { Error: { } } in the facade; the event is then yielded and the stream ends
+        // with stream_incomplete instead.
+        var failure = await Assert.ThrowsAsync<AnthropicApiException>(() => TestClients.CollectAsync(client).WaitAsync(Bound));
+
+        // Red: the same mutation; Type is then "stream_incomplete".
+        Assert.Equal("error", failure.Error.Type);
+        // Red: build the fallback with an empty message; this then differs.
+        Assert.Equal("The stream sent an error event without details.", failure.Error.Message);
     }
 
     [Fact]
@@ -267,5 +334,27 @@ public sealed class ClientTests : IDisposable
         Assert.True(result.IsFailure);
         // Red: register the policies without MaxRetries, the attribute's MaxAttempts = 3 then applies.
         Assert.Single(_handler.Requests);
+    }
+
+    [Fact]
+    public async Task A_second_AddAnthropicClient_call_wins_over_the_first()
+    {
+        _handler.Always(() => Responses.Overloaded());
+        var services = new ServiceCollection();
+        services.AddAnthropicClient(o => o.ApiKey = "sk-ant-first-fake").ConfigurePrimaryHttpMessageHandler(() => _handler);
+        services.AddAnthropicClient(o =>
+        {
+            o.ApiKey = TestClients.FakeKey;
+            o.MaxRetries = 0;
+        }).ConfigurePrimaryHttpMessageHandler(() => _handler);
+        using var provider = services.BuildServiceProvider();
+
+        await provider.GetRequiredService<AnthropicClient>()
+            .CreateMessageAsync(TestClients.Request(), CancellationToken.None).WaitAsync(Bound);
+
+        // Red: register the policies with TryAddSingleton; the first call's MaxRetries 2 then gives 3 requests.
+        var request = Assert.Single(_handler.Requests);
+        // Red: drop headers.Remove(ApiKeyHeader) from ConfigureHttpClient; both keys are then sent.
+        Assert.Equal(TestClients.FakeKey, request.Headers["x-api-key"]);
     }
 }

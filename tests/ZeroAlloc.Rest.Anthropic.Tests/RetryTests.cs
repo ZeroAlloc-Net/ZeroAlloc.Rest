@@ -111,7 +111,8 @@ public sealed class RetryTests : IDisposable
 
         // Red: make IsTransient(AnthropicApiError) true for status 0; there are then 3 requests.
         Assert.Single(_handler.Requests);
-        // Red: the generated client returns a Transport failure; turning it into a throw fails this line.
+        // Guards the generated client, which returns a transport failure as a Result instead of throwing. It cannot
+        // be made red from this project: ZeroAlloc.Rest's generator owns that rule.
         Assert.True(result.IsFailure);
         // Red: map HttpErrorKind.Transport to "timeout"; this then differs.
         Assert.Equal("connection_error", result.Error.Type);
@@ -148,7 +149,7 @@ public sealed class RetryTests : IDisposable
         var failure = await Assert.ThrowsAsync<AnthropicApiException>(
             () => TestClients.CollectAsync(client, seen).WaitAsync(Bound));
 
-        // Red: let the IOException through unwrapped; ThrowsAsync above then fails on the type first.
+        // Red: build the IOException's AnthropicApiException without the exception as its inner one; this is then null.
         Assert.IsType<IOException>(failure.InnerException);
         // Red: name the dropped connection "timeout"; this then differs.
         Assert.Equal("connection_error", failure.Error.Type);

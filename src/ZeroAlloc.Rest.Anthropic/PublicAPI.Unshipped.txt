@@ -37,10 +37,6 @@ ZeroAlloc.Rest.Anthropic.AnthropicErrorMapper
 ZeroAlloc.Rest.Anthropic.AnthropicErrorMapper.AnthropicErrorMapper() -> void
 ZeroAlloc.Rest.Anthropic.AnthropicErrorMapper.Map(ZeroAlloc.Rest.HttpError! error) -> ZeroAlloc.Rest.Anthropic.AnthropicApiError!
 ZeroAlloc.Rest.Anthropic.AnthropicJson
-ZeroAlloc.Rest.Anthropic.AnthropicMessagesApiClient
-ZeroAlloc.Rest.Anthropic.AnthropicMessagesApiClient.AnthropicMessagesApiClient(System.Net.Http.HttpClient! httpClient, ZeroAlloc.Rest.IRestSerializer! serializer, ZeroAlloc.Rest.IHttpErrorMapper<ZeroAlloc.Rest.Anthropic.AnthropicApiError!>! anthropicApiErrorMapper) -> void
-ZeroAlloc.Rest.Anthropic.AnthropicMessagesApiClient.CreateMessageAsync(ZeroAlloc.Rest.Anthropic.MessageRequest! request, System.Threading.CancellationToken ct) -> System.Threading.Tasks.Task<ZeroAlloc.Results.Result<ZeroAlloc.Rest.Anthropic.MessageResponse!, ZeroAlloc.Rest.Anthropic.AnthropicApiError!>>!
-ZeroAlloc.Rest.Anthropic.AnthropicMessagesApiClient.StreamMessageAsync(ZeroAlloc.Rest.Anthropic.MessageRequest! request, System.Threading.CancellationToken ct) -> System.Collections.Generic.IAsyncEnumerable<ZeroAlloc.Rest.Anthropic.MessageStreamEvent!>!
 ZeroAlloc.Rest.Anthropic.AnthropicServiceCollectionExtensions
 ZeroAlloc.Rest.Anthropic.CacheControl
 ZeroAlloc.Rest.Anthropic.CacheControl.<Clone>$() -> ZeroAlloc.Rest.Anthropic.CacheControl!
@@ -104,14 +100,6 @@ ZeroAlloc.Rest.Anthropic.ErrorEvent.Equals(ZeroAlloc.Rest.Anthropic.ErrorEvent? 
 ZeroAlloc.Rest.Anthropic.ErrorEvent.Error.get -> ZeroAlloc.Rest.Anthropic.ErrorDetail!
 ZeroAlloc.Rest.Anthropic.ErrorEvent.Error.init -> void
 ZeroAlloc.Rest.Anthropic.ErrorEvent.ErrorEvent(ZeroAlloc.Rest.Anthropic.ErrorDetail! Error) -> void
-ZeroAlloc.Rest.Anthropic.GeneratedRestClientExtensions
-ZeroAlloc.Rest.Anthropic.IAnthropicMessagesApi
-ZeroAlloc.Rest.Anthropic.IAnthropicMessagesApi.CreateMessageAsync(ZeroAlloc.Rest.Anthropic.MessageRequest! request, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<ZeroAlloc.Results.Result<ZeroAlloc.Rest.Anthropic.MessageResponse!, ZeroAlloc.Rest.Anthropic.AnthropicApiError!>>!
-ZeroAlloc.Rest.Anthropic.IAnthropicMessagesApi.IsTransient(System.Exception! exception) -> bool
-ZeroAlloc.Rest.Anthropic.IAnthropicMessagesApi.IsTransient(ZeroAlloc.Rest.Anthropic.AnthropicApiError! error) -> bool
-ZeroAlloc.Rest.Anthropic.IAnthropicMessagesApi.RetryAfter(System.Exception! exception) -> System.TimeSpan?
-ZeroAlloc.Rest.Anthropic.IAnthropicMessagesApi.RetryAfter(ZeroAlloc.Rest.Anthropic.AnthropicApiError! error) -> System.TimeSpan?
-ZeroAlloc.Rest.Anthropic.IAnthropicMessagesApi.StreamMessageAsync(ZeroAlloc.Rest.Anthropic.MessageRequest! request, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<ZeroAlloc.Rest.Anthropic.MessageStreamEvent!>!
 ZeroAlloc.Rest.Anthropic.InputJsonDelta
 ZeroAlloc.Rest.Anthropic.InputJsonDelta.Deconstruct(out string! PartialJson) -> void
 ZeroAlloc.Rest.Anthropic.InputJsonDelta.Equals(ZeroAlloc.Rest.Anthropic.InputJsonDelta? other) -> bool
@@ -476,7 +464,6 @@ static ZeroAlloc.Rest.Anthropic.ErrorDetail.operator !=(ZeroAlloc.Rest.Anthropic
 static ZeroAlloc.Rest.Anthropic.ErrorDetail.operator ==(ZeroAlloc.Rest.Anthropic.ErrorDetail? left, ZeroAlloc.Rest.Anthropic.ErrorDetail? right) -> bool
 static ZeroAlloc.Rest.Anthropic.ErrorEvent.operator !=(ZeroAlloc.Rest.Anthropic.ErrorEvent? left, ZeroAlloc.Rest.Anthropic.ErrorEvent? right) -> bool
 static ZeroAlloc.Rest.Anthropic.ErrorEvent.operator ==(ZeroAlloc.Rest.Anthropic.ErrorEvent? left, ZeroAlloc.Rest.Anthropic.ErrorEvent? right) -> bool
-static ZeroAlloc.Rest.Anthropic.GeneratedRestClientExtensions.AddIAnthropicMessagesApi(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Action<ZeroAlloc.Rest.ZeroAllocClientOptions!>? configure = null) -> Microsoft.Extensions.DependencyInjection.IHttpClientBuilder!
 static ZeroAlloc.Rest.Anthropic.InputJsonDelta.operator !=(ZeroAlloc.Rest.Anthropic.InputJsonDelta? left, ZeroAlloc.Rest.Anthropic.InputJsonDelta? right) -> bool
 static ZeroAlloc.Rest.Anthropic.InputJsonDelta.operator ==(ZeroAlloc.Rest.Anthropic.InputJsonDelta? left, ZeroAlloc.Rest.Anthropic.InputJsonDelta? right) -> bool
 static ZeroAlloc.Rest.Anthropic.MessageDeltaBody.operator !=(ZeroAlloc.Rest.Anthropic.MessageDeltaBody? left, ZeroAlloc.Rest.Anthropic.MessageDeltaBody? right) -> bool
