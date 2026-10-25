@@ -34,3 +34,12 @@ ZRA005  | ZeroAlloc.Rest.Generator | Warning  | Route template and route paramet
 Rule ID | Category                 | Severity | Notes
 --------|--------------------------|----------|---------------------------------------------
 ZRA006  | ZeroAlloc.Rest.Generator | Warning  | No client can be generated for the interface
+
+## Release 3.4.0
+
+### New Rules
+
+Rule ID | Category                 | Severity | Notes
+--------|--------------------------|----------|------------------------------------------------------
+ZRA007  | ZeroAlloc.Rest.Generator | Error    | IAsyncEnumerable<T> and [EventStream] must go together
+ZRA008  | ZeroAlloc.Rest.Generator | Error    | Invalid [EventType] mapping

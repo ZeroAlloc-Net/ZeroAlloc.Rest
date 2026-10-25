@@ -2,8 +2,10 @@
 override ZeroAlloc.Rest.HttpError.Equals(object? obj) -> bool
 override ZeroAlloc.Rest.HttpError.GetHashCode() -> int
 override ZeroAlloc.Rest.HttpError.ToString() -> string!
+override ZeroAlloc.Rest.ServerSentEvent<T>.GetHashCode() -> int
 static ZeroAlloc.Rest.GeneratedRestClient.CreateBodyContentAsync<T>(ZeroAlloc.Rest.IRestSerializer! serializer, T value, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<System.Net.Http.HttpContent!>
 static ZeroAlloc.Rest.GeneratedRestClient.CreateStreamBodyContent(System.IO.Stream! body, string? mediaType) -> System.Net.Http.HttpContent!
+static ZeroAlloc.Rest.GeneratedRestClient.DeserializeEventDataAsync<T>(ZeroAlloc.Rest.IRestSerializer! serializer, ZeroAlloc.Rest.ServerSentEventReader! reader, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<T?>
 static ZeroAlloc.Rest.GeneratedRestClient.OpenResponseBodyAsync(System.Net.Http.HttpResponseMessage! response, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<System.IO.Stream!>
 static ZeroAlloc.Rest.GeneratedRestClient.ReadErrorBodyAsync(System.Net.Http.HttpContent! content, int maxBytes, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<(System.ReadOnlyMemory<byte> Body, bool Truncated)>
 static ZeroAlloc.Rest.GeneratedRestClient.ReadResponseStreamAsync(System.Net.Http.HttpContent! content, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<System.IO.Stream!>
@@ -11,6 +13,8 @@ static ZeroAlloc.Rest.GeneratedRestClient.WithMediaType(System.Net.Http.HttpCont
 static ZeroAlloc.Rest.HttpError.operator !=(ZeroAlloc.Rest.HttpError? left, ZeroAlloc.Rest.HttpError? right) -> bool
 static ZeroAlloc.Rest.HttpError.operator ==(ZeroAlloc.Rest.HttpError? left, ZeroAlloc.Rest.HttpError? right) -> bool
 static ZeroAlloc.Rest.HttpErrorExtensions.GetRetryAfter(this ZeroAlloc.Rest.HttpError! error, System.TimeProvider? timeProvider = null) -> System.TimeSpan?
+static ZeroAlloc.Rest.ServerSentEvent<T>.operator !=(ZeroAlloc.Rest.ServerSentEvent<T> left, ZeroAlloc.Rest.ServerSentEvent<T> right) -> bool
+static ZeroAlloc.Rest.ServerSentEvent<T>.operator ==(ZeroAlloc.Rest.ServerSentEvent<T> left, ZeroAlloc.Rest.ServerSentEvent<T> right) -> bool
 ZeroAlloc.Rest.Attributes.BodyAttribute
 ZeroAlloc.Rest.Attributes.BodyAttribute.BodyAttribute() -> void
 ZeroAlloc.Rest.Attributes.BodyAttribute.ContentType.get -> string?
@@ -21,6 +25,14 @@ ZeroAlloc.Rest.Attributes.DeleteAttribute.DeleteAttribute(string! route) -> void
 ZeroAlloc.Rest.Attributes.ErrorMapperAttribute
 ZeroAlloc.Rest.Attributes.ErrorMapperAttribute.ErrorMapperAttribute(System.Type! mapperType) -> void
 ZeroAlloc.Rest.Attributes.ErrorMapperAttribute.MapperType.get -> System.Type!
+ZeroAlloc.Rest.Attributes.EventStreamAttribute
+ZeroAlloc.Rest.Attributes.EventStreamAttribute.ErrorType.get -> System.Type?
+ZeroAlloc.Rest.Attributes.EventStreamAttribute.ErrorType.init -> void
+ZeroAlloc.Rest.Attributes.EventStreamAttribute.EventStreamAttribute() -> void
+ZeroAlloc.Rest.Attributes.EventTypeAttribute
+ZeroAlloc.Rest.Attributes.EventTypeAttribute.EventTypeAttribute(string! name, System.Type! type) -> void
+ZeroAlloc.Rest.Attributes.EventTypeAttribute.Name.get -> string!
+ZeroAlloc.Rest.Attributes.EventTypeAttribute.Type.get -> System.Type!
 ZeroAlloc.Rest.Attributes.FormBodyAttribute
 ZeroAlloc.Rest.Attributes.FormBodyAttribute.FormBodyAttribute() -> void
 ZeroAlloc.Rest.Attributes.GetAttribute
@@ -82,6 +94,12 @@ ZeroAlloc.Rest.HttpError.Message.get -> string?
 ZeroAlloc.Rest.HttpError.Message.init -> void
 ZeroAlloc.Rest.HttpError.StatusCode.get -> System.Net.HttpStatusCode
 ZeroAlloc.Rest.HttpError.StatusCode.init -> void
+ZeroAlloc.Rest.HttpErrorException
+ZeroAlloc.Rest.HttpErrorException.Error.get -> ZeroAlloc.Rest.HttpError!
+ZeroAlloc.Rest.HttpErrorException.HttpErrorException(ZeroAlloc.Rest.HttpError! error) -> void
+ZeroAlloc.Rest.HttpErrorException<TError>
+ZeroAlloc.Rest.HttpErrorException<TError>.HttpErrorException(ZeroAlloc.Rest.HttpError! error, TError mappedError) -> void
+ZeroAlloc.Rest.HttpErrorException<TError>.MappedError.get -> TError
 ZeroAlloc.Rest.HttpErrorExtensions
 ZeroAlloc.Rest.HttpErrorKind
 ZeroAlloc.Rest.HttpErrorKind.Deserialization = 3 -> ZeroAlloc.Rest.HttpErrorKind
@@ -104,3 +122,25 @@ ZeroAlloc.Rest.RestUrlBuilder.AppendQueryName(string! name) -> void
 ZeroAlloc.Rest.RestUrlBuilder.RestUrlBuilder() -> void
 ZeroAlloc.Rest.RestUrlBuilder.RestUrlBuilder(System.Span<char> initialBuffer) -> void
 ZeroAlloc.Rest.RestUrlBuilder.ToStringAndClear() -> string!
+ZeroAlloc.Rest.ServerSentEvent<T>
+ZeroAlloc.Rest.ServerSentEvent<T>.Data.get -> T
+ZeroAlloc.Rest.ServerSentEvent<T>.Data.init -> void
+ZeroAlloc.Rest.ServerSentEvent<T>.Deconstruct(out string? Event, out string? Id, out T Data) -> void
+ZeroAlloc.Rest.ServerSentEvent<T>.Equals(ZeroAlloc.Rest.ServerSentEvent<T> other) -> bool
+ZeroAlloc.Rest.ServerSentEvent<T>.Event.get -> string?
+ZeroAlloc.Rest.ServerSentEvent<T>.Event.init -> void
+ZeroAlloc.Rest.ServerSentEvent<T>.Id.get -> string?
+ZeroAlloc.Rest.ServerSentEvent<T>.Id.init -> void
+ZeroAlloc.Rest.ServerSentEvent<T>.ServerSentEvent() -> void
+ZeroAlloc.Rest.ServerSentEvent<T>.ServerSentEvent(string? Event, string? Id, T Data) -> void
+ZeroAlloc.Rest.ServerSentEventReader
+ZeroAlloc.Rest.ServerSentEventReader.Data.get -> System.ReadOnlyMemory<byte>
+ZeroAlloc.Rest.ServerSentEventReader.DisposeAsync() -> System.Threading.Tasks.ValueTask
+ZeroAlloc.Rest.ServerSentEventReader.EventName.get -> string!
+ZeroAlloc.Rest.ServerSentEventReader.EventNameEquals(System.ReadOnlySpan<byte> utf8) -> bool
+ZeroAlloc.Rest.ServerSentEventReader.LastEventId.get -> string?
+ZeroAlloc.Rest.ServerSentEventReader.ReadAsync(System.Threading.CancellationToken ct) -> System.Threading.Tasks.ValueTask<bool>
+ZeroAlloc.Rest.ServerSentEventReader.RetryMilliseconds.get -> int?
+ZeroAlloc.Rest.ServerSentEventReader.ServerSentEventReader(System.IO.Stream! stream) -> void
+~override ZeroAlloc.Rest.ServerSentEvent<T>.Equals(object obj) -> bool
+~override ZeroAlloc.Rest.ServerSentEvent<T>.ToString() -> string
