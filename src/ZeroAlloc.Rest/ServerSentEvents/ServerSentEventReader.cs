@@ -7,12 +7,25 @@ namespace ZeroAlloc.Rest;
 /// <summary>
 /// Reads a <c>text/event-stream</c> one event at a time, following the WHATWG event-stream rules.
 /// It scans bytes, not characters, and keeps its working memory in pooled buffers that
-/// <see cref="DisposeAsync"/> returns. The reader owns <c>stream</c> and disposes it with itself.
+/// <see cref="DisposeAsync"/> returns. The reader disposes only the <see cref="Stream"/> it was given;
+/// the caller owns and disposes the <c>HttpResponseMessage</c> that the stream came from.
 /// </summary>
 /// <remarks>
+/// <para>
 /// One deviation from the browser rule: the last event is dispatched when the stream ends without a
-/// blank line after it, where a browser would drop it. A server that closes the connection right
-/// after its last event is common, and losing that event is worse.
+/// blank line after it, where a browser would drop it. That includes an unterminated partial line at
+/// the end of the stream, which is read as a field line and, if it is a <c>data</c> line, delivered as
+/// an event. A server that closes the connection right after its last event is common, and losing
+/// that event is worse.
+/// </para>
+/// <para>
+/// Line and event size are unbounded, as with the BCL <c>SseParser</c>: a server can make the pooled
+/// buffers grow as large as it sends. Read only from servers you trust to bound their events.
+/// </para>
+/// <para>
+/// The reader is not thread-safe. Call <see cref="ReadAsync"/> one at a time, and do not let
+/// <see cref="DisposeAsync"/> overlap a <see cref="ReadAsync"/>.
+/// </para>
 /// </remarks>
 public sealed class ServerSentEventReader : IAsyncDisposable
 {
@@ -21,7 +34,7 @@ public sealed class ServerSentEventReader : IAsyncDisposable
 
     private readonly Stream _stream;
 
-    private byte[] _buf = ArrayPool<byte>.Shared.Rent(InitialBufferSize);
+    private byte[] _buf;
     private int _start;
     private int _end;
     private int _scanned; // bytes after _start already searched for a line end
@@ -30,21 +43,26 @@ public sealed class ServerSentEventReader : IAsyncDisposable
     private bool _eof;
     private bool _disposed;
 
-    private byte[] _data = ArrayPool<byte>.Shared.Rent(InitialBufferSize);
+    private byte[] _data;
     private int _dataLen;
     private int _dataLines;
 
-    private byte[] _name = ArrayPool<byte>.Shared.Rent(64);
+    private byte[] _name;
     private int _nameLen;
 
-    private byte[] _id = ArrayPool<byte>.Shared.Rent(64);
+    private byte[] _id;
     private int _idLen;
+    private bool _idSet;
 
-    /// <summary>Creates a reader over <paramref name="stream"/>, which the reader takes ownership of.</summary>
+    /// <summary>Creates a reader over <paramref name="stream"/>, which the reader disposes with itself.</summary>
     /// <param name="stream">The response body.</param>
     public ServerSentEventReader(Stream stream)
     {
         _stream = stream ?? throw new ArgumentNullException(nameof(stream));
+        _buf = ArrayPool<byte>.Shared.Rent(InitialBufferSize);
+        _data = ArrayPool<byte>.Shared.Rent(InitialBufferSize);
+        _name = ArrayPool<byte>.Shared.Rent(64);
+        _id = ArrayPool<byte>.Shared.Rent(64);
     }
 
     /// <summary>
@@ -60,7 +78,7 @@ public sealed class ServerSentEventReader : IAsyncDisposable
     /// The last <c>id:</c> the stream set. Like the browser's last event id it persists across
     /// events. It is <see langword="null"/> before any id.
     /// </summary>
-    public string? LastEventId => _idLen == 0 ? null : Encoding.UTF8.GetString(_id, 0, _idLen);
+    public string? LastEventId => _idSet ? Encoding.UTF8.GetString(_id, 0, _idLen) : null;
 
     /// <summary>The last valid <c>retry:</c> the stream set, in milliseconds; <see langword="null"/> before any.</summary>
     public int? RetryMilliseconds { get; private set; }
@@ -118,7 +136,7 @@ public sealed class ServerSentEventReader : IAsyncDisposable
         }
     }
 
-    /// <summary>Returns the pooled buffers and disposes the stream.</summary>
+    /// <summary>Returns the pooled buffers and disposes the stream. It must not overlap a <see cref="ReadAsync"/>.</summary>
     /// <returns>A task that completes when the stream is disposed.</returns>
     public ValueTask DisposeAsync()
     {
@@ -282,11 +300,12 @@ public sealed class ServerSentEventReader : IAsyncDisposable
                 Grow(ref _id, 0, value.Length);
                 value.CopyTo(_id);
                 _idLen = value.Length;
+                _idSet = true;
             }
         }
         else if (field.SequenceEqual("retry"u8))
         {
-            if (value.Length > 0 && IsAsciiDigits(value)
+            if (IsAsciiDigits(value)
                 && Utf8Parser.TryParse(value, out int ms, out _))
             {
                 RetryMilliseconds = ms;

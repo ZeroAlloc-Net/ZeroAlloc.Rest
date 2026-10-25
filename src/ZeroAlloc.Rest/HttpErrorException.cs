@@ -5,7 +5,6 @@ namespace ZeroAlloc.Rest;
 // RCS1194 asks for the parameterless and message-only constructors. They would build an exception
 // whose Error is null, and the only producer is generated code that always has the HttpError.
 #pragma warning disable RCS1194
-
 /// <summary>
 /// Thrown by an event-stream method when the server answers with a non-success status code, before
 /// the stream starts. A stream has no <c>Result</c> to carry the failure, so it throws.
@@ -27,7 +26,11 @@ public class HttpErrorException : HttpRequestException
     /// <summary>The failure. <see cref="HttpRequestException.StatusCode"/> is its status code.</summary>
     public HttpError Error { get; }
 }
+#pragma warning restore RCS1194
 
+// RCS1194 asks for the parameterless and message-only constructors. They would build an exception
+// whose Error is null, and the only producer is generated code that always has the HttpError.
+#pragma warning disable RCS1194
 /// <summary>
 /// An <see cref="HttpErrorException"/> whose <see cref="HttpError"/> was mapped to <typeparamref name="TError"/>.
 /// </summary>
@@ -46,3 +49,4 @@ public sealed class HttpErrorException<TError> : HttpErrorException
     /// <summary>The mapped error.</summary>
     public TError MappedError { get; }
 }
+#pragma warning restore RCS1194

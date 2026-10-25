@@ -141,7 +141,6 @@ public sealed class ServerSentEventReaderTests
 
         // Red: process the partial line at the end of each read instead of waiting for the line end.
         Assert.Equal("é😀", Encoding.UTF8.GetString(reader.Data.Span));
-        Assert.Equal(Encoding.UTF8.GetBytes("é😀"), reader.Data.ToArray());
     }
 
     [Theory]
@@ -166,6 +165,60 @@ public sealed class ServerSentEventReaderTests
 
         // Red: trim all leading whitespace from the value.
         Assert.Equal([(null, " two")], events);
+    }
+
+    [Theory]
+    [MemberData(nameof(ChunkSizes))]
+    public async Task A_data_line_with_a_newline_but_no_blank_line_is_delivered_at_the_end_of_the_stream(int chunk)
+    {
+        await using var reader = ReaderOver("data: b\n", chunk);
+
+        var events = await ReadAllAsync(reader);
+
+        // Red: stop dispatching a pending event at the end of the stream.
+        Assert.Equal([(null, "b")], events);
+    }
+
+    [Theory]
+    [MemberData(nameof(ChunkSizes))]
+    public async Task An_event_name_and_an_id_longer_than_their_initial_buffers_are_kept(int chunk)
+    {
+        var name = new string('n', 200);
+        var id = new string('i', 300);
+        await using var reader = ReaderOver($"event: {name}\nid: {id}\ndata: a\n\n", chunk);
+
+        Assert.True(await reader.ReadAsync(CancellationToken.None));
+
+        // Red: remove the Grow call for the name buffer; the 200 byte name overflows the 64 byte buffer.
+        Assert.Equal(name, reader.EventName);
+        Assert.True(reader.EventNameEquals(Encoding.UTF8.GetBytes(name)));
+        // Red: remove the Grow call for the id buffer; the 300 byte id overflows the 64 byte buffer.
+        Assert.Equal(id, reader.LastEventId);
+    }
+
+    [Theory]
+    [MemberData(nameof(ChunkSizes))]
+    public async Task An_empty_id_resets_the_last_event_id_to_the_empty_string(int chunk)
+    {
+        await using var reader = ReaderOver("id: 5\ndata: a\n\nid\ndata: b\n\n", chunk);
+
+        Assert.True(await reader.ReadAsync(CancellationToken.None));
+        Assert.Equal("5", reader.LastEventId);
+        Assert.True(await reader.ReadAsync(CancellationToken.None));
+
+        // Red: treat a zero length id as unset, so LastEventId returns null.
+        Assert.Equal("", reader.LastEventId);
+    }
+
+    [Fact]
+    public async Task No_id_field_leaves_LastEventId_null()
+    {
+        await using var reader = ReaderOver("data: a\n\n", 4096);
+
+        Assert.True(await reader.ReadAsync(CancellationToken.None));
+
+        // Red: initialise the id as set, so LastEventId returns "".
+        Assert.Null(reader.LastEventId);
     }
 
     [Fact]
@@ -283,7 +336,7 @@ public sealed class ServerSentEventReaderTests
 
         Assert.True(await reader.ReadAsync(CancellationToken.None));
 
-        // Red: drop IsAsciiDigits, then "-5" parses to -5; drop the length check, then "12x" parses to 12.
+        // Red: drop IsAsciiDigits, then "-5" parses to -5 and "12x" parses to 12.
         Assert.Equal(expected, reader.RetryMilliseconds);
     }
 
