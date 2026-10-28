@@ -6,14 +6,10 @@ namespace ZeroAlloc.Rest.Anthropic.Tests;
 
 /// <summary>
 /// Guards the recorded transcripts under <c>Transcripts/</c>: no secret in any file, and every expected transcript
-/// recorded in full. The folder is empty until the recorder has run against the real API.
+/// recorded in full.
 /// </summary>
 public sealed class TranscriptScrubTests
 {
-    private const string PendingRecording =
-        "No transcripts are recorded yet. Task 8 Step 4 records them; then delete this Skip. "
-        + "The test Recordings_lift_the_skip_on_the_three_files_check fails until it is gone.";
-
     private static readonly string Folder = Path.Combine(AppContext.BaseDirectory, "Transcripts");
 
     [Fact]
@@ -21,7 +17,10 @@ public sealed class TranscriptScrubTests
     {
         var key = Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY");
         var leaks = new List<string>();
-        foreach (var file in Files())
+        var files = Files();
+        // Red: break the copy so the output folder is empty; this then fails instead of scanning nothing.
+        Assert.NotEmpty(files);
+        foreach (var file in files)
         {
             foreach (var finding in Findings(File.ReadAllText(file), key))
                 leaks.Add($"{Path.GetFileName(file)}: {finding}");
@@ -48,7 +47,7 @@ public sealed class TranscriptScrubTests
         Assert.Empty(Findings("{\"status\":200,\"headers\":{\"request-id\":\"req_1\"}}", "hunter2"));
     }
 
-    [Fact(Skip = PendingRecording)]
+    [Fact]
     public void Every_transcript_has_its_three_files()
     {
         var missing = new List<string>();
@@ -67,19 +66,28 @@ public sealed class TranscriptScrubTests
     }
 
     [Fact]
-    public void Recordings_lift_the_skip_on_the_three_files_check()
+    public void The_output_copy_holds_exactly_the_recorded_files()
     {
-        var method = typeof(TranscriptScrubTests).GetMethod(nameof(Every_transcript_has_its_three_files));
-        Assert.NotNull(method);
-        var fact = method.GetCustomAttribute<FactAttribute>();
-        Assert.NotNull(fact);
-        var recorded = Files().Length > 0;
+        var source = typeof(TranscriptScrubTests).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
+            .Single(a => string.Equals(a.Key, "TranscriptsSourceDirectory", StringComparison.Ordinal)).Value;
+        Assert.NotNull(source);
+        string[] Data(string folder) => Directory.Exists(folder)
+            ? [.. Directory.GetFiles(folder).Select(Path.GetFileName).Where(n => !n!.EndsWith(".cs", StringComparison.Ordinal)).Order(StringComparer.Ordinal)!]
+            : [];
 
-        // Red: record a transcript while the Skip stays on Every_transcript_has_its_three_files; this then fails.
-        // Red: lift the Skip while Transcripts holds nothing, or the copy glob breaks; this then fails, so the
-        // scrub guard cannot pass over an empty folder once recordings are expected.
-        Assert.True(recorded == (fact.Skip is null),
-            "Delete the Skip on Every_transcript_has_its_three_files exactly when Transcripts holds recordings.");
+        var expected = Data(source);
+
+        // Red: hook ClearStaleTranscripts to CopyFilesToOutputDirectory again; it then deletes the copy and this is empty.
+        // Red: leave a stale file in the output Transcripts folder, or break the copy glob; the names then differ.
+        Assert.Equal(expected, Data(Folder));
+    }
+
+    [Fact]
+    public void The_output_folder_holds_the_recordings()
+    {
+        // Red: break the copy or hook the clear after the copy; the folder is then empty and this fails, so the
+        // scrub guard cannot scan nothing.
+        Assert.NotEmpty(Files());
     }
 
     private static void AddIfMissing(List<string> missing, string file)
