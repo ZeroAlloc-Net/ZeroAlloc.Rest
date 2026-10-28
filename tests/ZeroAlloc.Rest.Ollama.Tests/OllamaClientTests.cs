@@ -50,11 +50,11 @@ public sealed class OllamaClientTests
         // missing, so the read fails as a Deserialization error and IsSuccess is false.
         Assert.True(result.IsSuccess);
         var response = result.Value;
-        // Red: replace Model with "name" in EmbedAsync; the model then differs.
+        // Red: in OllamaClient.EmbedAsync, await _api.EmbedAsync and map a success value to `r.Value with { Model = "name" }`; the model then differs.
         Assert.Equal("all-minilm", response.Model);
-        // Red: replace Embeddings with an empty list in EmbedAsync; the count is then 0.
+        // Red: in OllamaClient.EmbedAsync, await _api.EmbedAsync and map a success value to `r.Value with { Embeddings = [] }`; the count is then 0.
         Assert.Equal(2, response.Embeddings.Count);
-        // Red: reverse the Embeddings list in EmbedAsync; the first vector is then the second.
+        // Red: in OllamaClient.EmbedAsync, await _api.EmbedAsync and map a success value to `r.Value with { Embeddings = [.. r.Value.Embeddings.Reverse()] }`; the first vector is then the second.
         Assert.Equal([0.010071029f, -0.0017594862f], response.Embeddings[0]);
         Assert.Equal([-0.0098027075f, 0.06042469f], response.Embeddings[1]);
         // Red: rename [JsonPropertyName("total_duration")] to "totalDuration"; the value is then null.
