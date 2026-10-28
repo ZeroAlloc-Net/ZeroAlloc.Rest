@@ -18,6 +18,7 @@ Source-generated, Native AOT-compatible REST client for .NET 8 and .NET 10.
 - [Serialization](serialization.md)
 - [Dependency Injection](dependency-injection.md)
 - [Native AOT](native-aot.md)
+- [Blazor WebAssembly](blazor-webassembly.md)
 - [OpenAPI Code Generation](openapi-codegen.md)
 - [Benchmarks](benchmarks.md)
 - [Testing](testing.md)
