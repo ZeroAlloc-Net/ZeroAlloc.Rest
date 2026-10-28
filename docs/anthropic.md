@@ -78,8 +78,8 @@ await foreach (var evt in client.StreamMessageAsync(request, ct))
 ```csharp
 using System.Text.Json;
 
-var schema = JsonSerializer.Deserialize<JsonElement>("""{"type":"object","properties":{"city":{"type":"string"}}}""");
-var tool = new ToolDefinition("get_weather", "Current weather for a city.", schema, null);
+using var doc = JsonDocument.Parse("""{"type":"object","properties":{"city":{"type":"string"}}}""");
+var tool = new ToolDefinition("get_weather", "Current weather for a city.", doc.RootElement.Clone(), null);
 
 var request = new MessageRequest { Model = model, MaxTokens = 1024, Messages = history, Tools = [tool] };
 ```
