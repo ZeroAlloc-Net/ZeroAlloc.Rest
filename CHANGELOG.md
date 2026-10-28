@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.6.1](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v3.6.0...v3.6.1) (2026-10-28)
+
+
+### Documentation
+
+* add Blazor WebAssembly page ([#502](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/502)) ([0e4db57](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/0e4db572200b97b61a5b7e589a12ccbee4027f1a))
+
 ## [3.6.0](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v3.5.0...v3.6.0) (2026-10-28)
 
 
