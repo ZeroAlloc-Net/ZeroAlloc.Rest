@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.5.0](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v3.4.0...v3.5.0) (2026-10-28)
+
+
+### Features
+
+* ZeroAlloc.Rest.Anthropic and ZeroAlloc.Rest.Ollama clients ([#497](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/497)) ([aa16af7](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/aa16af729e8a2669c6834ff6b753e51b04063170))
+
 ## [3.4.0](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v3.3.5...v3.4.0) (2026-10-25)
 
 
