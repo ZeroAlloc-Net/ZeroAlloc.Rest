@@ -46,11 +46,13 @@ public sealed class OllamaClientTests
         var result = await Client(handler).EmbedAsync(new EmbedRequest("all-minilm", ["a", "b"]));
 
         // Red: return Result<EmbedResponse, OllamaApiError>.Failure from EmbedAsync whatever the answer; IsSuccess is then false.
+        // Red: rename [JsonPropertyName("embeddings")] or [JsonPropertyName("model")] on EmbedResponse; the member is required and
+        // missing, so the read fails as a Deserialization error and IsSuccess is false.
         Assert.True(result.IsSuccess);
         var response = result.Value;
-        // Red: rename [JsonPropertyName("model")] on EmbedResponse to "name"; the model is then null.
+        // Red: replace Model with "name" in EmbedAsync; the model then differs.
         Assert.Equal("all-minilm", response.Model);
-        // Red: rename [JsonPropertyName("embeddings")] on EmbedResponse to "vectors"; Embeddings stays null, so this line throws NullReferenceException.
+        // Red: replace Embeddings with an empty list in EmbedAsync; the count is then 0.
         Assert.Equal(2, response.Embeddings.Count);
         // Red: reverse the Embeddings list in EmbedAsync; the first vector is then the second.
         Assert.Equal([0.010071029f, -0.0017594862f], response.Embeddings[0]);
