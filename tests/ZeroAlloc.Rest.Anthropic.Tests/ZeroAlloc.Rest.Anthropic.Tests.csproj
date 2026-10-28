@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="coverlet.collector">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <ProjectReference Include="../../src/ZeroAlloc.Rest.Anthropic/ZeroAlloc.Rest.Anthropic.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>TranscriptsSourceDirectory</_Parameter1>
+      <_Parameter2>$(MSBuildProjectDirectory)/Transcripts</_Parameter2>
+    </AssemblyAttribute>
+    <None Include="DocumentedExamples/**" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Transcripts/**" Exclude="Transcripts/**/*.cs" CopyToOutputDirectory="PreserveNewest" />
+    <Compile Include="../ZeroAlloc.Rest.Anthropic.Recorder/TranscriptPublisher.cs" Link="Support/TranscriptPublisher.cs" />
+  </ItemGroup>
+  <!-- PreserveNewest never removes a copy whose source is gone, so clear the output folder first. It has to run
+       before _CopyOutOfDateSourceItemsToOutputDirectory, which does the copy; after it, the clear deletes the copy. -->
+  <Target Name="ClearStaleTranscripts" BeforeTargets="_CopyOutOfDateSourceItemsToOutputDirectory">
+    <RemoveDir Directories="$(OutDir)Transcripts" />
+  </Target>
+</Project>
