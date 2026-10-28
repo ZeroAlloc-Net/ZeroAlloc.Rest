@@ -46,7 +46,7 @@ services.AddAnthropicClient(o => o.ApiKey = configuration["Anthropic:ApiKey"]);
 ```csharp
 var request = new MessageRequest
 {
-    Model = "claude-sonnet-4-5",
+    Model = "claude-sonnet-5-5",
     MaxTokens = 1024,
     System = "You answer in one sentence.",
     Messages = [new MessageParam(MessageRole.User, [new TextBlockParam("Why is the sky blue?")])],
@@ -76,7 +76,9 @@ await foreach (var evt in client.StreamMessageAsync(request, ct))
 ## Tools
 
 ```csharp
-var schema = JsonDocument.Parse("""{"type":"object","properties":{"city":{"type":"string"}}}""").RootElement;
+using System.Text.Json;
+
+var schema = JsonSerializer.Deserialize<JsonElement>("""{"type":"object","properties":{"city":{"type":"string"}}}""");
 var tool = new ToolDefinition("get_weather", "Current weather for a city.", schema, null);
 
 var request = new MessageRequest { Model = model, MaxTokens = 1024, Messages = history, Tools = [tool] };
@@ -119,7 +121,13 @@ Cancelling throws `OperationCanceledException` in both methods. The exception te
 
 ## Your own serializer
 
-`AnthropicJson.Context` is the source-generated `JsonSerializerContext` of every request and response type. To build your own typed client over the same types, use `new SystemTextJsonSerializer(AnthropicJson.Context)`.
+`AnthropicJson.Context` is the source-generated `JsonSerializerContext` of every request and response type. To build your own typed client over the same types, use it with the System.Text.Json serializer of ZeroAlloc.Rest:
+
+```csharp
+using ZeroAlloc.Rest.SystemTextJson;
+
+var serializer = new SystemTextJsonSerializer(AnthropicJson.Context);
+```
 
 ## Scope
 

@@ -53,7 +53,13 @@ This client does not retry. Add a resilience handler to the builder `AddOllamaCl
 
 ## Your own serializer
 
-`OllamaJson.Context` is the source-generated `JsonSerializerContext` of the request and response types. Use `new SystemTextJsonSerializer(OllamaJson.Context)` with your own typed client.
+`OllamaJson.Context` is the source-generated `JsonSerializerContext` of the request and response types. Use it with the System.Text.Json serializer of ZeroAlloc.Rest:
+
+```csharp
+using ZeroAlloc.Rest.SystemTextJson;
+
+var serializer = new SystemTextJsonSerializer(OllamaJson.Context);
+```
 
 ## Scope
 
