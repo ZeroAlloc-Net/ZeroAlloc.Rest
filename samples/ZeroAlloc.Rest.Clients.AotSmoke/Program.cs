@@ -100,8 +100,9 @@ using (var stub = new StubServer())
     var result = await client.CreateMessageAsync(request, cts.Token).ConfigureAwait(false);
     await serving.ConfigureAwait(false);
 
-    // Red: return Result.Failure from AnthropicClient.CreateMessageAsync whatever the answer. The stub is then never
-    // called, so the run ends in a 60 second timeout exception instead of this line, and still exits non-zero.
+    // Red: return Result.Failure from AnthropicClient.CreateMessageAsync whatever the answer. It fails slowly and not
+    // through Fail: the stub is never called, so `await serving` waits out the 60 second token and throws
+    // OperationCanceledException, which exits non-zero.
     if (!result.IsSuccess)
         return Fail($"Anthropic create returned {result.Error}");
 

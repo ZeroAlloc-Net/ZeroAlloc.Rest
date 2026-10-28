@@ -101,13 +101,17 @@ public sealed class TranscriptReplayTests : IDisposable
 
         // Red: drop `with { Stream = true }` from StreamMessageAsync; the body then lacks "stream":true.
         Assert.Equal(Read("stream-text.request.json"), Assert.Single(_handler.Requests).Body);
-        // Red: drop [EventType("ping", typeof(PingEvent))]; the ping is then skipped and the list is shorter.
-        // This one Red covers every lambda below on purpose: the missing ping shifts each later event one place up,
-        // so the lambda at the ping position and every one after it fails.
+        // Red: drop [EventType("ping", typeof(PingEvent))]. Observed with this xunit: the failure is an item comparison
+        // at the third lambda, which expects PingEvent and gets a ContentBlockDeltaEvent; the count check is not what
+        // fails. Lambdas 1 and 2 pass, so each later lambda that only names a type is held by the order, and the one
+        // that holds a value has its own Red below.
         Assert.Collection(
             seen,
+            // Red: rename [JsonPropertyName("id")] to "ident" in MessageResponse; the id then reads null.
             e => Assert.Equal("msg_011CgUNz2Qov5XApN6RXx56p", Assert.IsType<MessageStartEvent>(e).Message.Id),
-            e => Assert.Equal(0, Assert.IsType<ContentBlockStartEvent>(e).Index),
+            // The type is the check here: index 0 is also the default, so no rename of "index" turns this red. The
+            // injected block test holds the index, with its block at 1.
+            e => Assert.IsType<ContentBlockStartEvent>(e),
             e => Assert.IsType<PingEvent>(e),
             e => Assert.IsType<ContentBlockDeltaEvent>(e),
             e => Assert.IsType<ContentBlockDeltaEvent>(e),
@@ -198,7 +202,7 @@ public sealed class TranscriptReplayTests : IDisposable
         Assert.Equal(1, starts[1].Index);
         // Red: add [JsonDerivedType(typeof(ToolUseBlock), "future_block")] to ContentBlock; the block then reads as ToolUseBlock.
         Assert.Equal(typeof(ContentBlock), starts[1].ContentBlock.GetType());
-        // Red: two changes, as the stream checks one before this: map message_stop to PingEvent in
+        // Red: this takes TWO edits together, because the stream checks the stop itself first: map message_stop to PingEvent in
         // IAnthropicMessagesApi and replace `stopped |= current is MessageStopEvent;` with `stopped = true;` in
         // AnthropicClient; the last event is then a PingEvent.
         Assert.IsType<MessageStopEvent>(seen[^1]);
