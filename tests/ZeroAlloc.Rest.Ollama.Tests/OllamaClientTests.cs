@@ -1,4 +1,5 @@
 using System.Net;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace ZeroAlloc.Rest.Ollama.Tests;
@@ -44,14 +45,14 @@ public sealed class OllamaClientTests
 
         var result = await Client(handler).EmbedAsync(new EmbedRequest("all-minilm", ["a", "b"]));
 
-        // Red: rename [JsonPropertyName("embeddings")] on EmbedResponse to "vectors"; Embeddings is then null and IsSuccess false.
+        // Red: return Result<EmbedResponse, OllamaApiError>.Failure from EmbedAsync whatever the answer; IsSuccess is then false.
         Assert.True(result.IsSuccess);
         var response = result.Value;
         // Red: rename [JsonPropertyName("model")] on EmbedResponse to "name"; the model is then null.
         Assert.Equal("all-minilm", response.Model);
-        // Red: change the stub body to hold one vector; the count is then 1.
+        // Red: rename [JsonPropertyName("embeddings")] on EmbedResponse to "vectors"; Embeddings stays null, so this line throws NullReferenceException.
         Assert.Equal(2, response.Embeddings.Count);
-        // Red: swap the two vectors in the stub body; the first values then differ.
+        // Red: reverse the Embeddings list in EmbedAsync; the first vector is then the second.
         Assert.Equal([0.010071029f, -0.0017594862f], response.Embeddings[0]);
         Assert.Equal([-0.0098027075f, 0.06042469f], response.Embeddings[1]);
         // Red: rename [JsonPropertyName("total_duration")] to "totalDuration"; the value is then null.
@@ -69,11 +70,102 @@ public sealed class OllamaClientTests
 
         var result = await Client(handler).EmbedAsync(new EmbedRequest("x", ["a"]));
 
-        // Red: stub a 200 with the documented body; IsFailure is then false.
+        // Red: have EmbedAsync turn every failure into Result.Success of an empty response; IsFailure is then false.
         Assert.True(result.IsFailure);
         // Red: build the error with status 0 in Map; the status then differs.
         Assert.Equal(404, result.Error.Status);
         // Red: compare ValueTextEquals to "message" in ReadMessage; the text is then the HTTP 404 fallback.
         Assert.Equal("model \"x\" not found", result.Error.Message);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.BadGateway, "<html><body>502 Bad Gateway</body></html>")]
+    [InlineData(HttpStatusCode.InternalServerError, "")]
+    [InlineData(HttpStatusCode.InternalServerError, """{"error":""")]
+    [InlineData(HttpStatusCode.InternalServerError, """{"detail":"no error member"}""")]
+    [InlineData(HttpStatusCode.InternalServerError, """{"error":{"code":1}}""")]
+    [InlineData(HttpStatusCode.InternalServerError, "[1,2]")]
+    public async Task A_body_without_an_error_text_falls_back_to_the_status(HttpStatusCode status, string body)
+    {
+        var handler = new StubHandler(status, body);
+
+        var result = await Client(handler).EmbedAsync(new EmbedRequest("m", ["a"]));
+
+        // Red: have EmbedAsync turn every failure into Result.Success of an empty response; IsFailure is then false.
+        Assert.True(result.IsFailure);
+        // Red: let ReadMessage return string.Empty for a body that is not an object, or stop catching JsonException;
+        // the "[1,2]" row then gets an empty message and the malformed row throws.
+        // Red: build the fallback error with status 0 in Map; the status then differs.
+        Assert.Equal((int)status, result.Error.Status);
+        // Red: change the fallback text in Map to "failed"; the message then differs.
+        Assert.Equal($"Ollama answered HTTP {(int)status} without an error body.", result.Error.Message);
+    }
+
+    [Fact]
+    public async Task A_transport_failure_maps_to_its_message()
+    {
+        var http = new HttpClient(new FailingHandler(new HttpRequestException("connection refused")))
+        {
+            BaseAddress = new Uri("http://ollama.test/"),
+        };
+
+        var result = await OllamaClient.Create(http).EmbedAsync(new EmbedRequest("m", ["a"]));
+
+        // Red: have EmbedAsync turn every failure into Result.Success of an empty response; IsFailure is then false.
+        Assert.True(result.IsFailure);
+        // Red: drop the Transport arm of Map so it falls to the body arm; the message is then the fallback text.
+        Assert.Equal("connection refused", result.Error.Message);
+    }
+
+    [Fact]
+    public async Task A_timeout_maps_to_status_zero()
+    {
+        var http = new HttpClient(new FailingHandler(new TaskCanceledException("timed out", new TimeoutException())))
+        {
+            BaseAddress = new Uri("http://ollama.test/"),
+        };
+
+        var result = await OllamaClient.Create(http).EmbedAsync(new EmbedRequest("m", ["a"]));
+
+        // Red: have EmbedAsync turn every failure into Result.Success of an empty response; IsFailure is then false.
+        Assert.True(result.IsFailure);
+        // Red: build the Timeout error with status 408 instead of 0; the status then differs.
+        Assert.Equal(0, result.Error.Status);
+        // Red: drop the Timeout arm of Map so it falls to the body arm; the message is then the fallback text.
+        Assert.Equal("timed out", result.Error.Message);
+    }
+
+    [Fact]
+    public async Task A_success_body_that_is_not_json_maps_to_a_deserialization_error()
+    {
+        var handler = new StubHandler(HttpStatusCode.OK, "not json");
+
+        var result = await Client(handler).EmbedAsync(new EmbedRequest("m", ["a"]));
+
+        // Red: have EmbedAsync turn every failure into Result.Success of an empty response; IsFailure is then false.
+        Assert.True(result.IsFailure);
+        // Red: build the Deserialization error with status 0; the status is then not 200.
+        Assert.Equal(200, result.Error.Status);
+        // Red: drop the Deserialization arm of Map so it falls to the body arm; the message is then the fallback text.
+        Assert.DoesNotContain("without an error body", result.Error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AddOllamaClient_resolves_a_client_that_sends_to_the_configured_address()
+    {
+        var handler = new StubHandler(HttpStatusCode.OK, DocumentedResponse);
+        var services = new ServiceCollection();
+        services.AddOllamaClient(o => o.BaseAddress = new Uri("http://configured.test:1234/"))
+            .ConfigurePrimaryHttpMessageHandler(_ => handler);
+        await using var provider = services.BuildServiceProvider();
+
+        var result = await provider.GetRequiredService<OllamaClient>().EmbedAsync(new EmbedRequest("all-minilm", ["a", "b"]));
+
+        // Red: leave out the TryAddTransient of OllamaClient; GetRequiredService above then throws.
+        Assert.True(result.IsSuccess);
+        // Red: drop "o.BaseAddress = options.BaseAddress" in AddOllamaClient; the host is then not configured.test.
+        Assert.Equal(new Uri("http://configured.test:1234/api/embed"), handler.Uri);
+        // Red: drop "o.UseSerializer(OllamaClient.Serializer)"; the body is then not written with the context.
+        Assert.Equal("""{"model":"all-minilm","input":["a","b"]}""", handler.Body);
     }
 }

@@ -23,26 +23,34 @@ using (var stub = new StubServer())
     var result = await client.EmbedAsync(new EmbedRequest("all-minilm", ["a", "b"]), cts.Token).ConfigureAwait(false);
     await serving.ConfigureAwait(false);
 
+    // Red: return Result.Failure from OllamaClient.EmbedAsync whatever the answer.
     if (!result.IsSuccess)
-    {
-        Console.Error.WriteLine($"AOT smoke: FAIL — Ollama embed returned {result.Error}");
-        return 1;
-    }
+        return Fail($"Ollama embed returned {result.Error}");
 
     var response = result.Value;
-    if (!string.Equals(response.Model, "all-minilm", StringComparison.Ordinal) || response.Embeddings.Count != 2
-        || response.Embeddings[1][1] != 0.06042469f || response.PromptEvalCount != 8)
-    {
-        Console.Error.WriteLine("AOT smoke: FAIL — Ollama embed response was not read as documented");
-        return 1;
-    }
+    // Red: build the response with Model = "x" in EmbedAsync.
+    if (!string.Equals(response.Model, "all-minilm", StringComparison.Ordinal))
+        return Fail("Ollama embed read the wrong model");
 
-    if (!stub.LastRequest.StartsWith("POST /api/embed ", StringComparison.Ordinal)
-        || !stub.LastRequest.EndsWith("""{"model":"all-minilm","input":["a","b"]}""", StringComparison.Ordinal))
-    {
-        Console.Error.WriteLine($"AOT smoke: FAIL — Ollama embed request was not written as documented: {stub.LastRequest}");
-        return 1;
-    }
+    // Red: keep only the first embedding in EmbedAsync.
+    if (response.Embeddings.Count != 2)
+        return Fail("Ollama embed read the wrong number of embeddings");
+
+    // Red: reverse the Embeddings list in EmbedAsync.
+    if (response.Embeddings[1][1] != 0.06042469f)
+        return Fail("Ollama embed read the wrong vector values");
+
+    // Red: build the response with PromptEvalCount = 0 in EmbedAsync.
+    if (response.PromptEvalCount != 8)
+        return Fail("Ollama embed read the wrong prompt_eval_count");
+
+    // Red: change [Post("api/embed")] to [Post("api/embeddings")] in IOllamaApi.
+    if (!stub.LastRequest.StartsWith("POST /api/embed ", StringComparison.Ordinal))
+        return Fail($"Ollama embed sent the wrong request line: {stub.LastRequest}");
+
+    // Red: rename [JsonPropertyName("input")] to "inputs" in EmbedRequest.
+    if (!stub.LastRequest.EndsWith("""{"model":"all-minilm","input":["a","b"]}""", StringComparison.Ordinal))
+        return Fail($"Ollama embed wrote the wrong body: {stub.LastRequest}");
 }
 
 using (var stub = new StubServer())
@@ -57,12 +65,24 @@ using (var stub = new StubServer())
     var result = await client.EmbedAsync(new EmbedRequest("x", ["a"]), cts.Token).ConfigureAwait(false);
     await serving.ConfigureAwait(false);
 
-    if (!result.IsFailure || result.Error.Status != 404 || !string.Equals(result.Error.Message, "model \"x\" not found", StringComparison.Ordinal))
-    {
-        Console.Error.WriteLine("AOT smoke: FAIL — Ollama error body was not mapped through the registered client");
-        return 1;
-    }
+    // Red: have EmbedAsync turn every failure into Result.Success of an empty response.
+    if (!result.IsFailure)
+        return Fail("Ollama error answer was not a failure");
+
+    // Red: build the fallback error with status 0 in OllamaErrorMapper.Map.
+    if (result.Error.Status != 404)
+        return Fail($"Ollama error status was {result.Error.Status}");
+
+    // Red: compare ValueTextEquals to "message" in OllamaErrorMapper.ReadMessage.
+    if (!string.Equals(result.Error.Message, "model \"x\" not found", StringComparison.Ordinal))
+        return Fail($"Ollama error message was {result.Error.Message}");
 }
 
 Console.WriteLine("AOT smoke: OK");
 return 0;
+
+static int Fail(string message)
+{
+    Console.Error.WriteLine($"AOT smoke: FAIL — {message}");
+    return 1;
+}
