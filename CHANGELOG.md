@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.6.0](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v3.5.0...v3.6.0) (2026-10-28)
+
+
+### Features
+
+* target net8.0 alongside net10.0 ([#499](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/499)) ([41a6bff](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/41a6bff2e43928a07d127d2b4e1f789b58704294))
+
 ## [3.5.0](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v3.4.0...v3.5.0) (2026-10-28)
 
 
