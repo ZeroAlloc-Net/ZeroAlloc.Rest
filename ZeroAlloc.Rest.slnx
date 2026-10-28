@@ -10,9 +10,11 @@
     <Project Path="src/ZeroAlloc.Rest.Resilience/ZeroAlloc.Rest.Resilience.csproj" />
     <Project Path="src/ZeroAlloc.Rest.DependencyInjection/ZeroAlloc.Rest.DependencyInjection.csproj" />
     <Project Path="src/ZeroAlloc.Rest.Anthropic/ZeroAlloc.Rest.Anthropic.csproj" />
+    <Project Path="src/ZeroAlloc.Rest.Ollama/ZeroAlloc.Rest.Ollama.csproj" />
   </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/ZeroAlloc.Rest.AotSmoke/ZeroAlloc.Rest.AotSmoke.csproj" />
+    <Project Path="samples/ZeroAlloc.Rest.Clients.AotSmoke/ZeroAlloc.Rest.Clients.AotSmoke.csproj" />
     <Project Path="samples/ZeroAlloc.Rest.CoreOnly.AotSmoke/ZeroAlloc.Rest.CoreOnly.AotSmoke.csproj" />
     <Project Path="samples/ZeroAlloc.Rest.MemoryPack.AotSmoke/ZeroAlloc.Rest.MemoryPack.AotSmoke.csproj" />
     <Project Path="samples/ZeroAlloc.Rest.MessagePack.AotSmoke/ZeroAlloc.Rest.MessagePack.AotSmoke.csproj" />
@@ -28,5 +30,6 @@
     <Project Path="tests/ZeroAlloc.Rest.Resilience.Tests/ZeroAlloc.Rest.Resilience.Tests.csproj" />
     <Project Path="tests/ZeroAlloc.Rest.Anthropic.Tests/ZeroAlloc.Rest.Anthropic.Tests.csproj" />
     <Project Path="tests/ZeroAlloc.Rest.Anthropic.Recorder/ZeroAlloc.Rest.Anthropic.Recorder.csproj" />
+    <Project Path="tests/ZeroAlloc.Rest.Ollama.Tests/ZeroAlloc.Rest.Ollama.Tests.csproj" />
   </Folder>
 </Solution>
