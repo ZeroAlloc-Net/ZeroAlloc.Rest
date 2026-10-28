@@ -85,6 +85,9 @@ builder.Services.AddIUserApi(options =>
 .AddPolicyHandler(retryPolicy);
 ```
 
+In Blazor WebAssembly, a scoped service injected into a handler is not the instance your components
+see; see [Blazor WebAssembly](blazor-webassembly.md#handler-scope-with-ihttpclientfactory).
+
 ### Named `HttpClient`
 
 The named `HttpClient` is called after the interface's name within its namespace: `IUserApi`, or

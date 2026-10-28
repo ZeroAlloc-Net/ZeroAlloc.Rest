@@ -554,6 +554,9 @@ The generated `AddSerializers`, called by `Add{I}` and `AddRestResilience`, regi
 
 ## Streaming responses
 
+> In a Blazor WebAssembly app, whether the browser delivers the body as it arrives depends on the
+> target framework; see [Blazor WebAssembly](blazor-webassembly.md#response-streaming).
+
 By default a generated call sends with `HttpCompletionOption.ResponseContentRead`: `HttpClient` reads
 the whole response body into its own buffer, which is not pooled, and the serializer then reads that
 copy. Set `StreamResponses` to skip the copy. The call then sends with
@@ -600,6 +603,9 @@ connection lost mid-body as `Transport` when streaming; to retry that too, also 
 `Kind is HttpErrorKind.Deserialization && Exception is IOException`.
 
 ## Server-sent events
+
+> In the browser, events stream by default on .NET 10 and need a per-request opt-in on .NET 8; see
+> [Blazor WebAssembly](blazor-webassembly.md#response-streaming).
 
 A method that returns `IAsyncEnumerable<T>` and carries `[EventStream]` reads a `text/event-stream`
 response one event at a time. Each event's `data:` is deserialized by the client's serializer, so it
