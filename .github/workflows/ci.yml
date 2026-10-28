@@ -130,6 +130,62 @@ jobs:
         # A hang is killed after two minutes and fails the step with exit code 124.
         run: timeout --kill-after=10s 120s ./aot-out/ZeroAlloc.Rest.AotSmoke
 
+  aot-smoke-clients:
+    runs-on: ubuntu-latest
+    # A typical run takes about a minute; a hung publish or smoke fails well before the default six hours.
+    timeout-minutes: 15
+    # Publishes samples/ZeroAlloc.Rest.Clients.AotSmoke with PublishAot=true and fails on any trim or
+    # AOT warning. Drives the provider clients, Anthropic and Ollama, over a loopback socket through
+    # their generated clients and source-generated JSON contexts.
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          # Installs the SDK global.json pins. Without it the job never installs
+          # that SDK at all and only works when the runner image happens to ship one
+          # satisfying the pin, which is how a publish failed on a lagging image.
+          global-json-file: global.json
+          dotnet-version: '10.0.x'
+
+      - name: Install AOT native toolchain
+        # NativeAOT links with clang and the zlib headers. The runner image ships clang, so apt
+        # runs only for what is missing. apt has no network timeout of its own: a stalled mirror
+        # used to hang this step until the job timed out. See ZeroAlloc-Net/.github#47.
+        timeout-minutes: 5
+        run: |
+          missing=""
+          command -v clang >/dev/null || missing="$missing clang"
+          dpkg -s zlib1g-dev >/dev/null 2>&1 || missing="$missing zlib1g-dev"
+          if [ -z "$missing" ]; then
+            echo "clang and zlib1g-dev are already installed"
+            exit 0
+          fi
+          echo "Installing:$missing"
+          apt_opts="-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30"
+          sudo apt-get $apt_opts update
+          sudo apt-get $apt_opts install -y $missing
+
+      - name: Restore
+        run: dotnet restore samples/ZeroAlloc.Rest.Clients.AotSmoke/ZeroAlloc.Rest.Clients.AotSmoke.csproj
+
+      - name: Publish AOT
+        # The smoke must publish with no trim or AOT warning at all.
+        run: |
+          set -o pipefail
+          dotnet publish samples/ZeroAlloc.Rest.Clients.AotSmoke/ZeroAlloc.Rest.Clients.AotSmoke.csproj -r linux-x64 -c Release -o ./aot-clients-out 2>&1 | tee publish.log
+          if grep -E "warning IL[0-9]+" publish.log; then
+            echo "::error::The clients AOT smoke has trim or AOT warnings."
+            exit 1
+          fi
+
+      - name: Run AOT binary
+        # A hang is killed after two minutes and fails the step with exit code 124.
+        run: timeout --kill-after=10s 120s ./aot-clients-out/ZeroAlloc.Rest.Clients.AotSmoke
+
   aot-smoke-core:
     runs-on: ubuntu-latest
     # A typical run takes about a minute; a hung publish or smoke fails well before the default six hours.
