@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
     <!-- Suppress NU1608: Microsoft.CodeAnalysis.CSharp.SourceGenerators.Testing.XUnit 1.1.2 internally
          references Roslyn 3.8.0 but we resolve 4.x — this is intentional and safe. -->
     <!-- MA0006/MA0074: string comparison style in test assertions -->
@@ -15,7 +16,10 @@
     </PackageReference>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.SourceGenerators.Testing.XUnit" />
-    <PackageReference Include="Basic.Reference.Assemblies.Net100" />
+    <PackageReference Include="Basic.Reference.Assemblies.Net100" Condition="'$(TargetFramework)' == 'net10.0'" />
+    <PackageReference Include="Basic.Reference.Assemblies.Net80" Condition="'$(TargetFramework)' == 'net8.0'" />
+    <!-- What a net8.0 consumer of ZeroAlloc.Rest.SystemTextJson compiles against; see TargetFrameworkReferences. -->
+    <PackageReference Include="System.Text.Json" Condition="'$(TargetFramework)' == 'net8.0'" />
     <ProjectReference Include="../../src/ZeroAlloc.Rest.Generator/ZeroAlloc.Rest.Generator.csproj" />
     <ProjectReference Include="../../src/ZeroAlloc.Rest/ZeroAlloc.Rest.csproj" />
     <ProjectReference Include="../../src/ZeroAlloc.Rest.DependencyInjection/ZeroAlloc.Rest.DependencyInjection.csproj" />

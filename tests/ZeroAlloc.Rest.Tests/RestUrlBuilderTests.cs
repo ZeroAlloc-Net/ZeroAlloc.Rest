@@ -70,6 +70,27 @@ public sealed class RestUrlBuilderTests
         Assert.Equal(string.Equals(url, value, StringComparison.Ordinal), ReferenceEquals(url, value));
     }
 
+    // Theory data goes through xUnit's serializer, which does not keep an unpaired surrogate as it
+    // is, so these are checked here, straight from the strings. On net8.0 the builder escapes with
+    // its own code instead of Uri.TryEscapeDataString, which .NET 9 added.
+    [Fact]
+    public void UnpairedSurrogates_AreEscapedAsEscapeDataString()
+    {
+        foreach (var value in new[] { "\uD800", "\uDC00", "x\uD800/y", "\uD83D/\uDE00", "a\uDBFFb", "\uDC00\uD800", "😀\uD800" })
+        {
+            foreach (var size in new[] { 0, 3, 256 })
+            {
+                var escaped = new RestUrlBuilder(new char[size]);
+                escaped.AppendEscaped(value);
+                Assert.Equal(Uri.EscapeDataString(value), escaped.ToStringAndClear());
+
+                var path = new RestUrlBuilder(new char[size]);
+                path.AppendPathEscaped(value);
+                Assert.Equal(EscapePathAt6e79d98(value), path.ToStringAndClear());
+            }
+        }
+    }
+
     [Fact]
     public void AValueAfterOtherText_IsNotReturnedAlone()
     {

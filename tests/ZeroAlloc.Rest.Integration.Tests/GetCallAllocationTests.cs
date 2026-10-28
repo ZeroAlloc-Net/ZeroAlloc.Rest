@@ -29,8 +29,8 @@ public sealed class GetCallAllocationTests
     // same Accept header and builds the same URL allocates the same 1,688 B, as the second test
     // pins. The 136 B is HttpClient's per-header cost: setting Accept on DefaultRequestHeaders
     // allocates the same, because SendAsync merges the defaults into each request. Kept by
-    // design, see #441.
-    private const int GeneratedGetBytesPerCall = 1_688;
+    // design, see #441. net8.0 adds what its HttpClient costs more; see RuntimeAllocation.
+    private const int GeneratedGetBytesPerCall = 1_688 + RuntimeAllocation.HttpClientSendExtraBytes;
 
     private static readonly byte[] UserJson = Encoding.UTF8.GetBytes("""{"id":1,"name":"Alice"}""");
 

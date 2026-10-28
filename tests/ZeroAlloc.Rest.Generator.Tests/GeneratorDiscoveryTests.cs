@@ -70,7 +70,7 @@ public class GeneratorDiscoveryTests
         var compilation = CSharpCompilation.Create(
             "TestAssembly",
             new[] { CSharpSyntaxTree.ParseText(source) },
-            Basic.Reference.Assemblies.Net100.References.All
+            TargetFrameworkReferences.All
                 .Append(MetadataReference.CreateFromFile(attributesAssembly.Location)),
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
 

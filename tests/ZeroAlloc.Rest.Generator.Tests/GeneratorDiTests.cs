@@ -127,7 +127,7 @@ public class GeneratorDiTests
         var compilation = CSharpCompilation.Create(
             "TestAssembly",
             new[] { CSharpSyntaxTree.ParseText(source) },
-            Basic.Reference.Assemblies.Net100.References.All
+            TargetFrameworkReferences.All
                 .Append(MetadataReference.CreateFromFile(AttributesAssembly.Location))
                 .Append(MetadataReference.CreateFromFile(typeof(ZeroAlloc.Rest.DependencyInjection.DependencyInjectionMarker).Assembly.Location)),
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));

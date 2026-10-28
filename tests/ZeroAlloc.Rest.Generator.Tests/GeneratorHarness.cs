@@ -12,7 +12,7 @@ internal static class GeneratorHarness
 {
     internal static readonly MetadataReference[] References =
     [
-        .. Basic.Reference.Assemblies.Net100.References.All,
+        .. TargetFrameworkReferences.All,
         MetadataReference.CreateFromFile(typeof(ZeroAlloc.Rest.HttpError).Assembly.Location),
         MetadataReference.CreateFromFile(typeof(ZeroAlloc.Results.Result<,>).Assembly.Location),
         MetadataReference.CreateFromFile(typeof(ZeroAlloc.Collections.HeapPooledList<>).Assembly.Location),

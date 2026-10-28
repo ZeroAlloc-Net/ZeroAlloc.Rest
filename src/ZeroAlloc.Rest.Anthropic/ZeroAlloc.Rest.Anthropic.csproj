@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
     <PackageId>ZeroAlloc.Rest.Anthropic</PackageId>
     <Description>A typed, AOT-compatible Anthropic Messages API client for .NET, built on ZeroAlloc.Rest: messages create and stream, tools, prompt caching and usage.</Description>
     <PackageTags>$(PackageTags);anthropic;claude;llm</PackageTags>

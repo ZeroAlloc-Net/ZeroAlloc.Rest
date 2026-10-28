@@ -14,7 +14,7 @@ public class RouteTemplateAnalyzerTests
 {
     private static readonly MetadataReference[] References =
     [
-        .. Basic.Reference.Assemblies.Net100.References.All,
+        .. TargetFrameworkReferences.All,
         MetadataReference.CreateFromFile(typeof(ZeroAlloc.Rest.HttpError).Assembly.Location),
         MetadataReference.CreateFromFile(typeof(ZeroAlloc.Collections.HeapPooledList<>).Assembly.Location),
         MetadataReference.CreateFromFile(typeof(Microsoft.Extensions.DependencyInjection.IServiceCollection).Assembly.Location),

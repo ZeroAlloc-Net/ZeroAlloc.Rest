@@ -1,10 +1,20 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
     <IsAotCompatible>true</IsAotCompatible>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../ZeroAlloc.Rest/ZeroAlloc.Rest.csproj" />
     <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" PrivateAssets="all" />
+  </ItemGroup>
+  <!--
+    net8.0 ships System.Text.Json 8, which lacks APIs the serializer's consumers use, such as
+    JsonStringEnumMemberName and the JsonSourceGenerationOptions properties added in 9. The package
+    brings the same System.Text.Json and source generator net10.0 has inbox, so both targets behave
+    alike. On net10.0 the inbox copy is used.
+  -->
+  <ItemGroup Condition="!$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net10.0'))">
+    <PackageReference Include="System.Text.Json" />
   </ItemGroup>
   <ItemGroup>
     <AdditionalFiles Include="PublicAPI.Shipped.txt" />

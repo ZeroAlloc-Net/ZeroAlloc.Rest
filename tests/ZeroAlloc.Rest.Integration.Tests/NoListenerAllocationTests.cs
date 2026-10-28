@@ -45,9 +45,10 @@ public sealed class NoListenerAllocationTests
     // The bytes each whole generated call allocates, measured on .NET 10 x64, Release, through a
     // synchronous stub that returns an empty 200: HttpClient, the request and its Accept header,
     // the response, and what the generated code adds. Each equals the same call written by hand.
-    private const int PingBytesPerCall = 1_136;
-    private const int PathBytesPerCall = 1_352;
-    private const int BodyBytesPerCall = 1_848;
+    // net8.0 adds what its HttpClient costs more; see RuntimeAllocation.
+    private const int PingBytesPerCall = 1_136 + RuntimeAllocation.HttpClientSendExtraBytes;
+    private const int PathBytesPerCall = 1_352 + RuntimeAllocation.HttpClientSendExtraBytes;
+    private const int BodyBytesPerCall = 1_848 + RuntimeAllocation.HttpClientSendExtraBytes;
 
     [OptimizedBuildFact]
     public void GeneratedCall_AllocatesNoMoreThanHandWritten_WithNothingListening()
@@ -84,7 +85,7 @@ public sealed class NoListenerAllocationTests
 
     // The value that needs escaping costs its escaped string on both sides.
     [OptimizedBuildTheory]
-    [InlineData("plain", 1_400)]
+    [InlineData("plain", 1_400 + RuntimeAllocation.HttpClientSendExtraBytes)]
     [InlineData("needs escaping/ü", 2_280)]
     public void GeneratedCallWithQueryParameters_AllocatesNoMoreThanHandWritten(string q, int bytesPerCall)
     {

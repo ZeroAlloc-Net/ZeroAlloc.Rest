@@ -37,3 +37,16 @@ internal static class SynchronousCall
         throw new InvalidOperationException("The call did not complete synchronously, so not all its allocations were on this thread.");
     }
 }
+
+internal static class RuntimeAllocation
+{
+    // net8.0's HttpClient.SendAsync allocates 8 B a call more than net10.0's. Measured with a bare
+    // HttpClient over a synchronous stub handler and no ZeroAlloc code at all: 1,072 B on .NET 8
+    // against 1,064 B on .NET 10, x64, Release. The budgets measured on .NET 10 add it on net8.0;
+    // the gates against a hand-written call hold the generated code to the same cost on both.
+#if NET10_0_OR_GREATER
+    internal const int HttpClientSendExtraBytes = 0;
+#else
+    internal const int HttpClientSendExtraBytes = 8;
+#endif
+}
