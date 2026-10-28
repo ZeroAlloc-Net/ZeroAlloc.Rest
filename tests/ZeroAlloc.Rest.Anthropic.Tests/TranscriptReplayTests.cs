@@ -73,7 +73,8 @@ public sealed class TranscriptReplayTests : IDisposable
         Assert.Equal(created, usage.CacheCreationInputTokens);
         // Red: rename [JsonPropertyName("cache_read_input_tokens")] in Usage; this then reads null.
         Assert.Equal(read, usage.CacheReadInputTokens);
-        // Red: rename [JsonPropertyName("ephemeral_5m_input_tokens")] in CacheCreation; this then reads 0.
+        // Red: rename [JsonPropertyName("ephemeral_5m_input_tokens")] in CacheCreation; this then reads null. All four
+        // cases fail, since the others expect 0, but only cache-write, where `created` is 14402, shows the value is read.
         Assert.Equal(created, usage.CacheCreation!.Ephemeral5mInputTokens);
         if (text is not null)
         {
@@ -101,6 +102,8 @@ public sealed class TranscriptReplayTests : IDisposable
         // Red: drop `with { Stream = true }` from StreamMessageAsync; the body then lacks "stream":true.
         Assert.Equal(Read("stream-text.request.json"), Assert.Single(_handler.Requests).Body);
         // Red: drop [EventType("ping", typeof(PingEvent))]; the ping is then skipped and the list is shorter.
+        // This one Red covers every lambda below on purpose: the missing ping shifts each later event one place up,
+        // so the lambda at the ping position and every one after it fails.
         Assert.Collection(
             seen,
             e => Assert.Equal("msg_011CgUNz2Qov5XApN6RXx56p", Assert.IsType<MessageStartEvent>(e).Message.Id),
@@ -172,6 +175,9 @@ public sealed class TranscriptReplayTests : IDisposable
     {
         var recorded = Read("stream-text.response.sse");
         const string Marker = "event: ping\n";
+        // Guard of the injected input, not of production code: no production change reaches it. If a re-recording
+        // changed the stream so it holds no ping, the Replace below would inject nothing and the test would pass
+        // without testing anything. Red: change Marker to "event: pong\n"; this then fails.
         Assert.Contains(Marker, recorded, StringComparison.Ordinal);
         const string Injected =
             "event: future_event\ndata: {\"type\":\"future_event\",\"x\":1}\n\n"
@@ -190,7 +196,11 @@ public sealed class TranscriptReplayTests : IDisposable
         Assert.Equal(2, starts.Count);
         // Red: rename [JsonPropertyName("index")] to "idx" in ContentBlockStartEvent; the injected block then reads 0.
         Assert.Equal(1, starts[1].Index);
+        // Red: add [JsonDerivedType(typeof(ToolUseBlock), "future_block")] to ContentBlock; the block then reads as ToolUseBlock.
         Assert.Equal(typeof(ContentBlock), starts[1].ContentBlock.GetType());
+        // Red: two changes, as the stream checks one before this: map message_stop to PingEvent in
+        // IAnthropicMessagesApi and replace `stopped |= current is MessageStopEvent;` with `stopped = true;` in
+        // AnthropicClient; the last event is then a PingEvent.
         Assert.IsType<MessageStopEvent>(seen[^1]);
     }
 
