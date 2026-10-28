@@ -70,6 +70,53 @@ public sealed class RestUrlBuilderTests
         Assert.Equal(string.Equals(url, value, StringComparison.Ordinal), ReferenceEquals(url, value));
     }
 
+    // Fixed expectations, so the escaping is pinned whatever runtime runs the test: on net8.0 the
+    // builder escapes with its own code, and the tests above only compare it with that runtime's
+    // Uri.EscapeDataString. The values are given as escapes, not literals, so they reach the builder
+    // unchanged.
+    [Fact]
+    public void Escaping_WritesTheRfc3986Form()
+    {
+        (string Value, string Escaped)[] cases =
+        [
+            ("a b", "a%20b"),
+            ("\u00FC", "%C3%BC"),
+            ("\uD83D\uDE00", "%F0%9F%98%80"),
+            ("\uD800", "%EF%BF%BD"),
+            (":/?#[]@!$&'()*+,;=", "%3A%2F%3F%23%5B%5D%40%21%24%26%27%28%29%2A%2B%2C%3B%3D"),
+        ];
+        foreach (var (value, escaped) in cases)
+        {
+            foreach (var size in new[] { 0, 3, 256 })
+            {
+                var builder = new RestUrlBuilder(new char[size]);
+                builder.AppendEscaped(value);
+                Assert.Equal(escaped, builder.ToStringAndClear());
+            }
+        }
+    }
+
+    // Theory data goes through xUnit's serializer, which does not keep an unpaired surrogate as it
+    // is, so these are checked here, straight from the strings. On net8.0 the builder escapes with
+    // its own code instead of Uri.TryEscapeDataString, which .NET 9 added.
+    [Fact]
+    public void UnpairedSurrogates_AreEscapedAsEscapeDataString()
+    {
+        foreach (var value in new[] { "\uD800", "\uDC00", "x\uD800/y", "\uD83D/\uDE00", "a\uDBFFb", "\uDC00\uD800", "😀\uD800" })
+        {
+            foreach (var size in new[] { 0, 3, 256 })
+            {
+                var escaped = new RestUrlBuilder(new char[size]);
+                escaped.AppendEscaped(value);
+                Assert.Equal(Uri.EscapeDataString(value), escaped.ToStringAndClear());
+
+                var path = new RestUrlBuilder(new char[size]);
+                path.AppendPathEscaped(value);
+                Assert.Equal(EscapePathAt6e79d98(value), path.ToStringAndClear());
+            }
+        }
+    }
+
     [Fact]
     public void AValueAfterOtherText_IsNotReturnedAlone()
     {

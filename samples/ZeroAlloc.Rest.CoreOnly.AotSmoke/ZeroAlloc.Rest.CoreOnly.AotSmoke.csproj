@@ -5,6 +5,7 @@
     fails the build if any Microsoft.Extensions assembly is referenced. See #336.
   -->
   <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
     <OutputType>Exe</OutputType>
     <IsPackable>false</IsPackable>
     <PublishAot>true</PublishAot>

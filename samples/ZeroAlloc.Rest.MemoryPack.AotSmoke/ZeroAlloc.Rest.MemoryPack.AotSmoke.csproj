@@ -10,6 +10,7 @@
     of any code, that does not come from a member of MemoryPack.Core.
   -->
   <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
     <OutputType>Exe</OutputType>
     <RootNamespace>ZeroAlloc.Rest.MemoryPackAotSmoke</RootNamespace>
     <IsPackable>false</IsPackable>

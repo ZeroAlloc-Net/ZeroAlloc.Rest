@@ -129,7 +129,7 @@ public class GeneratorAccessibilityTests
         var compilation = CSharpCompilation.Create(
             "TestAssembly",
             new[] { CSharpSyntaxTree.ParseText(source) },
-            Basic.Reference.Assemblies.Net100.References.All.Concat(RuntimeReferences),
+            TargetFrameworkReferences.All.Concat(RuntimeReferences),
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
 
         CSharpGeneratorDriver

@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
     <PackageId>ZeroAlloc.Rest.Resilience</PackageId>
     <Description>Wires ZeroAlloc.Rest clients through ZeroAlloc.Resilience proxies. Annotate a [ZeroAllocRestClient] interface with [Retry]/[Timeout]/[CircuitBreaker]; call AddRestResilience to register the resilience-wrapped HTTP client.</Description>
     <Version>0.0.0-local</Version>

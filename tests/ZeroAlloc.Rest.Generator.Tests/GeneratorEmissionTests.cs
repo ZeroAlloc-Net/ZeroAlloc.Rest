@@ -414,7 +414,7 @@ public class GeneratorEmissionTests
         var compilation = CSharpCompilation.Create(
             "TestAssembly",
             new[] { CSharpSyntaxTree.ParseText(source) },
-            Basic.Reference.Assemblies.Net100.References.All
+            TargetFrameworkReferences.All
                 .Append(MetadataReference.CreateFromFile(AttributesAssembly.Location))
                 .Append(MetadataReference.CreateFromFile(typeof(Microsoft.Extensions.DependencyInjection.IServiceCollection).Assembly.Location))
                 .Append(MetadataReference.CreateFromFile(typeof(Microsoft.Extensions.DependencyInjection.HttpClientFactoryServiceCollectionExtensions).Assembly.Location))
@@ -781,7 +781,7 @@ public class GeneratorEmissionTests
         var compilation = CSharpCompilation.Create(
             "TestAssembly",
             new[] { CSharpSyntaxTree.ParseText(source) },
-            Basic.Reference.Assemblies.Net100.References.All
+            TargetFrameworkReferences.All
                 .Append(MetadataReference.CreateFromFile(AttributesAssembly.Location))
                 .Append(MetadataReference.CreateFromFile(ResultsAssembly.Location))
                 .Append(MetadataReference.CreateFromFile(typeof(Microsoft.Extensions.DependencyInjection.IServiceCollection).Assembly.Location))
@@ -946,7 +946,7 @@ public class GeneratorEmissionTests
         var compilation = CSharpCompilation.Create(
             "TestAssembly",
             new[] { CSharpSyntaxTree.ParseText(source) },
-            Basic.Reference.Assemblies.Net100.References.All
+            TargetFrameworkReferences.All
                 .Append(MetadataReference.CreateFromFile(AttributesAssembly.Location)),
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
 
@@ -995,7 +995,7 @@ public class GeneratorEmissionTests
         var compilation = CSharpCompilation.Create(
             "TestAssembly",
             new[] { CSharpSyntaxTree.ParseText(source) },
-            Basic.Reference.Assemblies.Net100.References.All
+            TargetFrameworkReferences.All
                 .Append(MetadataReference.CreateFromFile(AttributesAssembly.Location)),
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
 
@@ -1015,7 +1015,7 @@ public class GeneratorEmissionTests
         var compilation = CSharpCompilation.Create(
             "TestAssembly",
             new[] { CSharpSyntaxTree.ParseText(source) },
-            Basic.Reference.Assemblies.Net100.References.All
+            TargetFrameworkReferences.All
                 .Append(MetadataReference.CreateFromFile(AttributesAssembly.Location))
                 .Append(MetadataReference.CreateFromFile(ResultsAssembly.Location)),
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));

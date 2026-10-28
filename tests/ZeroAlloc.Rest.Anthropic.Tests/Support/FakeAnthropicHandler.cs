@@ -8,7 +8,12 @@ namespace ZeroAlloc.Rest.Anthropic.Tests.Support;
 /// </summary>
 internal sealed class FakeAnthropicHandler : HttpMessageHandler
 {
+#if NET9_0_OR_GREATER
     private readonly Lock _gate = new();
+#else
+    // System.Threading.Lock arrived in .NET 9; a plain object is the monitor on net8.0.
+    private readonly object _gate = new();
+#endif
     private readonly Queue<Func<CancellationToken, Task<HttpResponseMessage>>> _queued = new();
     private readonly List<RecordedRequest> _requests = [];
     private Func<CancellationToken, Task<HttpResponseMessage>>? _fallback;

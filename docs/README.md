@@ -8,7 +8,7 @@ description: Source-generated, AOT-compatible REST client for .NET
 
 # ZeroAlloc.Rest
 
-Source-generated, Native AOT-compatible REST client for .NET 10+.
+Source-generated, Native AOT-compatible REST client for .NET 8 and .NET 10.
 
 ## Pages
 

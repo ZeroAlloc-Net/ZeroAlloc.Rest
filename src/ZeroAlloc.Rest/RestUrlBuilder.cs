@@ -162,7 +162,11 @@ public ref struct RestUrlBuilder
         if (value.IsEmpty)
             return;
         int written;
+#if NET9_0_OR_GREATER
         while (!Uri.TryEscapeDataString(value, _chars[_length..], out written))
+#else
+        while (!Internal.UriDataEscaper.TryEscapeDataString(value, _chars[_length..], out written))
+#endif
             Grow(value.Length);
         _length += written;
     }

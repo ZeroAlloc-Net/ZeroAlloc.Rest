@@ -25,7 +25,7 @@ public class GeneratorDependencyInjectionTests
     // Core, Results, Collections and the BCL: exactly what a core-only consumer compiles against.
     private static readonly MetadataReference[] CoreOnly =
     [
-        .. Basic.Reference.Assemblies.Net100.References.All,
+        .. TargetFrameworkReferences.All,
         MetadataReference.CreateFromFile(typeof(ZeroAlloc.Rest.HttpError).Assembly.Location),
         MetadataReference.CreateFromFile(typeof(ZeroAlloc.Results.Result<,>).Assembly.Location),
         MetadataReference.CreateFromFile(typeof(ZeroAlloc.Collections.HeapPooledList<>).Assembly.Location),
@@ -100,7 +100,7 @@ public class GeneratorDependencyInjectionTests
         var compilation = CSharpCompilation.Create(
             "DuplicateDependencyInjectionMarkerAssembly",
             [CSharpSyntaxTree.ParseText(source)],
-            Basic.Reference.Assemblies.Net100.References.All,
+            TargetFrameworkReferences.All,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
 
         using var ms = new System.IO.MemoryStream();

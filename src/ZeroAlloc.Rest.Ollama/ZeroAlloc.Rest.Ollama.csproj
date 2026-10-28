@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
     <PackageId>ZeroAlloc.Rest.Ollama</PackageId>
     <Description>A typed, AOT-compatible Ollama embed client for .NET, built on ZeroAlloc.Rest: POST /api/embed.</Description>
     <PackageTags>$(PackageTags);ollama;embeddings;llm</PackageTags>

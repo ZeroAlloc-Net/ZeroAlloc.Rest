@@ -15,6 +15,7 @@
     It is a development dependency, so it never flows to the consumer's own consumers.
   -->
   <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
     <PackageId>ZeroAlloc.Rest.Tools.MSBuild</PackageId>
     <Description>MSBuild task for ZeroAlloc.Rest: generates a [ZeroAllocRestClient] interface from an OpenAPI 3.x spec for each &lt;ZeroAllocApiSpec&gt; item, as part of the build.</Description>
     <PackageTags>$(PackageTags);openapi;msbuild;codegen</PackageTags>

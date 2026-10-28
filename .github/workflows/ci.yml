@@ -26,7 +26,11 @@ jobs:
           # that SDK at all and only works when the runner image happens to ship one
           # satisfying the pin, which is how a publish failed on a lagging image.
           global-json-file: global.json
-          dotnet-version: '10.0.x'
+          # The runtime packages and their tests target net8.0 and net10.0, so the tests need
+          # both runtimes. The 10.0 SDK builds net8.0 on its own; only the 8.0 runtime is added.
+          dotnet-version: |
+            8.0.x
+            10.0.x
 
       - name: Restore tools
         run: dotnet tool restore

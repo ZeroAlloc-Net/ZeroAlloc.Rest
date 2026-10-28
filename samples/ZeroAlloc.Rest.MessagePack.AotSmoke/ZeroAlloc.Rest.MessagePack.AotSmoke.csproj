@@ -11,6 +11,7 @@
     IL warning, of any code, that does not come from a member of MessagePack.
   -->
   <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
     <OutputType>Exe</OutputType>
     <RootNamespace>ZeroAlloc.Rest.MessagePackAotSmoke</RootNamespace>
     <IsPackable>false</IsPackable>

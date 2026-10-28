@@ -26,6 +26,8 @@ dotnet add package ZeroAlloc.Rest.SystemTextJson
 
 The source generator ships inside `ZeroAlloc.Rest`. The other two give you the `IHttpClientFactory` registration and the JSON serializer used below.
 
+Every runtime package targets net8.0 and net10.0. Build with the .NET 10 SDK, whose compiler the source generator needs, whichever of the two your project targets. On net8.0, `ZeroAlloc.Rest.SystemTextJson` brings the System.Text.Json 10 package, so both targets serialize alike.
+
 ## Quick start
 
 ```csharp
