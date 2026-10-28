@@ -150,6 +150,37 @@ public sealed class OllamaClientTests
         Assert.DoesNotContain("without an error body", result.Error.Message, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("""{"model":"all-minilm"}""")]
+    [InlineData("""{"embeddings":[[0.1]]}""")]
+    [InlineData("{}")]
+    public async Task A_success_body_missing_a_required_member_is_a_deserialization_error(string body)
+    {
+        var handler = new StubHandler(HttpStatusCode.OK, body);
+
+        var result = await Client(handler).EmbedAsync(new EmbedRequest("all-minilm", ["a"]));
+
+        // Red: set RespectRequiredConstructorParameters = false in OllamaJsonContext; the body then reads as a success
+        // with a null Embeddings or Model, and IsFailure is false.
+        Assert.True(result.IsFailure);
+        // Red: build the Deserialization error with status 0 in Map; the status then differs.
+        Assert.Equal(200, result.Error.Status);
+    }
+
+    [Fact]
+    public async Task The_optional_durations_and_count_may_be_absent()
+    {
+        var handler = new StubHandler(HttpStatusCode.OK, """{"model":"m","embeddings":[[0.5]]}""");
+
+        var result = await Client(handler).EmbedAsync(new EmbedRequest("m", ["a"]));
+
+        // Red: add JsonRequired to the total_duration property of EmbedResponse; IsSuccess is then false.
+        Assert.True(result.IsSuccess);
+        Assert.Null(result.Value.TotalDuration);
+        Assert.Null(result.Value.LoadDuration);
+        Assert.Null(result.Value.PromptEvalCount);
+    }
+
     [Fact]
     public async Task AddOllamaClient_resolves_a_client_that_sends_to_the_configured_address()
     {
