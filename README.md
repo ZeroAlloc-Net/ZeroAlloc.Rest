@@ -72,6 +72,7 @@ The generator writes `UserApiClient`, a sealed class implementing `IUserApi`, at
 - **Tracing and metrics** on the BCL `ActivitySource` and `Meter`, ready for OpenTelemetry: [Telemetry](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/blob/main/docs/telemetry.md).
 - **OpenAPI import**: generate the interface, models and JSON context from a spec with the `zeroalloc generate` CLI or an MSBuild item: [OpenAPI code generation](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/blob/main/docs/openapi-codegen.md).
 - **Retry, timeout, circuit breaker and rate limiting** with `ZeroAlloc.Rest.Resilience` and [ZeroAlloc.Resilience](https://github.com/ZeroAlloc-Net/ZeroAlloc.Resilience): [Resilience](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/blob/main/docs/resilience.md).
+- **LLM clients**: `ZeroAlloc.Rest.Anthropic` for the Anthropic Messages API, with streaming, tools and prompt caching, and `ZeroAlloc.Rest.Ollama` for Ollama embeddings: [Anthropic](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/blob/main/docs/anthropic.md), [Ollama](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/blob/main/docs/ollama.md).
 
 ## Performance
 
