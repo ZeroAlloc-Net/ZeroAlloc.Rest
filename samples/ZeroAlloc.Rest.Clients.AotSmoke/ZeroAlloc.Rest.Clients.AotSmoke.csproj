@@ -12,6 +12,16 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- The Anthropic stub serves two recordings from the test project. They are embedded at build time so the
+         published binary needs no file next to it, and the recordings stay in one place, so the smoke cannot
+         drift from them. -->
+    <EmbeddedResource Include="..\..\tests\ZeroAlloc.Rest.Anthropic.Tests\Transcripts\text.request.json" LogicalName="text.request.json" />
+    <EmbeddedResource Include="..\..\tests\ZeroAlloc.Rest.Anthropic.Tests\Transcripts\text.response.json" LogicalName="text.response.json" />
+    <EmbeddedResource Include="..\..\tests\ZeroAlloc.Rest.Anthropic.Tests\Transcripts\stream-text.request.json" LogicalName="stream-text.request.json" />
+    <EmbeddedResource Include="..\..\tests\ZeroAlloc.Rest.Anthropic.Tests\Transcripts\stream-text.response.sse" LogicalName="stream-text.response.sse" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- The provider clients under test; each brings the Rest runtime, serializer and registration packages. -->
     <ProjectReference Include="..\..\src\ZeroAlloc.Rest.Anthropic\ZeroAlloc.Rest.Anthropic.csproj" />
     <ProjectReference Include="..\..\src\ZeroAlloc.Rest.Ollama\ZeroAlloc.Rest.Ollama.csproj" />

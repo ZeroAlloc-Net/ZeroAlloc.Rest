@@ -21,14 +21,14 @@ internal sealed class StubServer : IDisposable
 
     public string LastRequest { get; private set; } = "";
 
-    public async Task ServeAsync(int status, string json, CancellationToken ct)
+    public async Task ServeAsync(int status, string json, CancellationToken ct, string contentType = "application/json")
     {
         using var client = await _listener.AcceptTcpClientAsync(ct).ConfigureAwait(false);
         var stream = client.GetStream();
         LastRequest = await ReadRequestAsync(stream, ct).ConfigureAwait(false);
         var body = Encoding.UTF8.GetBytes(json);
         var head = Encoding.ASCII.GetBytes(
-            $"HTTP/1.1 {status} Stub\r\nContent-Type: application/json\r\nContent-Length: {body.Length}\r\nConnection: close\r\n\r\n");
+            $"HTTP/1.1 {status} Stub\r\nContent-Type: {contentType}\r\nContent-Length: {body.Length}\r\nConnection: close\r\n\r\n");
         await stream.WriteAsync(head, ct).ConfigureAwait(false);
         await stream.WriteAsync(body, ct).ConfigureAwait(false);
     }
