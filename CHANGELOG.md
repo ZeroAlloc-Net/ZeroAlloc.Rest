@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.6.2](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v3.6.1...v3.6.2) (2026-10-30)
+
+
+### Tests
+
+* restore the 32 KB payload in the MemoryPack allocation gates ([#511](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/511)) ([b4b2691](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/b4b26916193038042d6c63aa918c6b238278d1d1)), closes [#448](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/448)
+
 ## [3.6.1](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v3.6.0...v3.6.1) (2026-10-28)
 
 
