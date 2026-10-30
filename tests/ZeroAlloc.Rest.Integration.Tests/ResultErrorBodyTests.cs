@@ -15,6 +15,9 @@ public interface ISmallCapApi
 {
     [Get("/users/{id}/result")]
     Task<Result<UserDto, HttpError>> GetUserResultAsync(int id, CancellationToken ct = default);
+
+    [Get("/users/{id}")]
+    Task<UserDto> GetUserAsync(int id, CancellationToken ct = default);
 }
 
 [ZeroAllocRestClient(MaxErrorBodyBytes = 0)]
@@ -22,6 +25,9 @@ public interface INoErrorBodyApi
 {
     [Get("/users/{id}/result")]
     Task<Result<UserDto, HttpError>> GetUserResultAsync(int id, CancellationToken ct = default);
+
+    [Delete("/users/{id}")]
+    Task DeleteUserAsync(int id, CancellationToken ct = default);
 }
 
 // Issue #298: an HttpError carries the error response's headers, content headers included, its
@@ -216,6 +222,86 @@ public sealed class ResultErrorBodyTests
         Assert.Equal(HttpErrorKind.Deserialization, result.Error.Kind);
         Assert.True(result.Error.Body.IsEmpty);
         Assert.Equal("application/json", result.Error.ContentType);
+    }
+
+    // Issue #514: a throwing method's error status throws HttpErrorException, which is an
+    // HttpRequestException with the status code and carries the same HttpError a Result method returns.
+    [Fact]
+    public async Task ThrowingMethod_StatusError_ThrowsHttpErrorException_WithTheBody()
+    {
+        using var httpClient = CreateHttpClient((_, _) =>
+            Respond(HttpStatusCode.UnprocessableEntity, ProblemJson, "application/problem+json"));
+        IUserApi client = new UserApiClient(httpClient, new SystemTextJsonSerializer());
+
+        var thrown = await Assert.ThrowsAsync<HttpErrorException>(() => client.GetUserAsync(1));
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, thrown.StatusCode);
+        Assert.Equal(HttpErrorKind.Status, thrown.Error.Kind);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, thrown.Error.StatusCode);
+        Assert.Equal(Encoding.UTF8.GetBytes(ProblemJson), thrown.Error.Body.ToArray());
+        Assert.Equal("application/problem+json", thrown.Error.ContentType);
+        Assert.Equal("req-9", thrown.Error.Headers["X-Request-Id"][0]);
+        Assert.Equal("Response status code does not indicate success: 422 (UnprocessableEntity).", thrown.Message);
+    }
+
+    [Fact]
+    public async Task ThrowingVoidMethod_StatusError_ThrowsHttpErrorException_WithTheBody()
+    {
+        using var httpClient = CreateHttpClient((_, _) =>
+            Respond(HttpStatusCode.Conflict, ProblemJson, "application/problem+json"));
+        IUserApi client = new UserApiClient(httpClient, new SystemTextJsonSerializer());
+
+        var thrown = await Assert.ThrowsAsync<HttpErrorException>(() => client.DeleteUserAsync(1));
+
+        Assert.Equal(HttpStatusCode.Conflict, thrown.StatusCode);
+        Assert.Equal(Encoding.UTF8.GetBytes(ProblemJson), thrown.Error.Body.ToArray());
+    }
+
+    [Fact]
+    public async Task ThrowingMethod_StatusError_IsStillCaughtAsHttpRequestException()
+    {
+        using var httpClient = CreateHttpClient((_, _) =>
+            Respond(HttpStatusCode.NotFound, ProblemJson, "application/problem+json"));
+        IUserApi client = new UserApiClient(httpClient, new SystemTextJsonSerializer());
+
+        HttpStatusCode? caught = null;
+        try
+        {
+            await client.GetUserAsync(1);
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+        {
+            caught = ex.StatusCode;
+        }
+
+        Assert.Equal(HttpStatusCode.NotFound, caught);
+    }
+
+    [Fact]
+    public async Task ThrowingMethod_BodyOverTheCap_IsTruncatedToTheCap()
+    {
+        using var httpClient = CreateHttpClient((_, _) =>
+            Respond(HttpStatusCode.UnprocessableEntity, ProblemJson, "application/problem+json"));
+        ISmallCapApi client = new SmallCapApiClient(httpClient, new SystemTextJsonSerializer());
+
+        var thrown = await Assert.ThrowsAsync<HttpErrorException>(() => client.GetUserAsync(1));
+
+        Assert.Equal(Encoding.UTF8.GetBytes(ProblemJson)[..16], thrown.Error.Body.ToArray());
+        Assert.True(thrown.Error.BodyTruncated);
+    }
+
+    [Fact]
+    public async Task ThrowingMethod_CapZero_ReadsNoBody()
+    {
+        using var httpClient = CreateHttpClient((_, _) =>
+            Respond(HttpStatusCode.UnprocessableEntity, ProblemJson, "application/problem+json"));
+        INoErrorBodyApi client = new NoErrorBodyApiClient(httpClient, new SystemTextJsonSerializer());
+
+        var thrown = await Assert.ThrowsAsync<HttpErrorException>(() => client.DeleteUserAsync(1));
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, thrown.StatusCode);
+        Assert.True(thrown.Error.Body.IsEmpty);
+        Assert.Equal("application/problem+json", thrown.Error.ContentType);
     }
 
     private static HttpClient CreateHttpClient(

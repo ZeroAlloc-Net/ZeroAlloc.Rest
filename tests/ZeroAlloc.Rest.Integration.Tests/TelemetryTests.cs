@@ -239,7 +239,7 @@ public sealed class TelemetryTests : IDisposable
         _server.Given(Request.Create().WithPath("/users/40").UsingGet())
                .RespondWith(Response.Create().WithStatusCode(500));
 
-        await Assert.ThrowsAsync<HttpRequestException>(() => _client.GetUserAsync(40));
+        await Assert.ThrowsAsync<HttpErrorException>(() => _client.GetUserAsync(40));
 
         capture.AssertRecordedOnceWithStatus(500);
     }
@@ -266,7 +266,7 @@ public sealed class TelemetryTests : IDisposable
         _server.Given(Request.Create().WithPath("/users/42").UsingDelete())
                .RespondWith(Response.Create().WithStatusCode(404));
 
-        await Assert.ThrowsAsync<HttpRequestException>(() => _client.DeleteUserAsync(42));
+        await Assert.ThrowsAsync<HttpErrorException>(() => _client.DeleteUserAsync(42));
 
         capture.AssertRecordedOnceWithStatus(404);
     }

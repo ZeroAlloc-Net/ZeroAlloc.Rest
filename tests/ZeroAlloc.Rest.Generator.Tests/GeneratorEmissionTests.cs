@@ -118,7 +118,8 @@ public class GeneratorEmissionTests
             """;
         var output = GetGeneratedSource(source, "MyApp.IOrderApi.g.cs");
         Assert.DoesNotContain("DeserializeAsync", output);
-        Assert.Contains("EnsureSuccessStatusCode", output);
+        Assert.DoesNotContain("EnsureSuccessStatusCode", output);
+        Assert.Contains("throw new global::ZeroAlloc.Rest.HttpErrorException(__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Status, __response, null, __errorBody.Body, __errorBody.Truncated));", output);
     }
 
     [Fact]
@@ -737,6 +738,8 @@ public class GeneratorEmissionTests
     [Fact]
     public void Generator_NonResult_ReturnType_KeepsRethrowingOnly()
     {
+        // Only an error status becomes an HttpError, thrown as HttpErrorException (#514). Transport,
+        // timeout and serializer failures still propagate as they are.
         var source = """
             using ZeroAlloc.Rest.Attributes;
             namespace MyApp;
@@ -748,10 +751,11 @@ public class GeneratorEmissionTests
             }
             """;
         var output = GetGeneratedSource(source, "MyApp.IUserApi.g.cs");
-        Assert.DoesNotContain("HttpErrorKind", output);
-        Assert.DoesNotContain("__CreateHttpError", output);
-        Assert.DoesNotContain("ReadErrorBodyAsync", output);
-        Assert.DoesNotContain("HttpRequestException", output);
+        Assert.DoesNotContain("__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Transport", output);
+        Assert.DoesNotContain("__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Timeout", output);
+        Assert.DoesNotContain("__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Deserialization", output);
+        Assert.DoesNotContain("catch (global::System.Net.Http.HttpRequestException", output);
+        Assert.Contains("throw new global::ZeroAlloc.Rest.HttpErrorException(__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Status,", output);
         Assert.Contains("throw;", output);
     }
 

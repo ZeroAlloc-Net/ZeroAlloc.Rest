@@ -268,15 +268,15 @@ public sealed class StreamBodyTests
     }
 
     [Fact]
-    public async Task Download_ErrorStatus_ThrowsAndDisposes()
+    public async Task Download_ErrorStatus_ThrowsWithItsBody_AndDisposes()
     {
         var content = new TrackingContent("missing");
         using var http = Http((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound) { Content = content }));
 
-        var thrown = await Assert.ThrowsAsync<HttpRequestException>(() => Api(http).DownloadAsync("a.txt"));
+        var thrown = await Assert.ThrowsAsync<HttpErrorException>(() => Api(http).DownloadAsync("a.txt"));
 
         Assert.Equal(HttpStatusCode.NotFound, thrown.StatusCode);
-        Assert.Equal(0, content.StreamedCount);
+        Assert.Equal("missing", Encoding.UTF8.GetString(thrown.Error.Body.Span));
         Assert.True(content.Disposed);
     }
 

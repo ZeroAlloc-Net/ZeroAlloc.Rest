@@ -736,7 +736,8 @@ stream it returns reads the body from the connection as you read it; nothing is 
   until the garbage collector finalizes it.
 - **Every other path disposes the response for you:** an error status, a body that cannot be
   opened, a timeout, a transport failure, and cancellation.
-- **An error status** throws `HttpRequestException` from `Task<Stream>`. A `Result` method returns an
+- **An error status** throws `HttpErrorException` from `Task<Stream>`, with the
+  [error body](#error-statuses-from-taskt-and-task-methods). A `Result` method returns an
   `HttpErrorKind.Status` failure that carries the [error body](#the-error-body), as it does for any
   other success type.
 - **An empty body,** such as a 204's, is an empty stream, never null.
@@ -750,6 +751,31 @@ stream it returns reads the body from the connection as you read it; nothing is 
 - A type derived from `Stream`, such as `Task<MemoryStream>`, is not a raw body. The serializer
   reads it, as before.
 
+## Error statuses from `Task<T>` and `Task` methods
+
+A method that returns `Task<T>` or `Task`, not a `Result`, throws on a non-success status. It throws
+`HttpErrorException`, whose `Error` is the same `HttpError` a `Result` method would return: the
+status code, the headers, the media type and the [error body](#the-error-body), capped at
+`MaxErrorBodyBytes`.
+
+```csharp
+try
+{
+    await api.CreateItemAsync(request, ct);
+}
+catch (HttpErrorException ex) when (ex.Error.ContentType == "application/problem+json" && !ex.Error.BodyTruncated)
+{
+    using var problem = JsonDocument.Parse(ex.Error.Body);
+    var detail = problem.RootElement.GetProperty("detail").GetString();
+}
+```
+
+- `HttpErrorException` is an `HttpRequestException` with `StatusCode` set, so an existing
+  `catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)` still catches it.
+- `MaxErrorBodyBytes = 0` reads no body; the exception still carries the status code and headers.
+- Only an error status becomes an `HttpErrorException`. A transport failure, a timeout, a body the
+  serializer cannot read, and cancellation propagate as they are.
+
 ## Void methods (no response body)
 
 Return `Task` (not `Task<T>`) for methods where you only care about success/failure:
@@ -759,7 +785,8 @@ Return `Task` (not `Task<T>`) for methods where you only care about success/fail
 Task DeleteUserAsync(int id, CancellationToken ct = default);
 ```
 
-The generated code calls `EnsureSuccessStatusCode()` and returns.
+The generated code checks the status and returns. A non-success status throws `HttpErrorException`,
+as [for a `Task<T>` method](#error-statuses-from-taskt-and-task-methods).
 
 To get failures as values instead of exceptions, return `UnitResult<HttpError>`; see [Operations with no response body](#operations-with-no-response-body-unitresulthttperror).
 
