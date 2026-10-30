@@ -186,13 +186,16 @@ public sealed class StreamResponsesTests
     }
 
     [Fact]
-    public async Task VoidMethod_ErrorStatus_ThrowsAndDisposes()
+    public async Task VoidMethod_ErrorStatus_ThrowsWithItsBody_AndDisposes()
     {
-        var content = new TrackingContent(Rex);
+        var content = new TrackingContent("gone", lengthKnown: false);
         var api = Streamed(content, HttpStatusCode.InternalServerError);
 
-        await Assert.ThrowsAsync<HttpRequestException>(() => api.DeleteAsync());
+        var thrown = await Assert.ThrowsAsync<HttpErrorException>(() => api.DeleteAsync());
 
+        Assert.Equal(HttpStatusCode.InternalServerError, thrown.StatusCode);
+        Assert.Equal(HttpErrorKind.Status, thrown.Error.Kind);
+        Assert.Equal("gone", Encoding.UTF8.GetString(thrown.Error.Body.Span));
         Assert.True(content.Disposed);
     }
 
@@ -345,16 +348,18 @@ public sealed class StreamResponsesTests
     }
 
     [Fact]
-    public async Task ErrorStatus_ThrowsFromATaskMethod_WithoutOpeningTheBody()
+    public async Task ErrorStatus_ThrowsFromATaskMethod_WithTheBodyReadFromTheStream()
     {
-        var content = new TrackingContent(Rex);
+        const string Problem = "{\"code\":\"missing\"}";
+        var content = new TrackingContent(Problem);
         var api = Streamed(content, HttpStatusCode.NotFound);
 
-        var thrown = await Assert.ThrowsAsync<HttpRequestException>(() => api.GetAsync());
+        var thrown = await Assert.ThrowsAsync<HttpErrorException>(() => api.GetAsync());
 
         Assert.Equal(HttpStatusCode.NotFound, thrown.StatusCode);
+        Assert.Equal(HttpErrorKind.Status, thrown.Error.Kind);
+        Assert.Equal(Problem, Encoding.UTF8.GetString(thrown.Error.Body.Span));
         Assert.Equal(0, content.BufferedCount);
-        Assert.Equal(0, content.StreamedCount);
         Assert.True(content.Disposed);
     }
 

@@ -147,10 +147,12 @@ internal static class ClientEmitter
             EmitRecordCancellation(sb);
         EmitRecordDurationWithoutResponse(sb);
 
-        var anyReturnsResult = false;
+        // Every method that sends a request builds an HttpError on a non-success status, so only a
+        // client whose methods are all invalid event stream stubs goes without the helper.
+        var anySendsRequest = false;
         foreach (var m in model.Methods)
-            if (m.ReturnsResult || m.EventStream is { IsValid: true }) { anyReturnsResult = true; break; }
-        if (anyReturnsResult)
+            if (m.EventStream is not { IsValid: false }) { anySendsRequest = true; break; }
+        if (anySendsRequest)
             EmitCreateHttpError(sb);
         if (errorMappings.Count > 0)
             EmitRecordMapperFailure(sb);
@@ -838,17 +840,7 @@ internal static class ClientEmitter
         // capped body is read, and the mapper for the method's ErrorType, if any, maps it.
         sb.AppendLine("                if (!__response.IsSuccessStatusCode)");
         sb.AppendLine("                {");
-        string createCall;
-        if (maxErrorBodyBytes > 0)
-        {
-            var cap = maxErrorBodyBytes.ToString(CultureInfo.InvariantCulture);
-            sb.AppendLine($"                    var __errorBody = await global::ZeroAlloc.Rest.GeneratedRestClient.ReadErrorBodyAsync(__response.Content, {cap}, {token}).ConfigureAwait(false);");
-            createCall = "__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Status, __response, null, __errorBody.Body, __errorBody.Truncated)";
-        }
-        else
-        {
-            createCall = "__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Status, __response, null)";
-        }
+        var createCall = EmitReadErrorBody(sb, "                    ", token, maxErrorBodyBytes);
         sb.AppendLine($"                    var __httpError = {createCall};");
         if (errorMapperField is not null)
             sb.AppendLine($"                    throw new global::ZeroAlloc.Rest.HttpErrorException<{method.DeclaredErrorTypeName}>(__httpError, {MappedError(method, errorMapperField)});");
@@ -1001,7 +993,7 @@ internal static class ClientEmitter
         var i2 = i1 + "    ";
         if (method.ReturnsVoid)
         {
-            sb.AppendLine($"{indent}__response.EnsureSuccessStatusCode();");
+            EmitStatusThrow(sb, indent, ctArg, maxErrorBodyBytes);
         }
         else if (method.ReturnsUnitResult)
         {
@@ -1065,7 +1057,7 @@ internal static class ClientEmitter
         }
         else
         {
-            sb.AppendLine($"{indent}__response.EnsureSuccessStatusCode();");
+            EmitStatusThrow(sb, indent, ctArg, maxErrorBodyBytes);
             if (method.StreamResponses || method.ReturnsStream)
                 EmitOpenStreamedBody(sb, method, indent, ctArg);
             else
@@ -1120,19 +1112,30 @@ internal static class ClientEmitter
 
     // A non-success status: read the capped body, when asked, before the response is disposed.
     private static void EmitStatusFailure(StringBuilder sb, MethodModel method, string indent, string ctArg, int maxErrorBodyBytes)
+        => EmitFailure(sb, indent, method, EmitReadErrorBody(sb, indent, ctArg, maxErrorBodyBytes));
+
+    // A throwing method's non-success status throws HttpErrorException, an HttpRequestException with
+    // the status code, whose Error carries the capped body as a Result method's failure does.
+    private static void EmitStatusThrow(StringBuilder sb, string indent, string ctArg, int maxErrorBodyBytes)
     {
-        if (maxErrorBodyBytes > 0)
-        {
-            // The helper caps the body, turns a failed read into an empty body, and still throws on
-            // caller cancellation.
-            var cap = maxErrorBodyBytes.ToString(CultureInfo.InvariantCulture);
-            sb.AppendLine($"{indent}var __errorBody = await global::ZeroAlloc.Rest.GeneratedRestClient.ReadErrorBodyAsync(__response.Content, {cap}, {ctArg}).ConfigureAwait(false);");
-            EmitFailure(sb, indent, method, "__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Status, __response, null, __errorBody.Body, __errorBody.Truncated)");
-        }
-        else
-        {
-            EmitFailure(sb, indent, method, "__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Status, __response, null)");
-        }
+        var i1 = indent + "    ";
+        sb.AppendLine($"{indent}if (!__response.IsSuccessStatusCode)");
+        sb.AppendLine($"{indent}{{");
+        var createCall = EmitReadErrorBody(sb, i1, ctArg, maxErrorBodyBytes);
+        sb.AppendLine($"{i1}throw new global::ZeroAlloc.Rest.HttpErrorException({createCall});");
+        sb.AppendLine($"{indent}}}");
+    }
+
+    // Emits the read of a non-success status's capped body, when MaxErrorBodyBytes asks for one, and
+    // returns the call that builds its Status HttpError. The helper caps the body, turns a failed
+    // read into an empty body, and still throws on caller cancellation.
+    private static string EmitReadErrorBody(StringBuilder sb, string indent, string ctArg, int maxErrorBodyBytes)
+    {
+        if (maxErrorBodyBytes <= 0)
+            return "__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Status, __response, null)";
+        var cap = maxErrorBodyBytes.ToString(CultureInfo.InvariantCulture);
+        sb.AppendLine($"{indent}var __errorBody = await global::ZeroAlloc.Rest.GeneratedRestClient.ReadErrorBodyAsync(__response.Content, {cap}, {ctArg}).ConfigureAwait(false);");
+        return "__CreateHttpError(global::ZeroAlloc.Rest.HttpErrorKind.Status, __response, null, __errorBody.Body, __errorBody.Truncated)";
     }
 
     // A mapped method repeats its E as declared, nullable annotation included: Result<T, E> and
