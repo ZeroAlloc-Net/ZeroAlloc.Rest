@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.6.3](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v3.6.2...v3.6.3) (2026-10-30)
+
+
+### Bug Fixes
+
+* keep the error body when a throwing method gets an error status ([#516](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/516)) ([0ff8c30](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/0ff8c305b7ab772e0db79e49d3cd42c83189a7c9)), closes [#514](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/514)
+
 ## [3.6.2](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v3.6.1...v3.6.2) (2026-10-30)
 
 
