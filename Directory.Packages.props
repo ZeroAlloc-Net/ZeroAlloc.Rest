@@ -20,7 +20,7 @@
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
     <PackageVersion Include="coverlet.collector" Version="10.1.0" />
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.SourceGenerators.Testing.XUnit" Version="1.1.2" />
-    <PackageVersion Include="WireMock.Net" Version="2.20.0" />
+    <PackageVersion Include="WireMock.Net" Version="2.21.0" />
     <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.14" />
     <!-- net8.0 only: ZeroAlloc.Rest.SystemTextJson brings it so net8.0 has the net10.0 serializer. -->
     <PackageVersion Include="System.Text.Json" Version="10.0.14" />
