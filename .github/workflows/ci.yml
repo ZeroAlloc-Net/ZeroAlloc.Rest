@@ -51,6 +51,13 @@ jobs:
       - name: Test
         run: dotnet test ZeroAlloc.Rest.slnx --no-build -c Release --logger "trx" --results-directory ./test-results --settings coverage.runsettings
 
+      # Merges the Cobertura reports and fails below the line-coverage floor, or when codecov.yml would let a drop in
+      # coverage pass quietly.
+      - name: Coverage gate
+        uses: MarcelRoozekrans/ci-baseline/actions/coverage-gate@v1
+        with:
+          reports: test-results/**/coverage.cobertura.xml
+
       # The core-only consumer under JIT: ZeroAlloc.Rest without the DI package; see #336.
       - name: Run core-only consumer (JIT)
         run: dotnet run --no-build -c Release --project samples/ZeroAlloc.Rest.CoreOnly.AotSmoke
