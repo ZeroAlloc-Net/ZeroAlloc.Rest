@@ -24,7 +24,7 @@
     <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.14" />
     <!-- net8.0 only: ZeroAlloc.Rest.SystemTextJson brings it so net8.0 has the net10.0 serializer. -->
     <PackageVersion Include="System.Text.Json" Version="10.0.14" />
-    <PackageVersion Include="Basic.Reference.Assemblies.Net100" Version="1.8.13" />
+    <PackageVersion Include="Basic.Reference.Assemblies.Net100" Version="1.8.14" />
     <PackageVersion Include="Basic.Reference.Assemblies.Net80" Version="1.8.14" />
     <!--
       MSBuild task references must not be newer than the MSBuild that loads the task.
