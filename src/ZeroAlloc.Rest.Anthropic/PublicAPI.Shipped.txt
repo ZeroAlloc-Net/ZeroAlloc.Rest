@@ -120,6 +120,8 @@ override ZeroAlloc.Rest.Anthropic.ToolResultBlockParam.<Clone>$() -> ZeroAlloc.R
 override ZeroAlloc.Rest.Anthropic.ToolResultBlockParam.Equals(object? obj) -> bool
 override ZeroAlloc.Rest.Anthropic.ToolResultBlockParam.GetHashCode() -> int
 override ZeroAlloc.Rest.Anthropic.ToolResultBlockParam.ToString() -> string!
+override ZeroAlloc.Rest.Anthropic.ToolResultContent.Equals(object? obj) -> bool
+override ZeroAlloc.Rest.Anthropic.ToolResultContent.GetHashCode() -> int
 override ZeroAlloc.Rest.Anthropic.ToolUseBlock.<Clone>$() -> ZeroAlloc.Rest.Anthropic.ToolUseBlock!
 override ZeroAlloc.Rest.Anthropic.ToolUseBlock.Equals(object? obj) -> bool
 override ZeroAlloc.Rest.Anthropic.ToolUseBlock.GetHashCode() -> int
@@ -201,8 +203,16 @@ static ZeroAlloc.Rest.Anthropic.TextDelta.operator !=(ZeroAlloc.Rest.Anthropic.T
 static ZeroAlloc.Rest.Anthropic.TextDelta.operator ==(ZeroAlloc.Rest.Anthropic.TextDelta? left, ZeroAlloc.Rest.Anthropic.TextDelta? right) -> bool
 static ZeroAlloc.Rest.Anthropic.ToolDefinition.operator !=(ZeroAlloc.Rest.Anthropic.ToolDefinition? left, ZeroAlloc.Rest.Anthropic.ToolDefinition? right) -> bool
 static ZeroAlloc.Rest.Anthropic.ToolDefinition.operator ==(ZeroAlloc.Rest.Anthropic.ToolDefinition? left, ZeroAlloc.Rest.Anthropic.ToolDefinition? right) -> bool
+static ZeroAlloc.Rest.Anthropic.ToolResultBlockParam.FromBlocks(string! toolUseId, System.Collections.Generic.IReadOnlyList<ZeroAlloc.Rest.Anthropic.TextBlockParam!>! blocks, bool? isError = null, ZeroAlloc.Rest.Anthropic.CacheControl? cacheControl = null) -> ZeroAlloc.Rest.Anthropic.ToolResultBlockParam!
 static ZeroAlloc.Rest.Anthropic.ToolResultBlockParam.operator !=(ZeroAlloc.Rest.Anthropic.ToolResultBlockParam? left, ZeroAlloc.Rest.Anthropic.ToolResultBlockParam? right) -> bool
 static ZeroAlloc.Rest.Anthropic.ToolResultBlockParam.operator ==(ZeroAlloc.Rest.Anthropic.ToolResultBlockParam? left, ZeroAlloc.Rest.Anthropic.ToolResultBlockParam? right) -> bool
+static ZeroAlloc.Rest.Anthropic.ToolResultContent.FromBlocks(System.Collections.Generic.IReadOnlyList<ZeroAlloc.Rest.Anthropic.TextBlockParam!>! blocks) -> ZeroAlloc.Rest.Anthropic.ToolResultContent
+static ZeroAlloc.Rest.Anthropic.ToolResultContent.FromString(string! text) -> ZeroAlloc.Rest.Anthropic.ToolResultContent
+static ZeroAlloc.Rest.Anthropic.ToolResultContent.implicit operator ZeroAlloc.Rest.Anthropic.ToolResultContent(string! text) -> ZeroAlloc.Rest.Anthropic.ToolResultContent
+static ZeroAlloc.Rest.Anthropic.ToolResultContent.implicit operator ZeroAlloc.Rest.Anthropic.ToolResultContent(System.Collections.Generic.List<ZeroAlloc.Rest.Anthropic.TextBlockParam!>! blocks) -> ZeroAlloc.Rest.Anthropic.ToolResultContent
+static ZeroAlloc.Rest.Anthropic.ToolResultContent.implicit operator ZeroAlloc.Rest.Anthropic.ToolResultContent(ZeroAlloc.Rest.Anthropic.TextBlockParam![]! blocks) -> ZeroAlloc.Rest.Anthropic.ToolResultContent
+static ZeroAlloc.Rest.Anthropic.ToolResultContent.operator !=(ZeroAlloc.Rest.Anthropic.ToolResultContent left, ZeroAlloc.Rest.Anthropic.ToolResultContent right) -> bool
+static ZeroAlloc.Rest.Anthropic.ToolResultContent.operator ==(ZeroAlloc.Rest.Anthropic.ToolResultContent left, ZeroAlloc.Rest.Anthropic.ToolResultContent right) -> bool
 static ZeroAlloc.Rest.Anthropic.ToolUseBlock.operator !=(ZeroAlloc.Rest.Anthropic.ToolUseBlock? left, ZeroAlloc.Rest.Anthropic.ToolUseBlock? right) -> bool
 static ZeroAlloc.Rest.Anthropic.ToolUseBlock.operator ==(ZeroAlloc.Rest.Anthropic.ToolUseBlock? left, ZeroAlloc.Rest.Anthropic.ToolUseBlock? right) -> bool
 static ZeroAlloc.Rest.Anthropic.ToolUseBlockParam.operator !=(ZeroAlloc.Rest.Anthropic.ToolUseBlockParam? left, ZeroAlloc.Rest.Anthropic.ToolUseBlockParam? right) -> bool
@@ -486,9 +496,16 @@ ZeroAlloc.Rest.Anthropic.ToolResultBlockParam.Deconstruct(out string! ToolUseId,
 ZeroAlloc.Rest.Anthropic.ToolResultBlockParam.Equals(ZeroAlloc.Rest.Anthropic.ToolResultBlockParam? other) -> bool
 ZeroAlloc.Rest.Anthropic.ToolResultBlockParam.IsError.get -> bool?
 ZeroAlloc.Rest.Anthropic.ToolResultBlockParam.IsError.init -> void
+ZeroAlloc.Rest.Anthropic.ToolResultBlockParam.Result.get -> ZeroAlloc.Rest.Anthropic.ToolResultContent?
+ZeroAlloc.Rest.Anthropic.ToolResultBlockParam.Result.init -> void
 ZeroAlloc.Rest.Anthropic.ToolResultBlockParam.ToolResultBlockParam(string! ToolUseId, string? Content, bool? IsError, ZeroAlloc.Rest.Anthropic.CacheControl? CacheControl = null) -> void
 ZeroAlloc.Rest.Anthropic.ToolResultBlockParam.ToolUseId.get -> string!
 ZeroAlloc.Rest.Anthropic.ToolResultBlockParam.ToolUseId.init -> void
+ZeroAlloc.Rest.Anthropic.ToolResultContent
+ZeroAlloc.Rest.Anthropic.ToolResultContent.Blocks.get -> System.Collections.Generic.IReadOnlyList<ZeroAlloc.Rest.Anthropic.TextBlockParam!>?
+ZeroAlloc.Rest.Anthropic.ToolResultContent.Equals(ZeroAlloc.Rest.Anthropic.ToolResultContent other) -> bool
+ZeroAlloc.Rest.Anthropic.ToolResultContent.Text.get -> string?
+ZeroAlloc.Rest.Anthropic.ToolResultContent.ToolResultContent() -> void
 ZeroAlloc.Rest.Anthropic.ToolUseBlock
 ZeroAlloc.Rest.Anthropic.ToolUseBlock.Deconstruct(out string! Id, out string! Name, out System.Text.Json.JsonElement Input) -> void
 ZeroAlloc.Rest.Anthropic.ToolUseBlock.Equals(ZeroAlloc.Rest.Anthropic.ToolUseBlock? other) -> bool

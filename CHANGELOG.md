@@ -1,5 +1,17 @@
 # Changelog
 
+## [3.7.0](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v3.6.3...v3.7.0) (2026-11-06)
+
+
+### Features
+
+* send a tool result as text blocks ([#528](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/528)) ([af3952a](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/af3952a5ea09ce6fbaed7e1e8abcf5f30840115f)), closes [#518](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/518)
+
+
+### Tests
+
+* cover EventDataStream and harden the Anthropic test infrastructure ([#527](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/527)) ([2a5059c](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/2a5059c69482c33e00e14428fcbf238ce54b991a)), closes [#519](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/519)
+
 ## [3.6.3](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v3.6.2...v3.6.3) (2026-10-30)
 
 
