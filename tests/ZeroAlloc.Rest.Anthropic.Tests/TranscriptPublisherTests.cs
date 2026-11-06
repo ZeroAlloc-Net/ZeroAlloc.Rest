@@ -59,6 +59,26 @@ public sealed class TranscriptPublisherTests : IDisposable
         Assert.False(File.Exists(Path.Combine(_target, "b.request.json")));
     }
 
+    [Fact]
+    public void A_failure_while_copying_leaves_the_old_recording_whole()
+    {
+        WriteSet(_scratch, "new");
+        File.WriteAllText(Path.Combine(_target, "a.request.json"), "old");
+        File.WriteAllText(Path.Combine(_target, "gone.meta.json"), "old");
+        // A directory where a staging file belongs makes one copy fail after others succeeded.
+        var blocked = Path.Combine(_target, "b.response.sse.publishing");
+        Directory.CreateDirectory(blocked);
+
+        Assert.ThrowsAny<Exception>(() => TranscriptPublisher.Publish(_scratch, _target, Names));
+
+        // Red: delete the old recordings before the copy, as Publish used to; they are then gone.
+        Assert.Equal("old", File.ReadAllText(Path.Combine(_target, "a.request.json")));
+        Assert.True(File.Exists(Path.Combine(_target, "gone.meta.json")));
+        // Red: skip the cleanup in the catch; the files copied before the failure stay behind.
+        Assert.Empty(Directory.GetFiles(_target, "*.publishing"));
+        Assert.False(File.Exists(Path.Combine(_target, "b.request.json")));
+    }
+
     private static void WriteSet(string directory, string content)
     {
         File.WriteAllText(Path.Combine(directory, "a.request.json"), content);

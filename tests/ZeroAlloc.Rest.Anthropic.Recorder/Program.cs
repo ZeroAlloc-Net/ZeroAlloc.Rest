@@ -59,7 +59,16 @@ catch (Exception ex)
 }
 finally
 {
-    Directory.Delete(scratch, recursive: true);
+    // The scratch directory is a temporary one. A failure to remove it must not replace the recorder's own
+    // exit code and message, so it is reported and left.
+    try
+    {
+        Directory.Delete(scratch, recursive: true);
+    }
+    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+    {
+        Console.Error.WriteLine($"Could not remove the scratch directory {scratch}: {ex.GetType().Name}.");
+    }
 }
 
 static async Task<int> RecordAsync(AnthropicClient client, RecordingHandler recorder)
