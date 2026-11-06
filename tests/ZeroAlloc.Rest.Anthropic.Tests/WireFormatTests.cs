@@ -308,6 +308,50 @@ public sealed class WireFormatTests
     }
 
     [Fact]
+    public void ToolResultContent_compares_by_value_and_converts_from_a_list()
+    {
+        var blocks = new List<TextBlockParam> { new("a") };
+        ToolResultContent first = blocks;
+        ToolResultContent second = blocks;
+        ToolResultContent text = ToolResultContent.FromString("a");
+
+        Assert.True(first == second);
+        Assert.True(first != text);
+        Assert.True(first.Equals((object)second));
+        Assert.False(first.Equals("a"));
+        Assert.Equal(first.GetHashCode(), second.GetHashCode());
+        Assert.Throws<ArgumentNullException>(() => ToolResultContent.FromString(null!));
+        Assert.Throws<ArgumentNullException>(() => ToolResultContent.FromBlocks(null!));
+        Assert.Throws<ArgumentNullException>(() => (ToolResultContent)(string)null!);
+        Assert.Throws<ArgumentNullException>(() => (ToolResultContent)(TextBlockParam[])null!);
+        Assert.Throws<ArgumentNullException>(() => (ToolResultContent)(List<TextBlockParam>)null!);
+    }
+
+    [Fact]
+    public void A_tool_result_with_neither_content_nor_result_omits_content()
+    {
+        var request = Request(new MessageParam(MessageRole.User, [new ToolResultBlockParam("t1", null, null)]));
+
+        Assert.Contains("""{"type":"tool_result","tool_use_id":"t1"}""", Write(request), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("""{"type":"tool_result","tool_use_id":"t1","content":5}""")]
+    [InlineData("""{"type":"tool_result","tool_use_id":"t1","content":[{"type":"tool_result","tool_use_id":"x"}]}""")]
+    public void A_tool_result_content_that_is_neither_text_nor_text_blocks_is_refused(string json)
+    {
+        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize(json, AnthropicJsonContext.Default.ContentBlockParam));
+    }
+
+    [Fact]
+    public void A_default_tool_result_content_is_refused_when_written()
+    {
+        var request = Request(new MessageParam(MessageRole.User, [new ToolResultBlockParam("t1", null, null) { Result = default(ToolResultContent) }]));
+
+        Assert.Throws<JsonException>(() => Write(request));
+    }
+
+    [Fact]
     public void An_assistant_tool_use_block_writes_its_input_and_the_assistant_role()
     {
         var input = JsonDocument.Parse("""{"location":"SF"}""").RootElement;
