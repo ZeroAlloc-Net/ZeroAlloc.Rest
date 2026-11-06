@@ -1,1 +1,18 @@
 #nullable enable
+ZeroAlloc.Rest.Anthropic.ToolResultBlockParam.Result.get -> ZeroAlloc.Rest.Anthropic.ToolResultContent?
+ZeroAlloc.Rest.Anthropic.ToolResultBlockParam.Result.init -> void
+ZeroAlloc.Rest.Anthropic.ToolResultContent
+ZeroAlloc.Rest.Anthropic.ToolResultContent.Blocks.get -> System.Collections.Generic.IReadOnlyList<ZeroAlloc.Rest.Anthropic.TextBlockParam!>?
+ZeroAlloc.Rest.Anthropic.ToolResultContent.Equals(ZeroAlloc.Rest.Anthropic.ToolResultContent other) -> bool
+ZeroAlloc.Rest.Anthropic.ToolResultContent.Text.get -> string?
+ZeroAlloc.Rest.Anthropic.ToolResultContent.ToolResultContent() -> void
+override ZeroAlloc.Rest.Anthropic.ToolResultContent.Equals(object? obj) -> bool
+override ZeroAlloc.Rest.Anthropic.ToolResultContent.GetHashCode() -> int
+static ZeroAlloc.Rest.Anthropic.ToolResultBlockParam.FromBlocks(string! toolUseId, System.Collections.Generic.IReadOnlyList<ZeroAlloc.Rest.Anthropic.TextBlockParam!>! blocks, bool? isError = null, ZeroAlloc.Rest.Anthropic.CacheControl? cacheControl = null) -> ZeroAlloc.Rest.Anthropic.ToolResultBlockParam!
+static ZeroAlloc.Rest.Anthropic.ToolResultContent.FromBlocks(System.Collections.Generic.IReadOnlyList<ZeroAlloc.Rest.Anthropic.TextBlockParam!>! blocks) -> ZeroAlloc.Rest.Anthropic.ToolResultContent
+static ZeroAlloc.Rest.Anthropic.ToolResultContent.FromString(string! text) -> ZeroAlloc.Rest.Anthropic.ToolResultContent
+static ZeroAlloc.Rest.Anthropic.ToolResultContent.implicit operator ZeroAlloc.Rest.Anthropic.ToolResultContent(System.Collections.Generic.List<ZeroAlloc.Rest.Anthropic.TextBlockParam!>! blocks) -> ZeroAlloc.Rest.Anthropic.ToolResultContent
+static ZeroAlloc.Rest.Anthropic.ToolResultContent.implicit operator ZeroAlloc.Rest.Anthropic.ToolResultContent(ZeroAlloc.Rest.Anthropic.TextBlockParam![]! blocks) -> ZeroAlloc.Rest.Anthropic.ToolResultContent
+static ZeroAlloc.Rest.Anthropic.ToolResultContent.implicit operator ZeroAlloc.Rest.Anthropic.ToolResultContent(string! text) -> ZeroAlloc.Rest.Anthropic.ToolResultContent
+static ZeroAlloc.Rest.Anthropic.ToolResultContent.operator !=(ZeroAlloc.Rest.Anthropic.ToolResultContent left, ZeroAlloc.Rest.Anthropic.ToolResultContent right) -> bool
+static ZeroAlloc.Rest.Anthropic.ToolResultContent.operator ==(ZeroAlloc.Rest.Anthropic.ToolResultContent left, ZeroAlloc.Rest.Anthropic.ToolResultContent right) -> bool

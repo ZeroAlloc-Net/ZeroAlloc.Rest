@@ -254,6 +254,104 @@ public sealed class WireFormatTests
     }
 
     [Fact]
+    public void A_tool_result_of_text_blocks_writes_a_content_array()
+    {
+        var request = Request(new MessageParam(
+            MessageRole.User,
+            [ToolResultBlockParam.FromBlocks("t1", [new TextBlockParam("first"), new TextBlockParam("second")], isError: true)]));
+
+        // Red: write Result as a joined string, or drop the "type" of the blocks.
+        Assert.Contains(
+            """{"type":"tool_result","tool_use_id":"t1","content":[{"type":"text","text":"first"},{"type":"text","text":"second"}],"is_error":true}""",
+            Write(request),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_tool_result_content_union_converts_from_a_string_and_from_blocks()
+    {
+        ToolResultContent text = "ok";
+        ToolResultContent blocks = new[] { new TextBlockParam("a") };
+
+        Assert.Equal("ok", text.Text);
+        Assert.Null(text.Blocks);
+        Assert.Null(blocks.Text);
+        Assert.Single(blocks.Blocks!);
+        Assert.NotEqual(text, blocks);
+    }
+
+    [Fact]
+    public void A_tool_result_that_sets_both_content_and_result_is_refused()
+    {
+        var both = new ToolResultBlockParam("t1", "text", null) { Result = ToolResultContent.FromBlocks([new TextBlockParam("a")]) };
+        var request = Request(new MessageParam(MessageRole.User, [both]));
+
+        // Red: let Result win silently in Wire, the request is then written with half of what was set.
+        Assert.Throws<JsonException>(() => Write(request));
+    }
+
+    [Fact]
+    public void A_tool_result_reads_back_both_content_forms()
+    {
+        var text = JsonSerializer.Deserialize(
+            """{"type":"tool_result","tool_use_id":"t1","content":"ok"}""", AnthropicJsonContext.Default.ContentBlockParam);
+        var blocks = JsonSerializer.Deserialize(
+            """{"type":"tool_result","tool_use_id":"t1","content":[{"type":"text","text":"a"},{"type":"text","text":"b"}]}""",
+            AnthropicJsonContext.Default.ContentBlockParam);
+
+        // Red: leave Content unset in the init of Wire.
+        Assert.Equal("ok", Assert.IsType<ToolResultBlockParam>(text).Content);
+        // Red: set Content for an array too.
+        var result = Assert.IsType<ToolResultBlockParam>(blocks);
+        Assert.Null(result.Content);
+        Assert.Equal(2, result.Result!.Value.Blocks!.Count);
+    }
+
+    [Fact]
+    public void ToolResultContent_compares_by_value_and_converts_from_a_list()
+    {
+        var blocks = new List<TextBlockParam> { new("a") };
+        ToolResultContent first = blocks;
+        ToolResultContent second = blocks;
+        ToolResultContent text = ToolResultContent.FromString("a");
+
+        Assert.True(first == second);
+        Assert.True(first != text);
+        Assert.True(first.Equals((object)second));
+        Assert.False(first.Equals("a"));
+        Assert.Equal(first.GetHashCode(), second.GetHashCode());
+        Assert.Throws<ArgumentNullException>(() => ToolResultContent.FromString(null!));
+        Assert.Throws<ArgumentNullException>(() => ToolResultContent.FromBlocks(null!));
+        Assert.Throws<ArgumentNullException>(() => (ToolResultContent)(string)null!);
+        Assert.Throws<ArgumentNullException>(() => (ToolResultContent)(TextBlockParam[])null!);
+        Assert.Throws<ArgumentNullException>(() => (ToolResultContent)(List<TextBlockParam>)null!);
+    }
+
+    [Fact]
+    public void A_tool_result_with_neither_content_nor_result_omits_content()
+    {
+        var request = Request(new MessageParam(MessageRole.User, [new ToolResultBlockParam("t1", null, null)]));
+
+        Assert.Contains("""{"type":"tool_result","tool_use_id":"t1"}""", Write(request), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("""{"type":"tool_result","tool_use_id":"t1","content":5}""")]
+    [InlineData("""{"type":"tool_result","tool_use_id":"t1","content":[{"type":"tool_result","tool_use_id":"x"}]}""")]
+    public void A_tool_result_content_that_is_neither_text_nor_text_blocks_is_refused(string json)
+    {
+        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize(json, AnthropicJsonContext.Default.ContentBlockParam));
+    }
+
+    [Fact]
+    public void A_default_tool_result_content_is_refused_when_written()
+    {
+        var request = Request(new MessageParam(MessageRole.User, [new ToolResultBlockParam("t1", null, null) { Result = default(ToolResultContent) }]));
+
+        Assert.Throws<JsonException>(() => Write(request));
+    }
+
+    [Fact]
     public void An_assistant_tool_use_block_writes_its_input_and_the_assistant_role()
     {
         var input = JsonDocument.Parse("""{"location":"SF"}""").RootElement;

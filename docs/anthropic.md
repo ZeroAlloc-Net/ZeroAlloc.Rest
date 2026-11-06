@@ -84,7 +84,7 @@ var tool = new ToolDefinition("get_weather", "Current weather for a city.", doc.
 var request = new MessageRequest { Model = model, MaxTokens = 1024, Messages = history, Tools = [tool] };
 ```
 
-When the model stops with `StopReasons.ToolUse`, its `ToolUseBlock` holds the `Id`, `Name` and `Input`. Send the turn back as a `ToolUseBlockParam` in an assistant message, then answer in a user message with a `ToolResultBlockParam(toolUseId, content, isError)`. While streaming, `InputJsonDelta` carries the input as partial JSON.
+When the model stops with `StopReasons.ToolUse`, its `ToolUseBlock` holds the `Id`, `Name` and `Input`. Send the turn back as a `ToolUseBlockParam` in an assistant message, then answer in a user message with a `ToolResultBlockParam(toolUseId, content, isError)`. A result with several parts goes as separate text blocks, `ToolResultBlockParam.FromBlocks(toolUseId, [new TextBlockParam("first"), new TextBlockParam("second")])`, which the API reads as an array of content blocks. Set `Content` or `Result`, not both. While streaming, `InputJsonDelta` carries the input as partial JSON.
 
 ## Prompt caching
 
