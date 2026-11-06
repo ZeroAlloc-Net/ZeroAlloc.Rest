@@ -32,12 +32,36 @@ internal static class TranscriptPublisher
             return missing;
 
         Directory.CreateDirectory(target);
+
+        // The copy is the step that can fail, so it goes first, to a name that is no recording. Only when every
+        // file has arrived are the old recordings removed and the new ones renamed into place, which are
+        // operations within one directory. A failure before that leaves the old recording whole.
+        var staged = new List<(string Staged, string Final)>();
+        try
+        {
+            foreach (var file in Directory.GetFiles(scratch).Where(IsRecording))
+            {
+                var final = Path.Combine(target, Path.GetFileName(file));
+                var temporary = final + StagingSuffix;
+                File.Copy(file, temporary, overwrite: true);
+                staged.Add((temporary, final));
+            }
+        }
+        catch
+        {
+            foreach (var (temporary, _) in staged)
+                File.Delete(temporary);
+            throw;
+        }
+
         foreach (var old in Directory.GetFiles(target).Where(IsRecording))
             File.Delete(old);
-        foreach (var file in Directory.GetFiles(scratch).Where(IsRecording))
-            File.Copy(file, Path.Combine(target, Path.GetFileName(file)), overwrite: true);
+        foreach (var (temporary, final) in staged)
+            File.Move(temporary, final, overwrite: true);
         return missing;
     }
+
+    private const string StagingSuffix = ".publishing";
 
     private static bool IsRecording(string path) =>
         RecordingSuffixes.Any(suffix => path.EndsWith(suffix, StringComparison.Ordinal));
