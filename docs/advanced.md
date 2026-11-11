@@ -604,7 +604,7 @@ connection lost mid-body as `Transport` when streaming; to retry that too, also 
 
 ## Server-sent events
 
-> In the browser, events stream by default on .NET 10 and need a per-request opt-in on .NET 8; see
+> In the browser, events stream by default on .NET 10 and 11 and need a per-request opt-in on .NET 8; see
 > [Blazor WebAssembly](blazor-webassembly.md#response-streaming).
 
 A method that returns `IAsyncEnumerable<T>` and carries `[EventStream]` reads a `text/event-stream`
