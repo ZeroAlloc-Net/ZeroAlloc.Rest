@@ -26,8 +26,9 @@ jobs:
           # that SDK at all and only works when the runner image happens to ship one
           # satisfying the pin, which is how a publish failed on a lagging image.
           global-json-file: global.json
-          # The runtime packages and their tests target net8.0 and net10.0, so the tests need
-          # both runtimes. The 10.0 SDK builds net8.0 on its own; only the 8.0 runtime is added.
+          # The runtime packages and their tests target net8.0, net10.0 and net11.0, so the tests
+          # need all three runtimes. The 11.0 SDK from global.json builds net8.0 and net10.0 on its
+          # own and brings the 11.0 runtime; the 8.0 and 10.0 runtimes are added.
           dotnet-version: |
             8.0.x
             10.0.x
@@ -87,6 +88,10 @@ jobs:
 
   api-compat:
     uses: ZeroAlloc-Net/.github/.github/workflows/api-compat.yml@main
+    with:
+      dotnet-version: |
+        10.0.x
+        11.0.x
 
   aot-smoke:
     runs-on: ubuntu-latest

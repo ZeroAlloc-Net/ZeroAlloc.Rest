@@ -726,9 +726,13 @@ public class GeneratorErrorMapperTests
         var compileErrors = compileDiagnostics
             .Where(d => d.Severity == DiagnosticSeverity.Error)
             .ToImmutableArray();
-        // Consumers build with TreatWarningsAsErrors, so a warning in generated code breaks them.
+        // Consumers build with TreatWarningsAsErrors, so a warning in generated code breaks them. A
+        // warning without a source location describes this reference set instead: on net11.0 the
+        // ZeroAlloc packages ship no net11.0 asset, so binding the net10.0 one reports CS1701, which
+        // the SDK's default compile hides for consumers too (see GeneratorHarness).
         var generatedWarnings = compileDiagnostics
             .Where(d => d.Severity == DiagnosticSeverity.Warning
+                && d.Location.IsInSource
                 && !string.Equals(d.Location.SourceTree?.FilePath, "Api.cs", StringComparison.Ordinal))
             .ToImmutableArray();
         return new GeneratorRun(sources, generatorDiagnostics, compileErrors, generatedWarnings);
