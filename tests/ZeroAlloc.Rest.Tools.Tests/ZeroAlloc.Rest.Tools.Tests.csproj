@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
     <!-- MA0074: string comparison in test assertions -->
     <NoWarn>$(NoWarn);MA0074</NoWarn>
   </PropertyGroup>
@@ -15,7 +15,8 @@
     <PackageReference Include="Microsoft.OpenApi.Readers" />
     <!-- Compile the emitted interface with the source generator and RouteTemplateAnalyzer -->
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
-    <PackageReference Include="Basic.Reference.Assemblies.Net100" />
+    <PackageReference Include="Basic.Reference.Assemblies.Net100" Condition="'$(TargetFramework)' == 'net10.0'" />
+    <PackageReference Include="Basic.Reference.Assemblies.Net110" Condition="'$(TargetFramework)' == 'net11.0'" />
     <!-- Run GenerateRestClientTask against a recording build engine -->
     <PackageReference Include="Microsoft.Build.Framework" />
     <PackageReference Include="Microsoft.Build.Utilities.Core" />

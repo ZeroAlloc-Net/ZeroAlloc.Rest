@@ -5,7 +5,7 @@
     fails the build if any Microsoft.Extensions assembly is referenced. See #336.
   -->
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net11.0</TargetFramework>
     <OutputType>Exe</OutputType>
     <IsPackable>false</IsPackable>
     <PublishAot>true</PublishAot>
@@ -18,10 +18,15 @@
                       OutputItemType="Analyzer" ReferenceOutputAssembly="false"
                       UndefineProperties="PublishAot" />
   </ItemGroup>
+  <!--
+    The net11.0 targeting pack itself ships reference assemblies named Microsoft.Extensions.*
+    (FrameworkReferenceName Microsoft.NETCore.App). Those say nothing about ZeroAlloc.Rest core, so
+    only references that do not come from a framework reference count: a package or a project.
+  -->
   <Target Name="AssertNoMicrosoftExtensions" AfterTargets="ResolveAssemblyReferences">
     <ItemGroup>
       <_MicrosoftExtensionsReference Include="@(ReferencePath)"
-                                     Condition="$([System.String]::Copy('%(Filename)').StartsWith('Microsoft.Extensions.'))" />
+                                     Condition="'%(ReferencePath.FrameworkReferenceName)' == '' And $([System.String]::Copy('%(Filename)').StartsWith('Microsoft.Extensions.'))" />
     </ItemGroup>
     <Error Condition="'@(_MicrosoftExtensionsReference)' != ''"
            Text="The core-only sample references @(_MicrosoftExtensionsReference->'%(Filename)'), so ZeroAlloc.Rest core pulls in Microsoft.Extensions again. See #336." />

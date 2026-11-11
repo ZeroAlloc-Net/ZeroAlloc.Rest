@@ -50,9 +50,10 @@ public sealed class StreamBodyTests
 
     // The whole call, measured on .NET 10 x64, Release, through a synchronous stub: HttpClient, the
     // request and response, the stub's own objects, and no copy of the body. A copy would add at
-    // least LargeBody. net8.0 adds what its HttpClient costs more to the upload; see RuntimeAllocation.
+    // least LargeBody. net8.0 adds what its HttpClient costs more to the upload, net11.0 adds 8 B to
+    // both gates; see RuntimeAllocation.
     private const int LargeUploadBytesPerCall = 1_512 + RuntimeAllocation.HttpClientSendExtraBytes;
-    private const int LargeDownloadBytesPerCall = 1_040;
+    private const int LargeDownloadBytesPerCall = 1_040 + RuntimeAllocation.StreamDownloadExtraBytes;
 
     [Fact]
     public async Task StreamBody_IsSentWithItsDeclaredMediaTypeAndLength()

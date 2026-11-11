@@ -13,7 +13,7 @@ WebAssembly app like in any other .NET app. In the browser, `HttpClient` sends t
 Fetch API. This page covers the two places where that differs from a server-side app: response
 streaming and the lifetime of `DelegatingHandler` dependencies.
 
-`ZeroAlloc.Rest` targets .NET 8 and .NET 10; a Blazor app on .NET 9 uses the .NET 8 build and follows
+`ZeroAlloc.Rest` targets .NET 8, .NET 10 and .NET 11; a Blazor app on .NET 9 uses the .NET 8 build and follows
 the .NET 8 and 9 rules below. Registration is the
 same as everywhere else; see [Dependency Injection](dependency-injection.md):
 

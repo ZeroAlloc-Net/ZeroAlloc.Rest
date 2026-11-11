@@ -15,9 +15,15 @@ namespace ZeroAlloc.Rest.Tools.Tests;
 // is a problem: consumers build with TreatWarningsAsErrors.
 internal static class GeneratedCode
 {
+    // The BCL reference set of the framework this test run targets: the referenced ZeroAlloc.Rest
+    // assemblies are built for it, and a set from an older framework fails with CS1705.
     private static readonly MetadataReference[] References =
     [
+#if NET11_0_OR_GREATER
+        .. Basic.Reference.Assemblies.Net110.References.All,
+#else
         .. Basic.Reference.Assemblies.Net100.References.All,
+#endif
         MetadataReference.CreateFromFile(typeof(ZeroAlloc.Rest.HttpError).Assembly.Location),
         MetadataReference.CreateFromFile(typeof(ZeroAlloc.Results.Result<,>).Assembly.Location),
         MetadataReference.CreateFromFile(typeof(ZeroAlloc.Collections.HeapPooledList<>).Assembly.Location),
