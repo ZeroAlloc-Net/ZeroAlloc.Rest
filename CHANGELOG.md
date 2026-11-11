@@ -1,5 +1,17 @@
 # Changelog
 
+## [3.8.0](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v3.7.0...v3.8.0) (2026-11-11)
+
+
+### Features
+
+* add net11.0 target ([#540](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/540)) ([db49467](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/db494671e911f1a1558f6284c0011a7d59af2db1))
+
+
+### Bug Fixes
+
+* **deps:** pin Microsoft.AspNetCore.WebUtilities 2.3.14 in the WireMock test projects ([#541](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/541)) ([7433990](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/74339903647701003269a176f9fd8c33fd719d98))
+
 ## [3.7.0](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v3.6.3...v3.7.0) (2026-11-06)
 
 
