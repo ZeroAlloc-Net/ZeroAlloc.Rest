@@ -21,6 +21,13 @@
     <PackageVersion Include="coverlet.collector" Version="10.1.0" />
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.SourceGenerators.Testing.XUnit" Version="1.1.2" />
     <PackageVersion Include="WireMock.Net" Version="2.30.0" />
+    <!--
+      GHSA-6527-9fp8-r4x6 hits Microsoft.AspNetCore.WebUtilities 2.3.0 to 2.3.13. WireMock.Net 2.30.0
+      reaches 2.3.0 through WireMock.Net.Shared and Microsoft.AspNetCore.Http 2.3.9, and no newer
+      WireMock.Net exists. The two WireMock test projects reference this directly to lift it to the
+      patched release. Drop it once WireMock.Net no longer pulls the 2.x ASP.NET Core packages.
+    -->
+    <PackageVersion Include="Microsoft.AspNetCore.WebUtilities" Version="2.3.14" />
     <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.14" />
     <!-- net8.0 only: ZeroAlloc.Rest.SystemTextJson brings it so net8.0 has the net10.0 serializer. -->
     <PackageVersion Include="System.Text.Json" Version="10.0.14" />
