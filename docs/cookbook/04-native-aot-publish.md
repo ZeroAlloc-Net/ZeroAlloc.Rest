@@ -12,7 +12,7 @@ description: Publish a ZeroAlloc.Rest client application as a Native AOT binary.
 
 ## Prerequisites
 
-- .NET 10 SDK
+- .NET 10 SDK or newer
 - Native AOT toolchain:
   - **Linux:** `build-essential` (gcc, binutils)
   - **macOS:** Xcode Command Line Tools

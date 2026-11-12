@@ -4,13 +4,15 @@ using Microsoft.CodeAnalysis;
 
 namespace ZeroAlloc.Rest.Generator.Tests;
 
-// The BCL reference set of the framework this test run targets. ZeroAlloc.Rest ships net8.0 and
-// net10.0, and the generator's output compiles inside consumers on either, so the net8.0 run
+// The BCL reference set of the framework this test run targets. ZeroAlloc.Rest ships net8.0,
+// net10.0 and net11.0, and the generator's output compiles inside consumers on either, so the net8.0 run
 // compiles every generated client against net8.0's BCL and the net8.0 ZeroAlloc.Rest assembly.
 // Generated code that used an API newer than net8.0 fails these tests there.
 internal static class TargetFrameworkReferences
 {
-#if NET10_0_OR_GREATER
+#if NET11_0_OR_GREATER
+    internal static ImmutableArray<PortableExecutableReference> All => Basic.Reference.Assemblies.Net110.References.All;
+#elif NET10_0_OR_GREATER
     internal static ImmutableArray<PortableExecutableReference> All => Basic.Reference.Assemblies.Net100.References.All;
 #else
     // A net8.0 consumer of ZeroAlloc.Rest.SystemTextJson gets System.Text.Json 10 from its package

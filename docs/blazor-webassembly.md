@@ -13,7 +13,7 @@ WebAssembly app like in any other .NET app. In the browser, `HttpClient` sends t
 Fetch API. This page covers the two places where that differs from a server-side app: response
 streaming and the lifetime of `DelegatingHandler` dependencies.
 
-`ZeroAlloc.Rest` targets .NET 8 and .NET 10; a Blazor app on .NET 9 uses the .NET 8 build and follows
+`ZeroAlloc.Rest` targets .NET 8, .NET 10 and .NET 11; a Blazor app on .NET 9 uses the .NET 8 build and follows
 the .NET 8 and 9 rules below. Registration is the
 same as everywhere else; see [Dependency Injection](dependency-injection.md):
 
@@ -35,7 +35,7 @@ await builder.Build().RunAsync();
 Browser `fetch` used to buffer a whole response before handing it to .NET. Whether a response
 reaches your code as it arrives depends on the target framework:
 
-| | .NET 8 and 9 | .NET 10 |
+| | .NET 8 and 9 | .NET 10 and 11 |
 |---|---|---|
 | Response streaming in the browser | Off. Opt in per request. | On by default. |
 
@@ -47,7 +47,7 @@ Two things on the client side matter, and the generated code already does the fi
   this way. A plain method without those does not, so it buffers whatever the browser does.
 - **The browser must stream the response.** This is the part that depends on the framework version.
 
-### .NET 10
+### .NET 10 and 11
 
 Nothing to do. An `[EventStream]` method that returns `IAsyncEnumerable<T>` yields each event as
 the server writes it, and a `Stream` response is readable while it downloads:
@@ -65,7 +65,7 @@ await foreach (var item in feed.FollowAsync(ct))
     Items.Add(item.Data);
 ```
 
-Do not add opt-ins "to be safe" on .NET 10; they are not needed.
+Do not add opt-ins "to be safe" on .NET 10 or 11; they are not needed.
 
 The response content stream is then a `BrowserHttpReadStream`, which does not support synchronous
 reads such as `Stream.Read(Span<byte>)`. The generated client and the built-in serializers read
