@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.8.1](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v3.8.0...v3.8.1) (2026-11-14)
+
+
+### Documentation
+
+* add context7.json to claim the library on Context7 ([#536](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/536)) ([430e86f](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/430e86f66359590eac23467108cfd65c66e7c85e))
+
 ## [3.8.0](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v3.7.0...v3.8.0) (2026-11-11)
 
 
