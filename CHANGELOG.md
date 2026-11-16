@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.8.2](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v3.8.1...v3.8.2) (2026-11-16)
+
+
+### Bug Fixes
+
+* embed PDBs so Go to Definition shows the package source ([#566](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/566)) ([a96db2d](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/a96db2d50b0a3aaff152f9aa63666319e837223d))
+
 ## [3.8.1](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v3.8.0...v3.8.1) (2026-11-14)
 
 
