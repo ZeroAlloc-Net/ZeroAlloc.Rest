@@ -49,7 +49,8 @@ dotnet publish samples/ZeroAlloc.Rest.AotSmoke/ZeroAlloc.Rest.AotSmoke.csproj -r
 if grep -E "warning IL[0-9]+" publish.log; then echo "trim or AOT warnings"; exit 1; fi
 timeout --kill-after=10s 120s ./aot-out/ZeroAlloc.Rest.AotSmoke
 ```
-For the other two, swap the project and the output folder. Jobs `aot-smoke-memorypack` and
+For the other two, swap the project, the output folder and the executable name
+(`ZeroAlloc.Rest.Clients.AotSmoke`, `ZeroAlloc.Rest.CoreOnly.AotSmoke`). Jobs `aot-smoke-memorypack` and
 `aot-smoke-messagepack` publish the same way but accept IL warnings whose member starts with `MemoryPack.` or
 `MessagePack.` (upstream warnings, issues #357 and #374) and fail on any other IL warning, including one from
 `ZeroAlloc.Rest.MemoryPack` or `.MessagePack` themselves. Do not widen that filter.
@@ -71,6 +72,10 @@ dotnet test tests/ZeroAlloc.Rest.Integration.Tests -c Release -f net8.0 --filter
 - Allocation budgets are exact byte counts from `AllocationGate`, measured on .NET 10 x64 in Release. The
   `net8.0` runs add `RuntimeAllocation.HttpClientSendExtraBytes`. The README quotes the 1,688 B figure of a
   generated GET: a change to a budget updates the README and `docs/benchmarks.md` in the same PR.
+- A generated call is not 0 B: the `HttpClient` request and response objects are inherent allocations,
+  which the org rule allows when documented. The promise tested by
+  `GeneratedGet_SmallDto_AllocatesNoMoreThanHandWritten` is that a generated call allocates no more than
+  the equivalent hand-written `HttpClient` call.
   Measured calls must complete synchronously (`SynchronousCall.Require`), and the tests sit in the
   `rest-telemetry-non-parallel` collection so no `MeterListener` runs beside them.
 - Every public API change in a runtime project edits that project's `PublicAPI.Unshipped.txt`. RS0016 and
