@@ -4,8 +4,8 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- Roslyn -->
-    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0" />
-    <PackageVersion Include="Microsoft.CodeAnalysis.Analyzers" Version="5.9.0" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.12.0" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.Analyzers" Version="5.12.0" />
     <!-- Serializers -->
     <PackageVersion Include="MessagePack" Version="3.1.12" />
     <!-- MessagePack 3.x bundles the source generator; no separate MessagePack.SourceGenerator package exists for 3.x -->
