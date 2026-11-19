@@ -13,7 +13,7 @@
     <!-- OpenAPI -->
     <PackageVersion Include="Microsoft.OpenApi.Readers" Version="1.6.31" />
     <!-- CLI -->
-    <PackageVersion Include="System.CommandLine" Version="2.0.15" />
+    <PackageVersion Include="System.CommandLine" Version="3.0.0" />
     <!-- Testing -->
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.1" />
@@ -28,9 +28,9 @@
       patched release. Drop it once WireMock.Net no longer pulls the 2.x ASP.NET Core packages.
     -->
     <PackageVersion Include="Microsoft.AspNetCore.WebUtilities" Version="2.3.14" />
-    <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.15" />
+    <PackageVersion Include="Microsoft.Extensions.Http" Version="11.0.0" />
     <!-- net8.0 only: ZeroAlloc.Rest.SystemTextJson brings it so net8.0 has the net10.0 serializer. -->
-    <PackageVersion Include="System.Text.Json" Version="10.0.15" />
+    <PackageVersion Include="System.Text.Json" Version="11.0.0" />
     <PackageVersion Include="Basic.Reference.Assemblies.Net100" Version="1.8.15" />
     <PackageVersion Include="Basic.Reference.Assemblies.Net110" Version="1.8.15" />
     <PackageVersion Include="Basic.Reference.Assemblies.Net80" Version="1.8.15" />
