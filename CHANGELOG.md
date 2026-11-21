@@ -1,5 +1,21 @@
 # Changelog
 
+## [4.0.0](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v3.8.2...v4.0.0) (2026-11-21)
+
+
+### ⚠ BREAKING CHANGES
+
+* the packages no longer ship net8.0 assets, so a project on .NET 8 or .NET 9 stays on 3.x or moves to net10.0 or later; ZRA006 is now an error instead of a warning, so an interface that is generic, nested in a generic type, or private or protected fails the build. See the Behaviour change section of PR #578 for migration steps.
+
+### Features
+
+* target net10.0 and net11.0, drop net8.0 ([514b2ac](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/514b2ac6cfdd8f879462e6caff9035696f93bb76))
+
+
+### Bug Fixes
+
+* report ZRA006 as an error instead of skipping client generation silently ([514b2ac](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/514b2ac6cfdd8f879462e6caff9035696f93bb76))
+
 ## [3.8.2](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v3.8.1...v3.8.2) (2026-11-16)
 
 
