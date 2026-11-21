@@ -17,7 +17,8 @@ OpenAPI importer `.Tools` (a dotnet tool) and `.Tools.MSBuild`, plus the standal
   target framework in `TargetFrameworkReferences.cs`.
 - `samples/*.AotSmoke` are the NativeAOT smoke apps that CI publishes. They are not packaged.
 - `tests/ZeroAlloc.Rest.Benchmarks` targets `net10.0` only: BenchmarkDotNet has no stable net11.0 release.
-- `apicompat-suppressions.xml` is empty on purpose: it holds only annotated, intentional API breaks.
+- `apicompat-suppressions.xml` holds only annotated, intentional API breaks. Its one entry today, PKV006
+  for net8.0, records the 4.0.0 framework drop; retire it once the baseline is a 4.x release.
 
 ## Build and test
 Prerequisites: the .NET 11 SDK from `global.json` (rollForward `latestMinor`) builds every target. Tests run on

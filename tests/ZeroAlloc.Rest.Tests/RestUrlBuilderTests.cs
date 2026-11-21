@@ -71,8 +71,8 @@ public sealed class RestUrlBuilderTests
     }
 
     // Fixed expectations, so the escaping is pinned whatever runtime runs the test: the tests above
-    // only compare the builder with that runtime's Uri.EscapeDataString. The values are given as escapes, not literals, so they reach the builder
-    // unchanged.
+    // only compare the builder with that runtime's Uri.EscapeDataString. The values are given as
+    // escapes, not literals, so they reach the builder unchanged.
     [Fact]
     public void Escaping_WritesTheRfc3986Form()
     {
