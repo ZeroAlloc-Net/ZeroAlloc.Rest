@@ -34,9 +34,9 @@ public sealed class CatchAllAllocationTests
     private const int Iterations = 1_000;
 
     // The whole {**path} call, measured on .NET 10 x64, Release, through a synchronous stub that
-    // returns an empty 200. It equals the constant route's call. net8.0 adds what its HttpClient
+    // returns an empty 200. It equals the constant route's call. net11.0 adds what its HttpClient
     // costs more; see RuntimeAllocation.
-    private const int CatchAllBytesPerCall = 1_232 + RuntimeAllocation.HttpClientSendExtraBytes;
+    private const int CatchAllBytesPerCall = 1_232 + RuntimeAllocation.Net11ExtraBytes;
 
     [OptimizedBuildFact]
     public void CatchAllHole_AddsNoAllocation_WhenTheValueNeedsNoEscaping()

@@ -169,7 +169,7 @@ public class GeneratorNestedAndGenericClientTests
 
         var diagnostic = Assert.Single(run.GeneratorDiagnostics);
         Assert.Equal("ZRA006", diagnostic.Id);
-        Assert.Equal(DiagnosticSeverity.Warning, diagnostic.Severity);
+        Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
         Assert.Equal(
             $"No REST client is generated for '{display}', because {reason}",
             diagnostic.GetMessage(CultureInfo.InvariantCulture));
