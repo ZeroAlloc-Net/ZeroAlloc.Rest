@@ -70,9 +70,8 @@ public sealed class RestUrlBuilderTests
         Assert.Equal(string.Equals(url, value, StringComparison.Ordinal), ReferenceEquals(url, value));
     }
 
-    // Fixed expectations, so the escaping is pinned whatever runtime runs the test: on net8.0 the
-    // builder escapes with its own code, and the tests above only compare it with that runtime's
-    // Uri.EscapeDataString. The values are given as escapes, not literals, so they reach the builder
+    // Fixed expectations, so the escaping is pinned whatever runtime runs the test: the tests above
+    // only compare the builder with that runtime's Uri.EscapeDataString. The values are given as escapes, not literals, so they reach the builder
     // unchanged.
     [Fact]
     public void Escaping_WritesTheRfc3986Form()
@@ -97,8 +96,7 @@ public sealed class RestUrlBuilderTests
     }
 
     // Theory data goes through xUnit's serializer, which does not keep an unpaired surrogate as it
-    // is, so these are checked here, straight from the strings. On net8.0 the builder escapes with
-    // its own code instead of Uri.TryEscapeDataString, which .NET 9 added.
+    // is, so these are checked here, straight from the strings.
     [Fact]
     public void UnpairedSurrogates_AreEscapedAsEscapeDataString()
     {
