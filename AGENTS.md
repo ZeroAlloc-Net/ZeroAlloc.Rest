@@ -68,7 +68,26 @@ dotnet test tests/ZeroAlloc.Rest.Generator.Tests -c Release -f net10.0 --filter 
 dotnet test tests/ZeroAlloc.Rest.Integration.Tests -c Release -f net10.0 --filter "FullyQualifiedName~GetCallAllocationTests"
 ```
 
+CI job `sdk10-consumer` needs a 10.0.1xx SDK; `tests/ZeroAlloc.Rest.Sdk10Smoke/global.json` pins
+10.0.100 with `rollForward: latestPatch`, so a newer band cannot stand in for it. It builds and runs a
+consumer of the packed packages with Roslyn 5.0:
+
+```bash
+dotnet pack src/ZeroAlloc.Rest -c Release -o artifacts -p:Version=9.9.9-local.<sha>
+dotnet pack src/ZeroAlloc.Rest.Generator -c Release -o artifacts -p:Version=9.9.9-local.<sha>
+cd tests/ZeroAlloc.Rest.Sdk10Smoke/Consumer
+dotnet run -c Release -p:ZeroAllocRestVersion=9.9.9-local.<sha>
+```
+
+CI job `roslyn-floor` calls the shared `roslyn-floor.yml` from ZeroAlloc-Net/.github: it packs the
+solution and fails when a packed DLL references Roslyn above 5.0.0.
+
 ## Conventions and gotchas
+- The generator references `Microsoft.CodeAnalysis.CSharp` 5.0.0, the compiler of SDK band 10.0.1xx, the
+  oldest supported SDK, set in `Directory.Packages.props`. A compiler older than the Roslyn the DLL
+  references skips the generator with `CS9057`, and nothing is generated. The shared Renovate preset holds
+  it below 5.1. If a newer Roslyn API is needed, change the code; raise the floor only together with the
+  minimum SDK. The test projects use 5.0.0 too.
 - Allocation budgets are exact byte counts from `AllocationGate`, measured on .NET 10 x64 in Release. The
   `net11.0` runs add `RuntimeAllocation.Net11ExtraBytes`. The README quotes the 1,688 B figure of a
   generated GET: a change to a budget updates the README and `docs/benchmarks.md` in the same PR.

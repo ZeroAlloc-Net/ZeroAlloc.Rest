@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Builds a consumer of the packed ZeroAlloc.Rest package with the oldest supported .NET SDK
+    band, 10.0.1xx, whose compiler is Roslyn 5.0. The package bundles the generator in
+    analyzers/dotnet/cs. A generator built against a newer Roslyn than the compiler that loads it
+    is skipped with CS9057, and then PingApiClient does not exist, so the build fails with CS0246.
+    The standalone ZeroAlloc.Rest.Generator package ships the same DLL; the roslyn-floor job
+    scans both.
+
+    CS9057 itself is not an error here: ZeroAlloc.Collections 1.3.1, a dependency of the package,
+    ships a generator built against Roslyn 5.9, which this SDK skips with that warning. It stays
+    visible in the build log and is tracked in ZeroAlloc-Net/.github#77.
+
+    The parent folder's global.json pins the 10.0.1xx band with rollForward latestPatch, so a
+    newer band cannot stand in for it. Run locally with a 10.0.1xx SDK installed:
+      dotnet pack src/ZeroAlloc.Rest -c Release -o artifacts -p:Version=9.9.9-local.<sha>
+      dotnet pack src/ZeroAlloc.Rest.Generator -c Release -o artifacts -p:Version=9.9.9-local.<sha>
+      cd tests/ZeroAlloc.Rest.Sdk10Smoke/Consumer
+      dotnet run -c Release -p:ZeroAllocRestVersion=9.9.9-local.<sha>
+    Not part of the solution; the sdk10-consumer job in ci.yml runs it.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <!-- The repository's Directory.Packages.props sits above this folder and NuGet still finds it. -->
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <WarningsAsErrors>$(WarningsAsErrors);CS8032</WarningsAsErrors>
+  </PropertyGroup>
+
+  <Target Name="RequireZeroAllocRestVersion" BeforeTargets="CollectPackageReferences">
+    <Error Condition="'$(ZeroAllocRestVersion)' == ''"
+           Text="Pass the version of the packed packages: -p:ZeroAllocRestVersion=..." />
+  </Target>
+
+  <ItemGroup>
+    <PackageReference Include="ZeroAlloc.Rest" Version="[$(ZeroAllocRestVersion)]" />
+  </ItemGroup>
+</Project>
