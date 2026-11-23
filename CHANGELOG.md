@@ -1,5 +1,12 @@
 # Changelog
 
+## [4.0.2](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v4.0.1...v4.0.2) (2026-11-23)
+
+
+### Bug Fixes
+
+* depend on Collections 1.3.2 and Resilience 3.6.0, which load on SDK 10.0.1xx ([#584](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/584)) ([3d8abcd](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/3d8abcd6279dc75a19f1f395d25d135041161097))
+
 ## [4.0.1](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v4.0.0...v4.0.1) (2026-11-22)
 
 
