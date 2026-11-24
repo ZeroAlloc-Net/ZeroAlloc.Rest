@@ -19,11 +19,11 @@ dotnet add package ZeroAlloc.Rest.DependencyInjection
 dotnet add package ZeroAlloc.Rest.SystemTextJson
 ```
 
-The runtime packages target net8.0, net10.0 and net11.0. Build with the .NET 10 SDK or newer, whose
-compiler the source generator needs, whichever of the three your project targets. A project that
-targets net11.0 needs the .NET 11 SDK. On net8.0,
-`ZeroAlloc.Rest.SystemTextJson` brings the System.Text.Json 10 package, so both targets serialize
-alike.
+The runtime packages target net10.0 and net11.0. Build with the .NET 10 SDK 10.0.100 or later, or Visual
+Studio 2026 or later: the source generator is built against Roslyn 5.0, and an older compiler skips it with
+warning CS9057, after which the generated clients are missing. Version 4.0.0 was built against Roslyn 5.12 and
+loads only in the .NET 11 SDK; on .NET 10, use 4.0.1 or later. A project that targets net11.0 needs the .NET 11 SDK.
+Version 4.0.0 dropped net8.0; stay on 3.x for a project that still targets .NET 8 or .NET 9.
 
 Or via `<PackageReference>`:
 

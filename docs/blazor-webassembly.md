@@ -13,8 +13,7 @@ WebAssembly app like in any other .NET app. In the browser, `HttpClient` sends t
 Fetch API. This page covers the two places where that differs from a server-side app: response
 streaming and the lifetime of `DelegatingHandler` dependencies.
 
-`ZeroAlloc.Rest` targets .NET 8, .NET 10 and .NET 11; a Blazor app on .NET 9 uses the .NET 8 build and follows
-the .NET 8 and 9 rules below. Registration is the
+`ZeroAlloc.Rest` targets .NET 10 and .NET 11. Registration is the
 same as everywhere else; see [Dependency Injection](dependency-injection.md):
 
 ```csharp
@@ -32,12 +31,8 @@ await builder.Build().RunAsync();
 
 ## Response streaming
 
-Browser `fetch` used to buffer a whole response before handing it to .NET. Whether a response
-reaches your code as it arrives depends on the target framework:
-
-| | .NET 8 and 9 | .NET 10 and 11 |
-|---|---|---|
-| Response streaming in the browser | Off. Opt in per request. | On by default. |
+Browser `fetch` used to buffer a whole response before handing it to .NET. On .NET 10 and 11 a
+response reaches your code as it arrives by default.
 
 Two things on the client side matter, and the generated code already does the first:
 
@@ -45,9 +40,9 @@ Two things on the client side matter, and the generated code already does the fi
   waits for the whole body before it returns. A method with `[EventStream]`, a method that returns
   `Stream`, and any method with [`StreamResponses = true`](advanced.md#streaming-responses) sends
   this way. A plain method without those does not, so it buffers whatever the browser does.
-- **The browser must stream the response.** This is the part that depends on the framework version.
+- **The browser must stream the response.** On .NET 10 and 11 it does unless you opt out.
 
-### .NET 10 and 11
+### Streaming by default
 
 Nothing to do. An `[EventStream]` method that returns `IAsyncEnumerable<T>` yields each event as
 the server writes it, and a `Stream` response is readable while it downloads:
@@ -107,26 +102,6 @@ builder.Services.AddIUserApi(options => options.BaseAddress = new Uri("https://a
     .AddHttpMessageHandler<NoStreamingHandler>();
 ```
 
-### .NET 8 and 9
-
-Streaming is off unless a request opts in. Set `SetBrowserResponseStreamingEnabled(true)` from a
-handler, the same way as above, for the requests that must stream:
-
-```csharp
-public sealed class StreamingHandler : DelegatingHandler
-{
-    protected override Task<HttpResponseMessage> SendAsync(
-        HttpRequestMessage request, CancellationToken cancellationToken)
-    {
-        request.SetBrowserResponseStreamingEnabled(true);
-        return base.SendAsync(request, cancellationToken);
-    }
-}
-```
-
-Without it, an `[EventStream]` method still works, but the browser delivers the response in one
-piece, so every event arrives at once when the response ends.
-
 ## Handler scope with IHttpClientFactory
 
 `Add{I}` registers the client through `IHttpClientFactory`, which builds each `DelegatingHandler`
@@ -178,6 +153,6 @@ source-generated serializer such as `SystemTextJsonSerializer` with a `JsonSeria
 
 ## Sources
 
-- [Call a web API from ASP.NET Core Blazor](https://learn.microsoft.com/aspnet/core/blazor/call-web-api): response streaming, opt-out and the .NET 8 and 9 opt-in, and `DelegatingHandler` scope.
+- [Call a web API from ASP.NET Core Blazor](https://learn.microsoft.com/aspnet/core/blazor/call-web-api): response streaming, opt-out, and `DelegatingHandler` scope.
 - [ASP.NET Core Blazor dependency injection](https://learn.microsoft.com/aspnet/core/blazor/fundamentals/dependency-injection): client-side scoped services behave like singletons.
 - [IHttpClientFactory](https://learn.microsoft.com/dotnet/core/extensions/httpclient-factory#message-handler-scopes-in-ihttpclientfactory): message handler scopes.

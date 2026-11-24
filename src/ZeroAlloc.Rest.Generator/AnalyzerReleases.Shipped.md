@@ -43,3 +43,11 @@ Rule ID | Category                 | Severity | Notes
 --------|--------------------------|----------|------------------------------------------------------
 ZRA007  | ZeroAlloc.Rest.Generator | Error    | IAsyncEnumerable<T> and [EventStream] must go together
 ZRA008  | ZeroAlloc.Rest.Generator | Error    | Invalid [EventType] mapping
+
+## Release 4.0.0
+
+### Changed Rules
+
+Rule ID | New Category             | New Severity | Old Category             | Old Severity | Notes
+--------|--------------------------|--------------|--------------------------|--------------|---------------------------------------------
+ZRA006  | ZeroAlloc.Rest.Generator | Error        | ZeroAlloc.Rest.Generator | Warning      | No client can be generated for the interface

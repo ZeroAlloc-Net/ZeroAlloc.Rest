@@ -230,8 +230,8 @@ internal interface IJevApi
 ## Diagnostics
 
 The generator reports these diagnostics. Each points at the method, parameter or attribute at
-fault. ZRA001 to ZRA004, ZRA007 and ZRA008 are errors, which `#pragma warning disable` does not
-suppress; fix the declaration. ZRA005 and ZRA006 are warnings.
+fault. ZRA001 to ZRA004 and ZRA006 to ZRA008 are errors, which `#pragma warning disable` does not
+suppress; fix the declaration. ZRA005 is a warning.
 
 ### ZRA001: Conflicting body attributes
 
@@ -369,7 +369,7 @@ hand-written code.
 
 ### ZRA006: No client can be generated for the interface
 
-Severity: Warning.
+Severity: Error. It was a warning before 4.0.0.
 
 The generated client is a class at namespace level that implements the interface, so no client is
 generated for an interface it cannot implement:
@@ -381,8 +381,8 @@ generated for an interface it cannot implement:
 - **An interface that is `private`, `protected` or `private protected`**, or that is nested in a
   type with one of those accessibilities. A class at namespace level cannot reach it.
 
-The warning points at the interface's name. Nothing else is generated for that interface, so code
-that uses its client or its `Add{I}` method fails to compile. Declare the interface non-generic,
+The error points at the interface's name. Nothing is generated for that interface, so the build
+fails even when nothing uses its client or its `Add{I}` method yet. Declare the interface non-generic,
 outside generic types, and `public` or `internal`. An interface nested in a non-generic type is
 supported; see [Nested interfaces](dependency-injection.md#nested-interfaces).
 
@@ -554,8 +554,8 @@ The generated `AddSerializers`, called by `Add{I}` and `AddRestResilience`, regi
 
 ## Streaming responses
 
-> In a Blazor WebAssembly app, whether the browser delivers the body as it arrives depends on the
-> target framework; see [Blazor WebAssembly](blazor-webassembly.md#response-streaming).
+> In a Blazor WebAssembly app the browser delivers the body as it arrives unless the app opts out;
+> see [Blazor WebAssembly](blazor-webassembly.md#response-streaming).
 
 By default a generated call sends with `HttpCompletionOption.ResponseContentRead`: `HttpClient` reads
 the whole response body into its own buffer, which is not pooled, and the serializer then reads that
@@ -604,7 +604,7 @@ connection lost mid-body as `Transport` when streaming; to retry that too, also 
 
 ## Server-sent events
 
-> In the browser, events stream by default on .NET 10 and 11 and need a per-request opt-in on .NET 8; see
+> In the browser, events stream by default on .NET 10 and 11; see
 > [Blazor WebAssembly](blazor-webassembly.md#response-streaming).
 
 A method that returns `IAsyncEnumerable<T>` and carries `[EventStream]` reads a `text/event-stream`

@@ -1,5 +1,35 @@
 # Changelog
 
+## [4.0.2](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v4.0.1...v4.0.2) (2026-11-23)
+
+
+### Bug Fixes
+
+* depend on Collections 1.3.2 and Resilience 3.6.0, which load on SDK 10.0.1xx ([#584](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/584)) ([3d8abcd](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/3d8abcd6279dc75a19f1f395d25d135041161097))
+
+## [4.0.1](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v4.0.0...v4.0.1) (2026-11-22)
+
+
+### Bug Fixes
+
+* build the generator against Roslyn 5.0 so every .NET 10 SDK loads it ([#581](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/issues/581)) ([c632e0a](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/c632e0ac87229ce425866d6d8179484305036cf5))
+
+## [4.0.0](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v3.8.2...v4.0.0) (2026-11-21)
+
+
+### ⚠ BREAKING CHANGES
+
+* the packages no longer ship net8.0 assets, so a project on .NET 8 or .NET 9 stays on 3.x or moves to net10.0 or later; ZRA006 is now an error instead of a warning, so an interface that is generic, nested in a generic type, or private or protected fails the build. See the Behaviour change section of PR #578 for migration steps.
+
+### Features
+
+* target net10.0 and net11.0, drop net8.0 ([514b2ac](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/514b2ac6cfdd8f879462e6caff9035696f93bb76))
+
+
+### Bug Fixes
+
+* report ZRA006 as an error instead of skipping client generation silently ([514b2ac](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/commit/514b2ac6cfdd8f879462e6caff9035696f93bb76))
+
 ## [3.8.2](https://github.com/ZeroAlloc-Net/ZeroAlloc.Rest/compare/v3.8.1...v3.8.2) (2026-11-16)
 
 

@@ -10,19 +10,19 @@ OpenAPI importer `.Tools` (a dotnet tool) and `.Tools.MSBuild`, plus the standal
 - `src/ZeroAlloc.Rest.Generator` targets `netstandard2.0` and is not a runtime library. Its output is the
   hot path, so judge a change by the emitted code in `ClientEmitter.cs` and `DiEmitter.cs`, not by the generator
   itself. `ZeroAlloc.Rest.csproj` packs the generator DLL under `analyzers/dotnet/cs`.
-- Runtime packages target `net8.0;net10.0;net11.0`. `ZeroAlloc.Rest.Tools` targets `net10.0;net11.0`,
+- Runtime packages and `ZeroAlloc.Rest.Tools` target `net10.0;net11.0`,
   `ZeroAlloc.Rest.Tools.MSBuild` targets `net10.0` only.
 - `tests/ZeroAlloc.Rest.Integration.Tests` holds the allocation gates, compiled against generated clients.
   `tests/ZeroAlloc.Rest.Generator.Tests` compiles generator output against the BCL reference set of the
   target framework in `TargetFrameworkReferences.cs`.
 - `samples/*.AotSmoke` are the NativeAOT smoke apps that CI publishes. They are not packaged.
-- `tests/ZeroAlloc.Rest.Benchmarks` targets `net10.0` only, not the three LTS frameworks of the org rule.
-- `apicompat-suppressions.xml` is empty on purpose: it holds only annotated, intentional API breaks.
+- `tests/ZeroAlloc.Rest.Benchmarks` targets `net10.0` only: BenchmarkDotNet has no stable net11.0 release.
+- `apicompat-suppressions.xml` holds only annotated, intentional API breaks. Its one entry today, PKV006
+  for net8.0, records the 4.0.0 framework drop; retire it once the baseline is a 4.x release.
 
 ## Build and test
 Prerequisites: the .NET 11 SDK from `global.json` (rollForward `latestMinor`) builds every target. Tests run on
-the runtime of their target framework: .NET 8 for `net8.0`, .NET 10 for `net10.0`, .NET 11 for `net11.0`.
-`ZeroAlloc.Rest.Tools.Tests` and `ZeroAlloc.Rest.DuplicateGeneratorTests` target only `net10.0` and `net11.0`.
+the runtime of their target framework: .NET 10 for `net10.0`, .NET 11 for `net11.0`.
 The benchmarks need the .NET 10 runtime.
 
 CI job `build` in `ci.yml`:
@@ -65,12 +65,36 @@ dotnet run --project tests/ZeroAlloc.Rest.Benchmarks -c Release --no-build -- --
 Fast inner loop, no CI job. Run on one target framework, in Release because the allocation gates skip in Debug:
 ```bash
 dotnet test tests/ZeroAlloc.Rest.Generator.Tests -c Release -f net10.0 --filter "FullyQualifiedName~GeneratorHintNameTests"
-dotnet test tests/ZeroAlloc.Rest.Integration.Tests -c Release -f net8.0 --filter "FullyQualifiedName~GetCallAllocationTests"
+dotnet test tests/ZeroAlloc.Rest.Integration.Tests -c Release -f net10.0 --filter "FullyQualifiedName~GetCallAllocationTests"
 ```
 
+CI job `sdk10-consumer` needs a 10.0.1xx SDK; `tests/ZeroAlloc.Rest.Sdk10Smoke/global.json` pins
+10.0.100 with `rollForward: latestPatch`, so a newer band cannot stand in for it. It builds and runs a
+consumer of the packed packages with Roslyn 5.0:
+
+```bash
+unset v; r=$(od -An -N4 -tx4 /dev/urandom | tr -d " ") && [ -n "$r" ] && v=9.9.9-local.sha$(git rev-parse --short HEAD).$(date +%s).r$r
+dotnet pack src/ZeroAlloc.Rest -c Release -o artifacts -p:Version="${v:?no random suffix}"
+dotnet pack src/ZeroAlloc.Rest.Generator -c Release -o artifacts -p:Version="${v:?no random suffix}"
+cd tests/ZeroAlloc.Rest.Sdk10Smoke/Consumer
+dotnet run -c Release -p:ZeroAllocRestVersion="${v:?no random suffix}"
+```
+
+Each step stops when the random suffix cannot be generated. Runs in one checkout share its `obj/` and
+`bin/` folders, so they must not overlap: give each concurrent run its own worktree. `CS9057` is an
+error in the consumer, so a generator from any package in its graph that this SDK skips fails it.
+
+CI job `roslyn-floor` calls the shared `roslyn-floor.yml` from ZeroAlloc-Net/.github: it packs the
+solution and fails when a packed DLL references Roslyn above 5.0.0.
+
 ## Conventions and gotchas
+- The generator references `Microsoft.CodeAnalysis.CSharp` 5.0.0, the compiler of SDK band 10.0.1xx, the
+  oldest supported SDK, set in `Directory.Packages.props`. A compiler older than the Roslyn the DLL
+  references skips the generator with `CS9057`, and nothing is generated. The shared Renovate preset holds
+  it below 5.1. If a newer Roslyn API is needed, change the code; raise the floor only together with the
+  minimum SDK. The test projects use 5.0.0 too.
 - Allocation budgets are exact byte counts from `AllocationGate`, measured on .NET 10 x64 in Release. The
-  `net8.0` runs add `RuntimeAllocation.HttpClientSendExtraBytes`. The README quotes the 1,688 B figure of a
+  `net11.0` runs add `RuntimeAllocation.Net11ExtraBytes`. The README quotes the 1,688 B figure of a
   generated GET: a change to a budget updates the README and `docs/benchmarks.md` in the same PR.
 - A generated call is not 0 B: the `HttpClient` request and response objects are inherent allocations,
   which the org rule allows when documented. The promise tested by
@@ -83,10 +107,9 @@ dotnet test tests/ZeroAlloc.Rest.Integration.Tests -c Release -f net8.0 --filter
   moves entries there. A new generator diagnostic goes in `AnalyzerReleases.Unshipped.md`.
 - `TreatWarningsAsErrors` is on, with Meziantou and Roslynator analyzers. Fix the warning. A project-level
   `NoWarn` such as `MA0048` exists only where the file layout is intentional.
-- Generated code compiles in consumers on `net8.0`, so it must not use an API newer than net8.0. The net8.0
-  run of `Generator.Tests` catches that.
-- On `net8.0`, `ZeroAlloc.Rest.SystemTextJson` pulls the System.Text.Json 10 package so both targets serialize
-  alike. Test projects that reference WireMock.Net lift `Microsoft.AspNetCore.WebUtilities` to a patched
+- Generated code compiles in consumers on `net10.0`, so it must not use an API newer than net10.0. The
+  net10.0 run of `Generator.Tests` catches that.
+- Test projects that reference WireMock.Net lift `Microsoft.AspNetCore.WebUtilities` to a patched
   version in `Directory.Packages.props`; keep that pin until WireMock drops the 2.x ASP.NET Core packages.
 - `Microsoft.Build.Framework` and `Microsoft.Build.Utilities.Core` stay below 18.10 (`renovate.json` holds
   them), because `Tools.MSBuild` targets `net10.0` and the .NET 10 SDK ships MSBuild 18.9.
